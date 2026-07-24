@@ -144,3 +144,12 @@ vite.config.ts.timestamp-*
 
 # macOS system files
 .DS_Store
+
+# Next.js (generated rules)
+/.pnp
+/out/
+/build
+*.pem
+.pnpm-debug.log*
+.vercel
+next-env.d.ts
