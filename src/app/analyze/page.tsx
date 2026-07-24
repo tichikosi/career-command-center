@@ -9,6 +9,7 @@ import { alexVanceProfile } from '@/data/candidate';
 import { initialOpportunities } from '@/data/opportunities';
 import { DeterministicSyntheticEngine } from '@/lib/engine';
 import { saveOpportunity } from '@/lib/storage';
+import { buildStageActions, buildRoleActions } from '@/lib/stageActions';
 import { JobOpportunity } from '@/types/opportunity';
 
 export default function AnalyzePage() {
@@ -61,6 +62,12 @@ export default function AnalyzePage() {
         updatedAt: new Date().toISOString(),
         stage: 'Identified',
         analysis: report,
+        priority: report.overallFitScore >= 85 ? 'High' : report.overallFitScore >= 50 ? 'Medium' : 'Low',
+        notes: '',
+        actions: [
+          ...buildStageActions('Identified'),
+          ...buildRoleActions(`opp-${Date.now()}`, report.nextActions),
+        ],
       };
 
       // Simulate engine processing delay
@@ -110,8 +117,9 @@ export default function AnalyzePage() {
         alexVanceProfile
       );
 
+      const newOppId = `opp-custom-${Date.now()}`;
       const newOpportunity: JobOpportunity = {
-        id: `opp-custom-${Date.now()}`,
+        id: newOppId,
         title: jobTitle.trim(),
         company: company.trim(),
         location: location.trim() || undefined,
@@ -122,6 +130,12 @@ export default function AnalyzePage() {
         updatedAt: new Date().toISOString(),
         stage: 'Identified',
         analysis: report,
+        priority: report.overallFitScore >= 85 ? 'High' : report.overallFitScore >= 50 ? 'Medium' : 'Low',
+        notes: '',
+        actions: [
+          ...buildStageActions('Identified'),
+          ...buildRoleActions(newOppId, report.nextActions),
+        ],
       };
 
       // Simulate engine processing delay

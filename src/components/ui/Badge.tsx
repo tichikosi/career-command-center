@@ -1,5 +1,5 @@
 import React from 'react';
-import { MatchType, RecommendationType, PipelineStage } from '@/types/opportunity';
+import { MatchType, RecommendationType, PipelineStage, OpportunityPriority } from '@/types/opportunity';
 
 export function RecommendationBadge({ recommendation }: { recommendation: RecommendationType }) {
   let styles = 'bg-slate-100 text-slate-800 border-slate-200';
@@ -78,6 +78,53 @@ export function PipelineStageBadge({ stage }: { stage: PipelineStage }) {
   return (
     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs border ${styles}`}>
       {stage}
+    </span>
+  );
+}
+
+export function PriorityBadge({ priority }: { priority: OpportunityPriority }) {
+  let styles = 'bg-slate-100 text-slate-700 border-slate-200';
+
+  switch (priority) {
+    case 'High':
+      styles = 'bg-rose-50 text-rose-700 border-rose-200 font-semibold';
+      break;
+    case 'Medium':
+      styles = 'bg-amber-50 text-amber-700 border-amber-200 font-medium';
+      break;
+    case 'Low':
+      styles = 'bg-slate-100 text-slate-500 border-slate-200 font-normal';
+      break;
+  }
+
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs border ${styles}`}>
+      {priority}
+    </span>
+  );
+}
+
+export function FollowUpStatusBadge({ status }: { status: 'Overdue' | 'Due Today' | 'Upcoming' | 'No Date' }) {
+  let styles = 'bg-slate-100 text-slate-500 border-slate-200';
+
+  switch (status) {
+    case 'Overdue':
+      styles = 'bg-rose-50 text-rose-700 border-rose-200 font-semibold';
+      break;
+    case 'Due Today':
+      styles = 'bg-amber-50 text-amber-700 border-amber-200 font-medium';
+      break;
+    case 'Upcoming':
+      styles = 'bg-sky-50 text-sky-700 border-sky-200';
+      break;
+    case 'No Date':
+      styles = 'bg-slate-100 text-slate-400 border-slate-200';
+      break;
+  }
+
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs border ${styles}`}>
+      {status}
     </span>
   );
 }

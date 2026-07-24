@@ -4,40 +4,42 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { Card, CardHeader } from '@/components/ui/Card';
-import { RecommendationBadge, MatchTypeBadge } from '@/components/ui/Badge';
+import { RecommendationBadge, MatchTypeBadge, PipelineStageBadge } from '@/components/ui/Badge';
 import { FallbackAnalysisNotice } from '@/components/ui/Notice';
 import { Modal } from '@/components/ui/Modal';
+import { OpportunityDetailsForm } from '@/components/ui/OpportunityDetailsForm';
 import {
   IconArrowRight,
   IconCheckCircle,
   IconAlertTriangle,
   IconTrash,
+  IconExternalLink,
 } from '@/components/icons';
-import { JobOpportunity, PipelineStage } from '@/types/opportunity';
+import { PipelineStage } from '@/types/opportunity';
 import { alexVanceProfile } from '@/data/candidate';
 import {
-  getOpportunityById,
   updateOpportunityStage,
   deleteOpportunity,
 } from '@/lib/storage';
+import { useOpportunity } from '@/lib/useOpportunities';
+import { validateUrl } from '@/lib/dateUtils';
 
 export default function AnalysisResultsPage() {
   const router = useRouter();
   const params = useParams();
-  const idFromPath = typeof params?.id === 'string' ? params.id : Array.isArray(params?.id) ? params.id[0] : null;
+  const idFromPath =
+    typeof params?.id === 'string'
+      ? params.id
+      : Array.isArray(params?.id)
+      ? params.id[0]
+      : null;
 
-  const [prevId, setPrevId] = useState<string | null>(idFromPath);
-  const [opportunity, setOpportunity] = useState<JobOpportunity | null>(() =>
-    idFromPath ? getOpportunityById(idFromPath) || null : null
-  );
+  // Reactive opportunity hook powered by useSyncExternalStore
+  const opportunity = useOpportunity(idFromPath);
 
-  // Synchronously update state during render if path ID changes (React 19 pattern)
-  if (idFromPath !== prevId) {
-    setPrevId(idFromPath);
-    setOpportunity(idFromPath ? getOpportunityById(idFromPath) || null : null);
-  }
-
-  const [activeTab, setActiveTab] = useState<'overview' | 'qualifications' | 'evidence' | 'prep' | 'next'>('overview');
+  const [activeTab, setActiveTab] = useState<
+    'overview' | 'qualifications' | 'evidence' | 'prep' | 'workflow' | 'next'
+  >('overview');
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   if (!opportunity) {
@@ -60,13 +62,13 @@ export default function AnalysisResultsPage() {
 
   const { analysis } = opportunity;
 
-  // UI-derived sections filtering from normalized qualifications array
+  // UI-derived sections from normalized qualifications array
   const strongMatches = analysis.qualifications.filter((q) => q.matchType === 'Strong Match');
   const partialMatches = analysis.qualifications.filter((q) => q.matchType === 'Partial Match');
   const materialGaps = analysis.qualifications.filter((q) => q.matchType === 'Material Gap');
   const unverifiedQualifications = analysis.qualifications.filter((q) => q.matchType === 'Unverified');
 
-  // Collect unique evidence citation IDs from Strong & Partial matches
+  // Resolve citation IDs to Alex Vance achievements
   const uniqueCitationIds = Array.from(
     new Set(
       analysis.qualifications
@@ -74,8 +76,6 @@ export default function AnalysisResultsPage() {
         .flatMap((q) => q.supportingEvidenceCitationIds)
     )
   );
-
-  // Resolve citation IDs to Alex Vance achievements
   const resolvedAchievements = alexVanceProfile.careerHistory
     .flatMap((role) =>
       role.achievements.map((ach) => ({
@@ -88,7 +88,6 @@ export default function AnalysisResultsPage() {
 
   const handleStageChange = (newStage: PipelineStage) => {
     updateOpportunityStage(opportunity.id, newStage);
-    setOpportunity({ ...opportunity, stage: newStage });
   };
 
   const handleDelete = () => {
@@ -96,9 +95,29 @@ export default function AnalysisResultsPage() {
     router.push('/opportunities');
   };
 
+  const companyUrl = validateUrl(opportunity.companyWebsiteUrl ?? '');
+  const appUrl = validateUrl(opportunity.applicationUrl ?? '');
+
+  const pendingActionCount =
+    opportunity.stage !== 'Archived'
+      ? opportunity.actions.filter((a) => !a.completed).length
+      : 0;
+
+  // Next Actions Tab collections
+  const currentStageActions = opportunity.actions.filter((a) => a.source === 'stage');
+  const roleSpecificActions = opportunity.actions.filter((a) => a.source === 'role');
+
+  // Fallback role-specific recommendations from analysis.nextActions if empty, deduplicated
+  const stageActionTexts = new Set(currentStageActions.map((a) => a.text.toLowerCase()));
+  const rawRoleActions = roleSpecificActions.length > 0
+    ? roleSpecificActions.map((a) => ({ text: a.text, completed: a.completed }))
+    : (analysis.nextActions ?? [])
+        .filter((text) => !stageActionTexts.has(text.toLowerCase()))
+        .map((text) => ({ text, completed: false }));
+
   return (
     <div className="space-y-8 animate-in fade-in duration-200">
-      {/* Navigation Breadcrumb & Actions */}
+      {/* Breadcrumb & Delete */}
       <div className="flex items-center justify-between text-xs text-slate-500">
         <div className="flex items-center gap-2">
           <Link href="/opportunities" className="hover:text-slate-900 font-medium">
@@ -116,7 +135,7 @@ export default function AnalysisResultsPage() {
         </button>
       </div>
 
-      {/* Fallback Notice if Custom Analysis */}
+      {/* Fallback notice */}
       {analysis.isFallbackAnalysis && (
         <FallbackAnalysisNotice text={analysis.analysisNotice} />
       )}
@@ -134,6 +153,28 @@ export default function AnalysisResultsPage() {
                   <span className="text-slate-300">•</span>
                   <span className="text-xs text-slate-500">{opportunity.location}</span>
                 </>
+              )}
+              {companyUrl && (
+                <a
+                  href={companyUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-800"
+                >
+                  <IconExternalLink className="w-3 h-3" />
+                  <span>Company Site</span>
+                </a>
+              )}
+              {appUrl && (
+                <a
+                  href={appUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-slate-900"
+                >
+                  <IconExternalLink className="w-3 h-3" />
+                  <span>Apply</span>
+                </a>
               )}
             </div>
             <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
@@ -159,12 +200,12 @@ export default function AnalysisResultsPage() {
               <RecommendationBadge recommendation={analysis.recommendation} />
             </div>
 
-            {/* Stage Selector */}
             <div className="flex items-center gap-2 text-xs">
-              <span className="text-slate-500 font-medium">Pipeline Stage:</span>
+              <span className="text-slate-500 font-medium">Stage:</span>
               <select
                 value={opportunity.stage}
                 onChange={(e) => handleStageChange(e.target.value as PipelineStage)}
+                aria-label="Pipeline stage"
                 className="bg-slate-100 border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900"
               >
                 <option value="Identified">Identified</option>
@@ -181,56 +222,28 @@ export default function AnalysisResultsPage() {
 
       {/* Tab Navigation */}
       <div className="flex border-b border-slate-200 overflow-x-auto scrollbar-none">
-        <button
-          onClick={() => setActiveTab('overview')}
-          className={`py-3 px-5 text-sm font-semibold border-b-2 whitespace-nowrap transition-colors ${
-            activeTab === 'overview'
-              ? 'border-slate-900 text-slate-900'
-              : 'border-transparent text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          Executive Overview
-        </button>
-        <button
-          onClick={() => setActiveTab('qualifications')}
-          className={`py-3 px-5 text-sm font-semibold border-b-2 whitespace-nowrap transition-colors ${
-            activeTab === 'qualifications'
-              ? 'border-slate-900 text-slate-900'
-              : 'border-transparent text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          Qualifications & Gaps ({analysis.qualifications.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('evidence')}
-          className={`py-3 px-5 text-sm font-semibold border-b-2 whitespace-nowrap transition-colors ${
-            activeTab === 'evidence'
-              ? 'border-slate-900 text-slate-900'
-              : 'border-transparent text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          Evidence & Objections ({resolvedAchievements.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('prep')}
-          className={`py-3 px-5 text-sm font-semibold border-b-2 whitespace-nowrap transition-colors ${
-            activeTab === 'prep'
-              ? 'border-slate-900 text-slate-900'
-              : 'border-transparent text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          Interview Preparation
-        </button>
-        <button
-          onClick={() => setActiveTab('next')}
-          className={`py-3 px-5 text-sm font-semibold border-b-2 whitespace-nowrap transition-colors ${
-            activeTab === 'next'
-              ? 'border-slate-900 text-slate-900'
-              : 'border-transparent text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          Next Actions ({analysis.nextActions.length})
-        </button>
+        {(
+          [
+            { key: 'overview', label: 'Executive Overview' },
+            { key: 'qualifications', label: `Qualifications & Gaps (${analysis.qualifications.length})` },
+            { key: 'evidence', label: `Evidence & Objections (${resolvedAchievements.length})` },
+            { key: 'prep', label: 'Interview Preparation' },
+            { key: 'workflow', label: `Workflow${pendingActionCount > 0 ? ` (${pendingActionCount})` : ''}` },
+            { key: 'next', label: `Next Actions (${currentStageActions.length + rawRoleActions.length})` },
+          ] as const
+        ).map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => setActiveTab(key)}
+            className={`py-3 px-5 text-sm font-semibold border-b-2 whitespace-nowrap transition-colors ${
+              activeTab === key
+                ? 'border-slate-900 text-slate-900'
+                : 'border-transparent text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       {/* Tab 1: Executive Overview */}
@@ -250,7 +263,6 @@ export default function AnalysisResultsPage() {
                 {analysis.likelyMandate}
               </p>
             </Card>
-
             <Card padding="lg" className="space-y-3">
               <CardHeader title="Fit Score & Rationale" />
               <p className="text-sm text-slate-700 leading-relaxed">
@@ -296,7 +308,7 @@ export default function AnalysisResultsPage() {
                 <thead className="bg-slate-50 border-y border-slate-200 text-slate-500 font-semibold uppercase tracking-wider">
                   <tr>
                     <th className="py-3 px-6">Category</th>
-                    <th className="py-3 px-6">Qualification Specification</th>
+                    <th className="py-3 px-6">Qualification</th>
                     <th className="py-3 px-6">Match Status</th>
                     <th className="py-3 px-6">Evidence & Rationale</th>
                   </tr>
@@ -345,10 +357,7 @@ export default function AnalysisResultsPage() {
 
           {/* Strongest Matches */}
           <Card padding="lg" className="space-y-4">
-            <CardHeader
-              title="Strongest Matches"
-              subtitle="UI-derived view: Direct, evidence-backed alignment"
-            />
+            <CardHeader title="Strongest Matches" subtitle="UI-derived view: Direct, evidence-backed alignment" />
             {strongMatches.length === 0 ? (
               <p className="text-xs text-slate-500">No strong matches identified.</p>
             ) : (
@@ -368,10 +377,7 @@ export default function AnalysisResultsPage() {
 
           {/* Partial Matches */}
           <Card padding="lg" className="space-y-4">
-            <CardHeader
-              title="Partial Matches"
-              subtitle="UI-derived view: Adjacent or partial experience fit"
-            />
+            <CardHeader title="Partial Matches" subtitle="UI-derived view: Adjacent or partial experience fit" />
             {partialMatches.length === 0 ? (
               <p className="text-xs text-slate-500">No partial matches identified.</p>
             ) : (
@@ -391,10 +397,7 @@ export default function AnalysisResultsPage() {
 
           {/* Material Gaps */}
           <Card padding="lg" className="space-y-4">
-            <CardHeader
-              title="Material Gaps"
-              subtitle="UI-derived view: Critical missing operational requirements representing hiring risks"
-            />
+            <CardHeader title="Material Gaps" subtitle="UI-derived view: Critical missing requirements" />
             {materialGaps.length === 0 ? (
               <p className="text-xs text-slate-500">Zero material gaps identified for this role.</p>
             ) : (
@@ -414,10 +417,7 @@ export default function AnalysisResultsPage() {
 
           {/* Unverified Qualifications */}
           <Card padding="lg" className="space-y-4">
-            <CardHeader
-              title="Unverified Qualifications"
-              subtitle="UI-derived view: Requirements lacking sufficient evidence in profile to confirm or deny"
-            />
+            <CardHeader title="Unverified Qualifications" subtitle="UI-derived view: Requirements lacking sufficient evidence to confirm or deny" />
             {unverifiedQualifications.length === 0 ? (
               <p className="text-xs text-slate-500">No unverified qualifications.</p>
             ) : (
@@ -440,7 +440,6 @@ export default function AnalysisResultsPage() {
       {/* Tab 3: Evidence & Objections */}
       {activeTab === 'evidence' && (
         <div className="space-y-6">
-          {/* Supporting Candidate Evidence */}
           <Card padding="lg" className="space-y-4">
             <CardHeader
               title="Supporting Candidate Evidence"
@@ -470,7 +469,6 @@ export default function AnalysisResultsPage() {
             )}
           </Card>
 
-          {/* Likely Hiring Objections */}
           <Card padding="lg" className="space-y-4">
             <CardHeader
               title="Likely Hiring Manager Objections"
@@ -505,7 +503,6 @@ export default function AnalysisResultsPage() {
       {/* Tab 4: Interview Preparation */}
       {activeTab === 'prep' && (
         <div className="space-y-6">
-          {/* Recruiter-Screen Questions */}
           <Card padding="lg" className="space-y-4">
             <CardHeader title="Recruiter-Screen Questions" />
             <ul className="space-y-3">
@@ -520,7 +517,6 @@ export default function AnalysisResultsPage() {
             </ul>
           </Card>
 
-          {/* Hiring-Manager Questions */}
           <Card padding="lg" className="space-y-4">
             <CardHeader title="Hiring-Manager Questions" />
             {analysis.hiringManagerQuestions.length === 0 ? (
@@ -539,7 +535,6 @@ export default function AnalysisResultsPage() {
             )}
           </Card>
 
-          {/* Tailored STAR Stories */}
           <Card padding="lg" className="space-y-4">
             <CardHeader title="Tailored STAR Stories" />
             {analysis.recommendedStarStories.length === 0 ? (
@@ -584,25 +579,105 @@ export default function AnalysisResultsPage() {
         </div>
       )}
 
-      {/* Tab 5: Recommended Next Actions */}
-      {activeTab === 'next' && (
-        <Card padding="lg" className="space-y-4">
-          <CardHeader
-            title="Recommended Next Actions"
-            subtitle="Actionable steps for managing this opportunity in your pipeline"
-          />
-          <ul className="space-y-3">
-            {analysis.nextActions.map((act, idx) => (
-              <li key={idx} className="p-4 bg-slate-50 rounded-xl border border-slate-200/80 flex items-center gap-3 text-sm text-slate-800 font-medium">
-                <IconCheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
-                <span>{act}</span>
-              </li>
-            ))}
-          </ul>
-        </Card>
+      {/* Tab 5: Workflow (Opportunity Details + Actions) */}
+      {activeTab === 'workflow' && (
+        <OpportunityDetailsForm
+          opportunity={opportunity}
+          onSave={() => {}}
+        />
       )}
 
-      {/* Confirmation Modal for Delete */}
+      {/* Tab 6: Analysis-Derived Next Actions */}
+      {activeTab === 'next' && (
+        <div className="space-y-6">
+          {/* Current Stage Recommendations */}
+          <Card padding="lg" className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardHeader
+                  title="Current Stage Recommendations"
+                  subtitle="Actionable steps derived dynamically from the active pipeline stage"
+                />
+              </div>
+              <PipelineStageBadge stage={opportunity.stage} />
+            </div>
+            {currentStageActions.length === 0 ? (
+              <p className="text-xs text-slate-500">No stage recommendations for current stage.</p>
+            ) : (
+              <ul className="space-y-3">
+                {currentStageActions.map((act) => (
+                  <li
+                    key={act.id}
+                    className={`p-4 rounded-xl border flex items-center justify-between gap-3 text-sm font-medium transition-colors ${
+                      act.completed
+                        ? 'bg-slate-50 border-slate-200 text-slate-500'
+                        : 'bg-white border-slate-200 text-slate-900'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <IconCheckCircle
+                        className={`w-5 h-5 shrink-0 ${
+                          act.completed ? 'text-emerald-600' : 'text-slate-300'
+                        }`}
+                      />
+                      <span className={act.completed ? 'line-through' : ''}>
+                        {act.text}
+                      </span>
+                    </div>
+                    {act.completed && (
+                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 shrink-0">
+                        Completed
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+
+          {/* Role-Specific Recommendations */}
+          <Card padding="lg" className="space-y-4">
+            <CardHeader
+              title="Role-Specific Recommendations"
+              subtitle="Tailored recommendations derived from the role analysis report"
+            />
+            {rawRoleActions.length === 0 ? (
+              <p className="text-xs text-slate-500">No role-specific recommendations generated.</p>
+            ) : (
+              <ul className="space-y-3">
+                {rawRoleActions.map((act, idx) => (
+                  <li
+                    key={idx}
+                    className={`p-4 rounded-xl border flex items-center justify-between gap-3 text-sm font-medium transition-colors ${
+                      act.completed
+                        ? 'bg-slate-50 border-slate-200 text-slate-500'
+                        : 'bg-slate-50/70 border-slate-200/80 text-slate-800'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <IconCheckCircle
+                        className={`w-5 h-5 shrink-0 ${
+                          act.completed ? 'text-emerald-600' : 'text-slate-400'
+                        }`}
+                      />
+                      <span className={act.completed ? 'line-through' : ''}>
+                        {act.text}
+                      </span>
+                    </div>
+                    {act.completed && (
+                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 shrink-0">
+                        Completed
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
       <Modal
         isOpen={isDeleteModalOpen}
         onClose={() => setIsDeleteModalOpen(false)}

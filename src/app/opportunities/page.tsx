@@ -4,7 +4,11 @@ import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Card } from '@/components/ui/Card';
-import { RecommendationBadge } from '@/components/ui/Badge';
+import {
+  RecommendationBadge,
+  PriorityBadge,
+  FollowUpStatusBadge,
+} from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import {
   IconSearch,
@@ -12,49 +16,243 @@ import {
   IconTrash,
   IconArrowRight,
   IconAnalyze,
+  IconSortAsc,
+  IconSortDesc,
+  IconSortNeutral,
+  IconExternalLink,
+  IconCalendar,
 } from '@/components/icons';
-import { JobOpportunity, PipelineStage } from '@/types/opportunity';
 import {
-  getOpportunities,
+  JobOpportunity,
+  PipelineStage,
+  SortField,
+  SortDirection,
+  FollowUpStatus,
+} from '@/types/opportunity';
+import {
   updateOpportunityStage,
   deleteOpportunity,
   archiveOpportunity,
   resetDemoData,
-  subscribeToStorage,
+  getUISettings,
+  saveUISettings,
 } from '@/lib/storage';
+import { useOpportunities } from '@/lib/useOpportunities';
+import { classifyFollowUpDate, formatShortDate, validateUrl } from '@/lib/dateUtils';
+
+// ---------------------------------------------------------------------------
+// Sorting helpers
+// ---------------------------------------------------------------------------
+
+const RECOMMENDATION_ORDER: Record<string, number> = {
+  Apply: 0,
+  'Network First': 1,
+  Monitor: 2,
+  Deprioritize: 3,
+};
+
+const PRIORITY_ORDER: Record<string, number> = {
+  High: 0,
+  Medium: 1,
+  Low: 2,
+};
+
+const STAGE_ORDER: Record<string, number> = {
+  Interviewing: 0,
+  Offer: 1,
+  Screening: 2,
+  Applied: 3,
+  Identified: 4,
+  Archived: 5,
+};
+
+function sortOpportunities(
+  opps: JobOpportunity[],
+  field: SortField,
+  dir: SortDirection
+): JobOpportunity[] {
+  const sorted = [...opps].sort((a, b) => {
+    let cmp = 0;
+
+    switch (field) {
+      case 'company':
+        cmp = a.company.localeCompare(b.company);
+        break;
+      case 'title':
+        cmp = a.title.localeCompare(b.title);
+        break;
+      case 'fitScore':
+        cmp = a.analysis.overallFitScore - b.analysis.overallFitScore;
+        break;
+      case 'recommendation':
+        cmp =
+          (RECOMMENDATION_ORDER[a.analysis.recommendation] ?? 99) -
+          (RECOMMENDATION_ORDER[b.analysis.recommendation] ?? 99);
+        break;
+      case 'priority':
+        cmp =
+          (PRIORITY_ORDER[a.priority] ?? 99) -
+          (PRIORITY_ORDER[b.priority] ?? 99);
+        break;
+      case 'stage':
+        cmp =
+          (STAGE_ORDER[a.stage] ?? 99) - (STAGE_ORDER[b.stage] ?? 99);
+        break;
+      case 'followUpDate':
+        cmp =
+          (a.followUpDate ?? '9999-99-99').localeCompare(
+            b.followUpDate ?? '9999-99-99'
+          );
+        break;
+      case 'createdAt':
+        cmp = a.createdAt.localeCompare(b.createdAt);
+        break;
+    }
+
+    return dir === 'asc' ? cmp : -cmp;
+  });
+
+  return sorted;
+}
+
+// ---------------------------------------------------------------------------
+// Column header with sort indicator
+// ---------------------------------------------------------------------------
+
+function SortableHeader({
+  field,
+  label,
+  currentField,
+  currentDir,
+  onSort,
+  className = '',
+}: {
+  field: SortField;
+  label: string;
+  currentField: SortField;
+  currentDir: SortDirection;
+  onSort: (f: SortField) => void;
+  className?: string;
+}) {
+  const isActive = currentField === field;
+
+  return (
+    <th className={`py-3.5 px-4 ${className}`}>
+      <button
+        onClick={() => onSort(field)}
+        className="flex items-center gap-1 font-semibold uppercase tracking-wider text-slate-500 hover:text-slate-900 transition-colors focus:outline-none focus-visible:underline"
+        aria-label={`Sort by ${label}`}
+      >
+        <span className="text-xs">{label}</span>
+        <span className="text-slate-400">
+          {isActive ? (
+            currentDir === 'asc' ? (
+              <IconSortAsc className="w-3 h-3 text-slate-900" />
+            ) : (
+              <IconSortDesc className="w-3 h-3 text-slate-900" />
+            )
+          ) : (
+            <IconSortNeutral className="w-3 h-3" />
+          )}
+        </span>
+      </button>
+    </th>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main content
+// ---------------------------------------------------------------------------
 
 function OpportunitiesContent() {
   const searchParams = useSearchParams();
   const initialStageFilter = searchParams ? searchParams.get('stage') || 'All' : 'All';
 
-  const [opportunities, setOpportunities] = useState<JobOpportunity[]>(() => getOpportunities());
-  const [searchTerm, setSearchTerm] = useState('');
-  const [stageFilter, setStageFilter] = useState<string>(initialStageFilter);
-  const [recommendationFilter, setRecommendationFilter] = useState<string>('All');
+  // Reactive opportunities hook
+  const opportunities = useOpportunities();
 
-  // Deletion Modal state
+  // Settings
+  const [settings] = useState(() => getUISettings());
+
+  // Filters
+  const [searchTerm, setSearchTerm] = useState(settings.searchTerm ?? '');
+  const [stageFilter, setStageFilter] = useState<string>(
+    initialStageFilter !== 'All' ? initialStageFilter : (settings.stageFilter ?? 'All')
+  );
+  const [recommendationFilter, setRecommendationFilter] = useState<string>(
+    settings.recommendationFilter ?? 'All'
+  );
+  const [priorityFilter, setPriorityFilter] = useState<string>(
+    settings.priorityFilter ?? 'All'
+  );
+  const [followUpFilter, setFollowUpFilter] = useState<FollowUpStatus | 'All'>(
+    settings.followUpFilter ?? 'All'
+  );
+
+  // Sort
+  const [sortField, setSortField] = useState<SortField>(settings.sortField ?? 'createdAt');
+  const [sortDirection, setSortDirection] = useState<SortDirection>(settings.sortDirection ?? 'desc');
+
+  // Modal
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
 
+  // Persist settings on state changes
   useEffect(() => {
-    const handleStorage = () => {
-      setOpportunities(getOpportunities());
-    };
-    return subscribeToStorage(handleStorage);
-  }, []);
+    saveUISettings({
+      sortField,
+      sortDirection,
+      stageFilter,
+      recommendationFilter,
+      priorityFilter,
+      followUpFilter,
+      searchTerm,
+    });
+  }, [sortField, sortDirection, stageFilter, recommendationFilter, priorityFilter, followUpFilter, searchTerm]);
 
-  // Filter opportunities
-  const filteredOpportunities = opportunities.filter((opp) => {
-    const matchesSearch =
-      opp.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      opp.company.toLowerCase().includes(searchTerm.toLowerCase());
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
 
-    const matchesStage = stageFilter === 'All' || opp.stage === stageFilter;
-    const matchesRecommendation =
-      recommendationFilter === 'All' || opp.analysis.recommendation === recommendationFilter;
+  const clearFilters = () => {
+    setSearchTerm('');
+    setStageFilter('All');
+    setRecommendationFilter('All');
+    setPriorityFilter('All');
+    setFollowUpFilter('All');
+  };
 
-    return matchesSearch && matchesStage && matchesRecommendation;
-  });
+  const hasActiveFilters =
+    searchTerm ||
+    stageFilter !== 'All' ||
+    recommendationFilter !== 'All' ||
+    priorityFilter !== 'All' ||
+    followUpFilter !== 'All';
+
+  // Apply filters
+  const filteredOpportunities = sortOpportunities(
+    opportunities.filter((opp) => {
+      const matchesSearch =
+        opp.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        opp.company.toLowerCase().includes(searchTerm.toLowerCase());
+
+      const matchesStage = stageFilter === 'All' || opp.stage === stageFilter;
+      const matchesRec =
+        recommendationFilter === 'All' || opp.analysis.recommendation === recommendationFilter;
+      const matchesPriority = priorityFilter === 'All' || opp.priority === priorityFilter;
+      const followUpStatus = classifyFollowUpDate(opp.followUpDate);
+      const matchesFollowUp = followUpFilter === 'All' || followUpStatus === followUpFilter;
+
+      return matchesSearch && matchesStage && matchesRec && matchesPriority && matchesFollowUp;
+    }),
+    sortField,
+    sortDirection
+  );
 
   const handleStageChange = (id: string, newStage: PipelineStage) => {
     updateOpportunityStage(id, newStage);
@@ -69,14 +267,12 @@ function OpportunitiesContent() {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
-      {/* Header & Primary Actions */}
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-            Opportunities Pipeline
-          </h1>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Opportunities Pipeline</h1>
           <p className="text-sm text-slate-600 mt-1">
-            Manage active recruiting conversations, update stages, and review fit reports.
+            Manage recruiting conversations, update stages, and review fit reports.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -97,29 +293,27 @@ function OpportunitiesContent() {
         </div>
       </div>
 
-      {/* Filter & Search Toolbar */}
+      {/* Filters */}
       <Card padding="md">
-        <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-          {/* Search Input */}
-          <div className="relative w-full md:w-80">
-            <IconSearch className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search title or company..."
-              className="w-full pl-9 pr-3.5 py-2 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
-            />
-          </div>
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col sm:flex-row items-center gap-3">
+            <div className="relative w-full sm:w-72">
+              <IconSearch className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search title or company..."
+                className="w-full pl-9 pr-3.5 py-2 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
+              />
+            </div>
 
-          {/* Filter Dropdowns */}
-          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-slate-500 font-medium">Stage:</span>
+            <div className="flex flex-wrap gap-2 w-full sm:w-auto">
               <select
                 value={stageFilter}
                 onChange={(e) => setStageFilter(e.target.value)}
-                className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                aria-label="Filter by stage"
+                className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900"
               >
                 <option value="All">All Stages</option>
                 <option value="Identified">Identified</option>
@@ -129,158 +323,263 @@ function OpportunitiesContent() {
                 <option value="Offer">Offer</option>
                 <option value="Archived">Archived</option>
               </select>
-            </div>
 
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-slate-500 font-medium">Recommendation:</span>
               <select
                 value={recommendationFilter}
                 onChange={(e) => setRecommendationFilter(e.target.value)}
-                className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                aria-label="Filter by recommendation"
+                className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900"
               >
                 <option value="All">All Recommendations</option>
-                <option value="Apply">Apply (&ge;85%)</option>
-                <option value="Network First">Network First (70-84%)</option>
-                <option value="Monitor">Monitor (50-69%)</option>
-                <option value="Deprioritize">Deprioritize (&lt;50%)</option>
+                <option value="Apply">Apply (≥85%)</option>
+                <option value="Network First">Network First</option>
+                <option value="Monitor">Monitor</option>
+                <option value="Deprioritize">Deprioritize</option>
               </select>
-            </div>
 
-            {(searchTerm || stageFilter !== 'All' || recommendationFilter !== 'All') && (
-              <button
-                onClick={() => {
-                  setSearchTerm('');
-                  setStageFilter('All');
-                  setRecommendationFilter('All');
-                }}
-                className="text-xs font-medium text-slate-500 hover:text-slate-900 underline"
+              <select
+                value={priorityFilter}
+                onChange={(e) => setPriorityFilter(e.target.value)}
+                aria-label="Filter by priority"
+                className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900"
               >
-                Clear Filters
-              </button>
-            )}
+                <option value="All">All Priorities</option>
+                <option value="High">High Priority</option>
+                <option value="Medium">Medium Priority</option>
+                <option value="Low">Low Priority</option>
+              </select>
+
+              <select
+                value={followUpFilter}
+                onChange={(e) => setFollowUpFilter(e.target.value as FollowUpStatus | 'All')}
+                aria-label="Filter by follow-up status"
+                className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900"
+              >
+                <option value="All">All Follow-ups</option>
+                <option value="Overdue">Overdue</option>
+                <option value="Due Today">Due Today</option>
+                <option value="Upcoming">Upcoming</option>
+                <option value="No Date">No Date</option>
+              </select>
+
+              {hasActiveFilters && (
+                <button
+                  onClick={clearFilters}
+                  className="text-xs font-medium text-slate-500 hover:text-slate-900 underline px-1"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
           </div>
+
+          <p className="text-xs text-slate-500">
+            Showing {filteredOpportunities.length} of {opportunities.length} opportunit{opportunities.length !== 1 ? 'ies' : 'y'}
+          </p>
         </div>
       </Card>
 
-      {/* Opportunities Data Table (Professional Table View Only) */}
+      {/* Table Container */}
       <Card padding="none" className="overflow-hidden">
+        {/* Mobile Horizontal Scroll Cue */}
+        <div className="sm:hidden px-4 py-2 bg-slate-50 border-b border-slate-200 text-[11px] font-medium text-slate-600 flex items-center justify-between">
+          <span>Scroll horizontally to view all columns</span>
+          <span aria-hidden="true">&rarr;</span>
+        </div>
+
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs text-slate-700">
-            <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold uppercase tracking-wider">
+          <table className="w-full text-left text-xs text-slate-700 min-w-[900px]">
+            <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
-                <th className="py-3.5 px-6">Company & Title</th>
-                <th className="py-3.5 px-6">Fit Score</th>
-                <th className="py-3.5 px-6">Recommendation</th>
-                <th className="py-3.5 px-6">Pipeline Stage</th>
-                <th className="py-3.5 px-6">Date Analyzed</th>
-                <th className="py-3.5 px-6 text-right">Actions</th>
+                {/* Sticky Left Column for Mobile Context */}
+                <SortableHeader
+                  field="company"
+                  label="Company & Title"
+                  currentField={sortField}
+                  currentDir={sortDirection}
+                  onSort={handleSort}
+                  className="sticky left-0 bg-slate-50 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] pl-6"
+                />
+                <SortableHeader field="fitScore" label="Fit" currentField={sortField} currentDir={sortDirection} onSort={handleSort} />
+                <SortableHeader field="recommendation" label="Recommendation" currentField={sortField} currentDir={sortDirection} onSort={handleSort} />
+                <SortableHeader field="priority" label="Priority" currentField={sortField} currentDir={sortDirection} onSort={handleSort} />
+                <SortableHeader field="stage" label="Stage" currentField={sortField} currentDir={sortDirection} onSort={handleSort} />
+                <SortableHeader field="followUpDate" label="Follow-up" currentField={sortField} currentDir={sortDirection} onSort={handleSort} />
+                <SortableHeader field="createdAt" label="Analyzed" currentField={sortField} currentDir={sortDirection} onSort={handleSort} />
+                <th className="py-3.5 px-4 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 pr-6">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredOpportunities.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-slate-500">
-                    <p className="text-sm font-semibold text-slate-900">No opportunities match filters</p>
+                  <td colSpan={8} className="py-12 text-center text-slate-500">
+                    <p className="text-sm font-semibold text-slate-900">No opportunities match current filters</p>
                     <p className="text-xs text-slate-500 mt-1">
-                      Try adjusting your search term or clearing filter selections.
+                      {hasActiveFilters ? 'Try adjusting your filters or clearing them.' : 'Add your first opportunity using Analyze New Role.'}
                     </p>
+                    {hasActiveFilters && (
+                      <button
+                        onClick={clearFilters}
+                        className="mt-3 text-xs font-medium text-slate-700 hover:text-slate-900 underline"
+                      >
+                        Clear all filters
+                      </button>
+                    )}
                   </td>
                 </tr>
               ) : (
-                filteredOpportunities.map((opp) => (
-                  <tr key={opp.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="py-4 px-6">
-                      <div className="font-semibold text-slate-900 text-sm">{opp.title}</div>
-                      <div className="text-xs text-slate-500 mt-0.5">{opp.company}</div>
-                    </td>
+                filteredOpportunities.map((opp) => {
+                  const followUpStatus = classifyFollowUpDate(opp.followUpDate);
+                  const companyUrl = validateUrl(opp.companyWebsiteUrl ?? '');
+                  const appUrl = validateUrl(opp.applicationUrl ?? '');
 
-                    <td className="py-4 px-6">
-                      <div className="flex items-center gap-1.5">
+                  return (
+                    <tr key={opp.id} className="group hover:bg-slate-50/80 transition-colors">
+                      {/* Sticky First Column */}
+                      <td className="sticky left-0 bg-white group-hover:bg-slate-50 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] py-3.5 pl-6 pr-4 transition-colors">
+                        <div className="font-semibold text-slate-900 text-sm">{opp.title}</div>
+                        <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-1.5">
+                          <span>{opp.company}</span>
+                          {companyUrl && (
+                            <a
+                              href={companyUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-indigo-500 hover:text-indigo-700"
+                              aria-label={`Visit ${opp.company} website`}
+                              title="Visit Company Website"
+                            >
+                              <IconExternalLink className="w-3 h-3 inline" />
+                            </a>
+                          )}
+                          {appUrl && (
+                            <a
+                              href={appUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-slate-400 hover:text-slate-700"
+                              aria-label={`Open job application for ${opp.title}`}
+                              title="Open Job Application"
+                            >
+                              <span className="text-[10px] font-medium">Apply →</span>
+                            </a>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Fit Score */}
+                      <td className="py-3.5 px-4">
                         <span className="font-extrabold text-slate-900 text-sm">
                           {opp.analysis.overallFitScore}%
                         </span>
-                      </div>
-                    </td>
+                      </td>
 
-                    <td className="py-4 px-6">
-                      <RecommendationBadge recommendation={opp.analysis.recommendation} />
-                    </td>
+                      {/* Recommendation */}
+                      <td className="py-3.5 px-4">
+                        <RecommendationBadge recommendation={opp.analysis.recommendation} />
+                      </td>
 
-                    <td className="py-4 px-6">
-                      <select
-                        value={opp.stage}
-                        onChange={(e) => handleStageChange(opp.id, e.target.value as PipelineStage)}
-                        className="bg-slate-100 border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900"
-                      >
-                        <option value="Identified">Identified</option>
-                        <option value="Applied">Applied</option>
-                        <option value="Screening">Screening</option>
-                        <option value="Interviewing">Interviewing</option>
-                        <option value="Offer">Offer</option>
-                        <option value="Archived">Archived</option>
-                      </select>
-                    </td>
+                      {/* Priority */}
+                      <td className="py-3.5 px-4">
+                        <PriorityBadge priority={opp.priority} />
+                      </td>
 
-                    <td className="py-4 px-6 text-slate-500 text-xs">
-                      {new Date(opp.createdAt).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric',
-                        timeZone: 'UTC',
-                      })}
-                    </td>
-
-                    <td className="py-4 px-6 text-right">
-                      <div className="flex items-center justify-end gap-3">
-                        <Link
-                          href={`/analysis/${opp.id}`}
-                          className="font-semibold text-slate-900 hover:text-indigo-600 flex items-center gap-1"
+                      {/* Stage */}
+                      <td className="py-3.5 px-4">
+                        <select
+                          value={opp.stage}
+                          onChange={(e) => handleStageChange(opp.id, e.target.value as PipelineStage)}
+                          aria-label={`Pipeline stage for ${opp.title}`}
+                          className="bg-slate-100 border border-slate-200 rounded-lg px-2 py-1 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900"
                         >
-                          <span>Report</span>
-                          <IconArrowRight className="w-3 h-3" />
-                        </Link>
-                        {opp.stage !== 'Archived' && (
-                          <button
-                            onClick={() => archiveOpportunity(opp.id)}
-                            className="text-slate-400 hover:text-slate-700"
-                            title="Archive Opportunity"
-                          >
-                            Archive
-                          </button>
+                          <option value="Identified">Identified</option>
+                          <option value="Applied">Applied</option>
+                          <option value="Screening">Screening</option>
+                          <option value="Interviewing">Interviewing</option>
+                          <option value="Offer">Offer</option>
+                          <option value="Archived">Archived</option>
+                        </select>
+                      </td>
+
+                      {/* Follow-up Date */}
+                      <td className="py-3.5 px-4">
+                        {opp.followUpDate ? (
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-1 text-slate-600">
+                              <IconCalendar className="w-3 h-3 shrink-0" />
+                              <span className="text-xs">{formatShortDate(opp.followUpDate)}</span>
+                            </div>
+                            {followUpStatus !== 'No Date' && (
+                              <FollowUpStatusBadge status={followUpStatus} />
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-slate-400">—</span>
                         )}
-                        <button
-                          onClick={() => setDeletingId(opp.id)}
-                          className="text-slate-400 hover:text-rose-600"
-                          title="Delete Opportunity"
-                        >
-                          <IconTrash className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                      </td>
+
+                      {/* Date Analyzed */}
+                      <td className="py-3.5 px-4 text-slate-500 text-xs">
+                        {new Date(opp.createdAt).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                          timeZone: 'UTC',
+                        })}
+                      </td>
+
+                      {/* Actions */}
+                      <td className="py-3.5 pl-4 pr-6 text-right">
+                        <div className="flex items-center justify-end gap-3">
+                          <Link
+                            href={`/analysis/${opp.id}`}
+                            className="font-semibold text-slate-900 hover:text-indigo-600 flex items-center gap-1"
+                          >
+                            <span>Report</span>
+                            <IconArrowRight className="w-3 h-3" />
+                          </Link>
+                          {opp.stage !== 'Archived' && (
+                            <button
+                              onClick={() => archiveOpportunity(opp.id)}
+                              className="text-xs text-slate-400 hover:text-slate-700"
+                              title="Archive Opportunity"
+                            >
+                              Archive
+                            </button>
+                          )}
+                          <button
+                            onClick={() => setDeletingId(opp.id)}
+                            className="text-slate-400 hover:text-rose-600"
+                            title="Delete Opportunity"
+                            aria-label={`Delete ${opp.title}`}
+                          >
+                            <IconTrash className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
       </Card>
 
-      {/* Confirmation Modal for Delete */}
+      {/* Modals */}
       <Modal
         isOpen={deletingId !== null}
         onClose={() => setDeletingId(null)}
         onConfirm={handleConfirmDelete}
         title="Delete Opportunity"
-        description="Are you sure you want to delete this opportunity? This record will be removed from your local storage."
+        description="Are you sure you want to delete this opportunity? This record will be permanently removed from your local storage."
         confirmText="Delete Role"
         isDanger={true}
       />
-
-      {/* Confirmation Modal for Reset */}
       <Modal
         isOpen={isResetModalOpen}
         onClose={() => setIsResetModalOpen(false)}
-        onConfirm={() => resetDemoData()}
+        onConfirm={() => { resetDemoData(); setIsResetModalOpen(false); }}
         title="Reset Demo Data"
         description="Are you sure you want to clear all locally stored opportunities and restore the default 5 synthetic benchmark roles?"
         confirmText="Reset All Data"

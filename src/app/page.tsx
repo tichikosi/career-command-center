@@ -1,65 +1,86 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { Card, CardHeader } from '@/components/ui/Card';
-import { RecommendationBadge, PipelineStageBadge } from '@/components/ui/Badge';
+import {
+  RecommendationBadge,
+  PipelineStageBadge,
+  PriorityBadge,
+} from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import {
   IconAnalyze,
   IconArrowRight,
   IconRefresh,
   IconHelpCircle,
+  IconAlertTriangle,
+  IconClock,
+  IconFlag,
+  IconCheckCircle,
+  IconCalendar,
 } from '@/components/icons';
-import { JobOpportunity, PipelineStage } from '@/types/opportunity';
-import {
-  getOpportunities,
-  subscribeToStorage,
-  resetDemoData,
-} from '@/lib/storage';
+import { PipelineStage } from '@/types/opportunity';
+import { resetDemoData } from '@/lib/storage';
+import { useOpportunities } from '@/lib/useOpportunities';
+import { classifyFollowUpDate, formatShortDate } from '@/lib/dateUtils';
 
 export default function DashboardPage() {
-  const [opportunities, setOpportunities] = useState<JobOpportunity[]>(() => getOpportunities());
+  const opportunities = useOpportunities();
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
 
-  useEffect(() => {
-    const handleStorage = () => {
-      setOpportunities(getOpportunities());
-    };
-    return subscribeToStorage(handleStorage);
-  }, []);
-
-  // Calculate Summary Metrics
+  // Active (non-archived) opportunities
+  const activeOpportunities = opportunities.filter((o) => o.stage !== 'Archived');
   const totalCount = opportunities.length;
-  const highFitCount = opportunities.filter((o) => o.analysis.overallFitScore >= 85).length;
-  const activeInterviewingCount = opportunities.filter((o) => o.stage === 'Interviewing').length;
-  const pendingActionsCount = opportunities.filter(
-    (o) => o.stage !== 'Archived' && o.analysis.nextActions && o.analysis.nextActions.length > 0
-  ).length;
+  const activeCount = activeOpportunities.length;
 
-  // Recent 3 opportunities
+  // High priority active
+  const highPriorityActive = activeOpportunities.filter((o) => o.priority === 'High');
+
+  // Overdue follow-ups
+  const overdueOpportunities = activeOpportunities.filter(
+    (o) => classifyFollowUpDate(o.followUpDate) === 'Overdue'
+  );
+
+  // Due today
+  const dueTodayOpportunities = activeOpportunities.filter(
+    (o) => classifyFollowUpDate(o.followUpDate) === 'Due Today'
+  );
+
+  // Dynamic pending actions: count incomplete actions across non-archived opportunities
+  const totalPendingActions = activeOpportunities.reduce((sum, o) => {
+    return sum + o.actions.filter((a) => !a.completed).length;
+  }, 0);
+
+  // Highest-priority active opportunity (High > Medium > Low, then by fit score)
+  const PRIORITY_RANK: Record<string, number> = { High: 0, Medium: 1, Low: 2 };
+  const topOpportunity = [...activeOpportunities].sort((a, b) => {
+    const rankDiff = (PRIORITY_RANK[a.priority] ?? 99) - (PRIORITY_RANK[b.priority] ?? 99);
+    if (rankDiff !== 0) return rankDiff;
+    return b.analysis.overallFitScore - a.analysis.overallFitScore;
+  })[0] ?? null;
+
+  const topNextAction = topOpportunity
+    ? topOpportunity.actions.find((a) => !a.completed)
+    : null;
+
+  // Recent 3 opportunities (by createdAt desc)
   const recentOpportunities = [...opportunities]
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, 3);
 
-  // Group by Stage
   const STAGES: PipelineStage[] = [
-    'Identified',
-    'Applied',
-    'Screening',
-    'Interviewing',
-    'Offer',
-    'Archived',
+    'Identified', 'Applied', 'Screening', 'Interviewing', 'Offer', 'Archived',
   ];
+
+  const hasAlerts = overdueOpportunities.length > 0 || dueTodayOpportunities.length > 0;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-200">
       {/* Header Banner & Primary CTA */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-slate-200/80 shadow-xs">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-            Career Command Center
-          </h1>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Career Command Center</h1>
           <p className="text-sm text-slate-600 mt-1">
             Executive opportunity pipeline & evidence-backed role alignment dashboard.
           </p>
@@ -82,42 +103,75 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Follow-up Alert Banner */}
+      {hasAlerts && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-2">
+          <div className="flex items-center gap-2">
+            <IconAlertTriangle className="w-4 h-4 text-amber-700 shrink-0" />
+            <h2 className="text-sm font-bold text-amber-900">Follow-up Attention Required</h2>
+          </div>
+          <div className="flex flex-wrap gap-4 text-xs">
+            {overdueOpportunities.length > 0 && (
+              <Link
+                href="/opportunities?followUp=Overdue"
+                className="inline-flex items-center gap-1 font-semibold text-rose-700 hover:text-rose-900"
+              >
+                <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />
+                {overdueOpportunities.length} Overdue — {overdueOpportunities.map((o) => o.title).join(', ')}
+              </Link>
+            )}
+            {dueTodayOpportunities.length > 0 && (
+              <Link
+                href="/opportunities?followUp=Due Today"
+                className="inline-flex items-center gap-1 font-semibold text-amber-700 hover:text-amber-900"
+              >
+                <IconClock className="w-3 h-3 shrink-0" />
+                {dueTodayOpportunities.length} Due Today — {dueTodayOpportunities.map((o) => o.title).join(', ')}
+              </Link>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Metric Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card padding="md" className="border-l-4 border-l-slate-900">
-          <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">
-            Total Opportunities
+          <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Active Opportunities</p>
+          <p className="text-3xl font-bold text-slate-900 mt-2">{activeCount}</p>
+          <p className="text-xs text-slate-500 mt-1">
+            {totalCount > activeCount ? `${totalCount - activeCount} archived` : 'In local pipeline'}
           </p>
-          <p className="text-3xl font-bold text-slate-900 mt-2">{totalCount}</p>
-          <p className="text-xs text-slate-500 mt-1">Active in local pipeline</p>
         </Card>
 
-        <Card padding="md" className="border-l-4 border-l-emerald-600">
-          <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">
-            High Alignment Roles
-          </p>
-          <p className="text-3xl font-bold text-emerald-700 mt-2">{highFitCount}</p>
-          <p className="text-xs text-slate-500 mt-1">Fit score &ge; 85% (Apply status)</p>
-        </Card>
-
-        <Card padding="md" className="border-l-4 border-l-indigo-600">
-          <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">
-            Active Interviewing
-          </p>
-          <p className="text-3xl font-bold text-indigo-900 mt-2">{activeInterviewingCount}</p>
-          <p className="text-xs text-slate-500 mt-1">In active interview stage</p>
+        <Card padding="md" className="border-l-4 border-l-rose-500">
+          <div className="flex items-center gap-1.5 mb-1">
+            <IconFlag className="w-3.5 h-3.5 text-rose-500" />
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">High Priority</p>
+          </div>
+          <p className="text-3xl font-bold text-rose-700 mt-1">{highPriorityActive.length}</p>
+          <p className="text-xs text-slate-500 mt-1">Active high-priority roles</p>
         </Card>
 
         <Card padding="md" className="border-l-4 border-l-amber-500">
-          <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">
-            Pending Action Items
-          </p>
-          <p className="text-3xl font-bold text-amber-700 mt-2">{pendingActionsCount}</p>
-          <p className="text-xs text-slate-500 mt-1">Non-archived next actions</p>
+          <div className="flex items-center gap-1.5 mb-1">
+            <IconClock className="w-3.5 h-3.5 text-amber-500" />
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Overdue Follow-ups</p>
+          </div>
+          <p className="text-3xl font-bold text-amber-700 mt-1">{overdueOpportunities.length}</p>
+          <p className="text-xs text-slate-500 mt-1">Require immediate attention</p>
+        </Card>
+
+        <Card padding="md" className="border-l-4 border-l-indigo-500">
+          <div className="flex items-center gap-1.5 mb-1">
+            <IconCheckCircle className="w-3.5 h-3.5 text-indigo-500" />
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Pending Actions</p>
+          </div>
+          <p className="text-3xl font-bold text-indigo-700 mt-1">{totalPendingActions}</p>
+          <p className="text-xs text-slate-500 mt-1">Across all active roles</p>
         </Card>
       </div>
 
-      {/* Empty State vs Recent Content */}
+      {/* Empty State vs Content */}
       {totalCount === 0 ? (
         <Card padding="lg" className="text-center py-12">
           <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center mx-auto mb-4">
@@ -125,7 +179,7 @@ export default function DashboardPage() {
           </div>
           <h3 className="text-lg font-semibold text-slate-900">No Opportunities Analyzed Yet</h3>
           <p className="text-sm text-slate-600 max-w-md mx-auto mt-2">
-            Get started by analyzing a synthetic sample position or pasting a custom job description to calculate evidence-backed fit reports.
+            Get started by analyzing a synthetic sample position or pasting a custom job description.
           </p>
           <div className="mt-6 flex items-center justify-center gap-3">
             <Link
@@ -144,12 +198,108 @@ export default function DashboardPage() {
         </Card>
       ) : (
         <>
-          {/* Recent Analyses Grid */}
+          {/* Top Priority Next Action */}
+          {topOpportunity && topNextAction && (
+            <Card padding="md" className="border-l-4 border-l-indigo-600 bg-indigo-50/30">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1 space-y-1">
+                  <p className="text-xs font-bold uppercase tracking-wider text-indigo-700">
+                    Next Recommended Action
+                  </p>
+                  <p className="text-sm font-semibold text-slate-900">{topNextAction.text}</p>
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <PriorityBadge priority={topOpportunity.priority} />
+                    <span className="text-xs text-slate-500">
+                      {topOpportunity.title} — {topOpportunity.company}
+                    </span>
+                  </div>
+                  {topOpportunity.followUpDate && (
+                    <div className="flex items-center gap-1 text-xs text-slate-500 mt-1">
+                      <IconCalendar className="w-3 h-3" />
+                      <span>Follow-up: {formatShortDate(topOpportunity.followUpDate)}</span>
+                    </div>
+                  )}
+                </div>
+                <Link
+                  href={`/analysis/${topOpportunity.id}`}
+                  className="shrink-0 text-xs font-semibold text-indigo-700 hover:text-indigo-900 flex items-center gap-1"
+                >
+                  <span>Open Report</span>
+                  <IconArrowRight className="w-3 h-3" />
+                </Link>
+              </div>
+            </Card>
+          )}
+
+          {/* High Priority Active Opportunities */}
+          {highPriorityActive.length > 0 && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-bold text-slate-900 tracking-tight">
+                  High Priority — Active
+                </h2>
+                <Link
+                  href="/opportunities?priority=High"
+                  className="text-xs font-semibold text-slate-700 hover:text-slate-900 flex items-center gap-1"
+                >
+                  <span>View All High Priority</span>
+                  <IconArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {highPriorityActive.slice(0, 3).map((opp) => {
+                  const followUpStatus = classifyFollowUpDate(opp.followUpDate);
+                  const pendingCount = opp.actions.filter((a) => !a.completed).length;
+                  return (
+                    <Card key={opp.id} padding="md" className="flex flex-col justify-between hover:border-slate-300 border-l-2 border-l-rose-400">
+                      <div>
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{opp.company}</span>
+                            <h3 className="font-semibold text-slate-900 mt-0.5 line-clamp-1 text-sm">{opp.title}</h3>
+                          </div>
+                          <RecommendationBadge recommendation={opp.analysis.recommendation} />
+                        </div>
+                        <div className="flex items-center gap-2 mt-2 flex-wrap">
+                          <PipelineStageBadge stage={opp.stage} />
+                          {opp.followUpDate && (
+                            <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
+                              followUpStatus === 'Overdue' ? 'bg-rose-100 text-rose-700' :
+                              followUpStatus === 'Due Today' ? 'bg-amber-100 text-amber-700' :
+                              'bg-sky-100 text-sky-700'
+                            }`}>
+                              {followUpStatus === 'No Date' ? '' : followUpStatus}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+                        <div className="text-slate-500">
+                          {pendingCount > 0 ? (
+                            <span>{pendingCount} action{pendingCount !== 1 ? 's' : ''} remaining</span>
+                          ) : (
+                            <span className="text-emerald-600">All actions complete</span>
+                          )}
+                        </div>
+                        <Link
+                          href={`/analysis/${opp.id}`}
+                          className="font-medium text-slate-900 hover:text-indigo-600 flex items-center gap-1"
+                        >
+                          <span>Open</span>
+                          <IconArrowRight className="w-3 h-3" />
+                        </Link>
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Recent Analyses */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold text-slate-900 tracking-tight">
-                Recent Role Analyses
-              </h2>
+              <h2 className="text-lg font-bold text-slate-900 tracking-tight">Recent Role Analyses</h2>
               <Link
                 href="/opportunities"
                 className="text-xs font-semibold text-slate-700 hover:text-slate-900 flex items-center gap-1"
@@ -158,33 +308,24 @@ export default function DashboardPage() {
                 <IconArrowRight className="w-3.5 h-3.5" />
               </Link>
             </div>
-
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {recentOpportunities.map((opp) => (
                 <Card key={opp.id} padding="md" className="flex flex-col justify-between hover:border-slate-300">
                   <div>
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                          {opp.company}
-                        </span>
-                        <h3 className="font-semibold text-slate-900 mt-0.5 line-clamp-1">
-                          {opp.title}
-                        </h3>
+                        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{opp.company}</span>
+                        <h3 className="font-semibold text-slate-900 mt-0.5 line-clamp-1">{opp.title}</h3>
                       </div>
                       <RecommendationBadge recommendation={opp.analysis.recommendation} />
                     </div>
-
                     <p className="text-xs text-slate-600 mt-3 line-clamp-2 leading-relaxed">
                       {opp.analysis.executiveSummary}
                     </p>
                   </div>
-
                   <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
                     <div className="flex items-center gap-2">
-                      <span className="font-bold text-slate-900 text-sm">
-                        {opp.analysis.overallFitScore}%
-                      </span>
+                      <span className="font-bold text-slate-900 text-sm">{opp.analysis.overallFitScore}%</span>
                       <span className="text-slate-400">Fit</span>
                     </div>
                     <Link
@@ -200,7 +341,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Pipeline Breakdown Table */}
+          {/* Pipeline Stage Breakdown */}
           <Card padding="none" className="overflow-hidden">
             <CardHeader
               title="Pipeline Stage Breakdown"
@@ -213,28 +354,21 @@ export default function DashboardPage() {
                   <tr>
                     <th className="py-3 px-6">Pipeline Stage</th>
                     <th className="py-3 px-6">Total Roles</th>
-                    <th className="py-3 px-6">High Alignment (&ge;85%)</th>
-                    <th className="py-3 px-6 text-right font-medium">Quick Action</th>
+                    <th className="py-3 px-6">High Alignment (≥85%)</th>
+                    <th className="py-3 px-6 text-right">Quick Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {STAGES.map((stage) => {
                     const stageOpps = opportunities.filter((o) => o.stage === stage);
-                    const highFitInStage = stageOpps.filter(
-                      (o) => o.analysis.overallFitScore >= 85
-                    ).length;
-
+                    const highFitInStage = stageOpps.filter((o) => o.analysis.overallFitScore >= 85).length;
                     return (
                       <tr key={stage} className="hover:bg-slate-50/60 transition-colors">
                         <td className="py-3.5 px-6">
                           <PipelineStageBadge stage={stage} />
                         </td>
-                        <td className="py-3.5 px-6 font-semibold text-slate-900">
-                          {stageOpps.length}
-                        </td>
-                        <td className="py-3.5 px-6 font-medium text-emerald-700">
-                          {highFitInStage}
-                        </td>
+                        <td className="py-3.5 px-6 font-semibold text-slate-900">{stageOpps.length}</td>
+                        <td className="py-3.5 px-6 font-medium text-emerald-700">{highFitInStage}</td>
                         <td className="py-3.5 px-6 text-right">
                           <Link
                             href={`/opportunities?stage=${stage}`}
@@ -253,11 +387,11 @@ export default function DashboardPage() {
         </>
       )}
 
-      {/* Confirmation Modal for Reset */}
+      {/* Reset Modal */}
       <Modal
         isOpen={isResetModalOpen}
         onClose={() => setIsResetModalOpen(false)}
-        onConfirm={() => resetDemoData()}
+        onConfirm={() => { resetDemoData(); setIsResetModalOpen(false); }}
         title="Reset Demo Data"
         description="Are you sure you want to clear all locally stored opportunities and restore the default 5 synthetic benchmark roles? Any custom-analyzed roles will be removed."
         confirmText="Reset All Data"
