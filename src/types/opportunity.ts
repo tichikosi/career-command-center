@@ -34,6 +34,8 @@ export type SortField =
 
 export type SortDirection = 'asc' | 'desc';
 
+export type ThemeMode = 'light' | 'dark' | 'system';
+
 /** Structured action item: stage-suggested, role-derived, or user-authored custom */
 export interface OpportunityAction {
   id: string;
@@ -121,4 +123,5 @@ export interface OpportunityUISettings {
   priorityFilter: string;
   followUpFilter: FollowUpStatus | 'All';
   searchTerm: string;
+  themeMode: ThemeMode; // V1.1B
 }

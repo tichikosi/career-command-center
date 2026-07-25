@@ -42,7 +42,7 @@ function SafeExternalLink({
 
   if (!validUrl) {
     return (
-      <span className="text-xs text-slate-400 italic">
+      <span className="text-xs text-slate-400 dark:text-slate-500 italic">
         {href ? 'Invalid URL' : 'Not provided'}
       </span>
     );
@@ -53,7 +53,7 @@ function SafeExternalLink({
       href={validUrl}
       target="_blank"
       rel="noopener noreferrer"
-      className="inline-flex items-center gap-1.5 text-xs font-medium text-indigo-700 hover:text-indigo-900 hover:underline"
+      className="inline-flex items-center gap-1.5 text-xs font-medium text-indigo-700 dark:text-indigo-400 hover:text-indigo-900 dark:hover:text-indigo-300 hover:underline"
     >
       <span>{label}</span>
       <IconExternalLink className="w-3 h-3 shrink-0" />
@@ -176,7 +176,7 @@ export function OpportunityDetailsForm({ opportunity, onSave }: Props) {
           {!isEditing ? (
             <button
               onClick={() => setIsEditing(true)}
-              className="flex items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+              className="flex items-center gap-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors"
             >
               <IconEdit className="w-3.5 h-3.5" />
               <span>Edit</span>
@@ -185,13 +185,13 @@ export function OpportunityDetailsForm({ opportunity, onSave }: Props) {
             <div className="flex items-center gap-2">
               <button
                 onClick={handleCancel}
-                className="text-xs font-medium text-slate-500 hover:text-slate-700 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+                className="text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 px-3 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSave}
-                className="flex items-center gap-1.5 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 px-3 py-1.5 rounded-lg transition-colors"
+                className="flex items-center gap-1.5 text-xs font-semibold text-white bg-slate-900 dark:bg-slate-100 dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-200 px-3 py-1.5 rounded-lg transition-colors"
               >
                 <IconSave className="w-3.5 h-3.5" />
                 <span>Save Changes</span>
@@ -204,14 +204,14 @@ export function OpportunityDetailsForm({ opportunity, onSave }: Props) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
             {/* Priority */}
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-700" htmlFor="edit-priority">
+              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300" htmlFor="edit-priority">
                 Priority
               </label>
               <select
                 id="edit-priority"
                 value={editPriority}
                 onChange={(e) => setEditPriority(e.target.value as OpportunityPriority)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
               >
                 {PRIORITY_OPTIONS.map((p) => (
                   <option key={p} value={p}>{p}</option>
@@ -221,14 +221,14 @@ export function OpportunityDetailsForm({ opportunity, onSave }: Props) {
 
             {/* Stage */}
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-700" htmlFor="edit-stage">
+              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300" htmlFor="edit-stage">
                 Pipeline Stage
               </label>
               <select
                 id="edit-stage"
                 value={editStage}
                 onChange={(e) => setEditStage(e.target.value as PipelineStage)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
               >
                 {STAGE_OPTIONS.map((s) => (
                   <option key={s} value={s}>{s}</option>
@@ -238,7 +238,7 @@ export function OpportunityDetailsForm({ opportunity, onSave }: Props) {
 
             {/* Follow-up Date */}
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-700" htmlFor="edit-followup">
+              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300" htmlFor="edit-followup">
                 Follow-up Date
               </label>
               <input
@@ -246,13 +246,13 @@ export function OpportunityDetailsForm({ opportunity, onSave }: Props) {
                 type="date"
                 value={editFollowUpDate}
                 onChange={(e) => setEditFollowUpDate(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
               />
             </div>
 
             {/* Company Website URL */}
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-700" htmlFor="edit-company-url">
+              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300" htmlFor="edit-company-url">
                 Company Website URL
               </label>
               <input
@@ -261,18 +261,18 @@ export function OpportunityDetailsForm({ opportunity, onSave }: Props) {
                 placeholder="https://company.example.com"
                 value={editCompanyUrl}
                 onChange={(e) => setEditCompanyUrl(e.target.value)}
-                className={`w-full bg-slate-50 border rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900 ${
-                  companyUrlError ? 'border-rose-400' : 'border-slate-200'
+                className={`w-full bg-slate-50 dark:bg-slate-800/80 border rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 ${
+                  companyUrlError ? 'border-rose-400 dark:border-rose-600' : 'border-slate-200 dark:border-slate-700'
                 }`}
               />
               {companyUrlError && (
-                <p className="text-xs text-rose-600">{companyUrlError}</p>
+                <p className="text-xs text-rose-600 dark:text-rose-400">{companyUrlError}</p>
               )}
             </div>
 
             {/* Application URL */}
             <div className="space-y-1 sm:col-span-2">
-              <label className="text-xs font-semibold text-slate-700" htmlFor="edit-app-url">
+              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300" htmlFor="edit-app-url">
                 Job Application URL
               </label>
               <input
@@ -281,18 +281,18 @@ export function OpportunityDetailsForm({ opportunity, onSave }: Props) {
                 placeholder="https://company.example.com/apply"
                 value={editApplicationUrl}
                 onChange={(e) => setEditApplicationUrl(e.target.value)}
-                className={`w-full bg-slate-50 border rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900 ${
-                  applicationUrlError ? 'border-rose-400' : 'border-slate-200'
+                className={`w-full bg-slate-50 dark:bg-slate-800/80 border rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 ${
+                  applicationUrlError ? 'border-rose-400 dark:border-rose-600' : 'border-slate-200 dark:border-slate-700'
                 }`}
               />
               {applicationUrlError && (
-                <p className="text-xs text-rose-600">{applicationUrlError}</p>
+                <p className="text-xs text-rose-600 dark:text-rose-400">{applicationUrlError}</p>
               )}
             </div>
 
             {/* Notes */}
             <div className="space-y-1 sm:col-span-2">
-              <label className="text-xs font-semibold text-slate-700" htmlFor="edit-notes">
+              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300" htmlFor="edit-notes">
                 Notes
               </label>
               <textarea
@@ -301,7 +301,7 @@ export function OpportunityDetailsForm({ opportunity, onSave }: Props) {
                 placeholder="Interview notes, contacts, reminders..."
                 value={editNotes}
                 onChange={(e) => setEditNotes(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900 resize-y"
+                className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 resize-y"
               />
             </div>
           </div>
@@ -309,51 +309,51 @@ export function OpportunityDetailsForm({ opportunity, onSave }: Props) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
             {/* Priority */}
             <div className="space-y-1">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Priority</p>
+              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Priority</p>
               <PriorityBadge priority={opportunity.priority} />
             </div>
 
             {/* Follow-up Date */}
             <div className="space-y-1">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Follow-up Date</p>
+              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Follow-up Date</p>
               {opportunity.followUpDate ? (
                 <div className="flex items-center gap-2">
-                  <IconCalendar className="w-3.5 h-3.5 text-slate-500" />
-                  <span className="text-sm text-slate-800">
+                  <IconCalendar className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+                  <span className="text-sm text-slate-800 dark:text-slate-200">
                     {formatShortDate(opportunity.followUpDate)}
                   </span>
                   {followUpStatus !== 'No Date' && (
                     <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
-                      followUpStatus === 'Overdue' ? 'bg-rose-100 text-rose-700' :
-                      followUpStatus === 'Due Today' ? 'bg-amber-100 text-amber-700' :
-                      'bg-sky-100 text-sky-700'
+                      followUpStatus === 'Overdue' ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300' :
+                      followUpStatus === 'Due Today' ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300' :
+                      'bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300'
                     }`}>
                       {followUpStatus}
                     </span>
                   )}
                 </div>
               ) : (
-                <span className="text-xs text-slate-400 italic">Not set</span>
+                <span className="text-xs text-slate-400 dark:text-slate-500 italic">Not set</span>
               )}
             </div>
 
             {/* Company Website */}
             <div className="space-y-1">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Company Website</p>
+              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Company Website</p>
               <SafeExternalLink href={opportunity.companyWebsiteUrl} label="Visit Company Website" />
             </div>
 
             {/* Application URL */}
             <div className="space-y-1">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Job Application</p>
+              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Job Application</p>
               <SafeExternalLink href={opportunity.applicationUrl} label="Open Job Application" />
             </div>
 
             {/* Notes */}
             {opportunity.notes && (
               <div className="space-y-1 sm:col-span-2">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Notes</p>
-                <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-line">
+                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Notes</p>
+                <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-line">
                   {opportunity.notes}
                 </p>
               </div>
@@ -362,8 +362,8 @@ export function OpportunityDetailsForm({ opportunity, onSave }: Props) {
             {/* Archived Reason */}
             {opportunity.stage === 'Archived' && opportunity.archivedReason && (
               <div className="space-y-1 sm:col-span-2">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Archive Reason</p>
-                <p className="text-sm text-slate-600 italic">{opportunity.archivedReason}</p>
+                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Archive Reason</p>
+                <p className="text-sm text-slate-600 dark:text-slate-400 italic">{opportunity.archivedReason}</p>
               </div>
             )}
           </div>
@@ -374,15 +374,15 @@ export function OpportunityDetailsForm({ opportunity, onSave }: Props) {
       <Card padding="lg" className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-sm font-bold text-slate-900">Next Action Items</h3>
+            <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Next Action Items</h3>
             {opportunity.stage !== 'Archived' && pendingCount > 0 && (
-              <p className="text-xs text-slate-500 mt-0.5">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 <IconClock className="w-3 h-3 inline mr-1" />
                 {pendingCount} item{pendingCount !== 1 ? 's' : ''} remaining
               </p>
             )}
             {opportunity.stage === 'Archived' && (
-              <p className="text-xs text-slate-400 italic mt-0.5">
+              <p className="text-xs text-slate-400 dark:text-slate-500 italic mt-0.5">
                 Archived — actions are preserved for reference
               </p>
             )}
@@ -392,7 +392,7 @@ export function OpportunityDetailsForm({ opportunity, onSave }: Props) {
         {/* Stage-suggested actions */}
         {stageActions.length > 0 && (
           <div className="space-y-2">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
               Stage: {opportunity.stage}
             </p>
             {stageActions.map((action) => (
@@ -409,7 +409,7 @@ export function OpportunityDetailsForm({ opportunity, onSave }: Props) {
         {/* Role-specific actions */}
         {roleActions.length > 0 && (
           <div className="space-y-2">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
               Role-Specific
             </p>
             {roleActions.map((action) => (
@@ -426,7 +426,7 @@ export function OpportunityDetailsForm({ opportunity, onSave }: Props) {
         {/* Custom actions */}
         {customActions.length > 0 && (
           <div className="space-y-2">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
               Custom Actions
             </p>
             {customActions.map((action) => (
@@ -442,7 +442,7 @@ export function OpportunityDetailsForm({ opportunity, onSave }: Props) {
 
         {/* Add custom action input */}
         {opportunity.stage !== 'Archived' && (
-          <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+          <div className="flex items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
             <input
               type="text"
               placeholder="Add a custom action..."
@@ -451,12 +451,12 @@ export function OpportunityDetailsForm({ opportunity, onSave }: Props) {
               onKeyDown={(e) => {
                 if (e.key === 'Enter') handleAddCustomAction();
               }}
-              className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900"
+              className="flex-1 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
             />
             <button
               onClick={handleAddCustomAction}
               disabled={!newActionText.trim()}
-              className="p-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="p-2 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 rounded-lg hover:bg-slate-800 dark:hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               aria-label="Add custom action"
             >
               <IconPlus className="w-4 h-4" />
@@ -490,8 +490,8 @@ function ActionItem({
     <div
       className={`flex items-start gap-3 p-3 rounded-lg border transition-colors ${
         action.completed
-          ? 'bg-slate-50 border-slate-200 opacity-60'
-          : 'bg-white border-slate-200 hover:border-slate-300'
+          ? 'bg-slate-50 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 opacity-60'
+          : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
       }`}
     >
       <button
@@ -501,7 +501,7 @@ function ActionItem({
         className={`w-4.5 h-4.5 mt-0.5 rounded-full border-2 shrink-0 flex items-center justify-center transition-colors ${
           action.completed
             ? 'border-emerald-500 bg-emerald-500 text-white'
-            : 'border-slate-300 hover:border-slate-500'
+            : 'border-slate-300 dark:border-slate-600 hover:border-slate-500 dark:hover:border-slate-400'
         } ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
       >
         {action.completed && (
@@ -512,16 +512,16 @@ function ActionItem({
       </button>
 
       <div className="flex-1 min-w-0">
-        <p className={`text-xs text-slate-800 leading-relaxed ${
-          action.completed ? 'line-through text-slate-400' : ''
+        <p className={`text-xs text-slate-800 dark:text-slate-200 leading-relaxed ${
+          action.completed ? 'line-through text-slate-400 dark:text-slate-500' : ''
         }`}>
           {action.text}
         </p>
         {sourceLabel && (
           <span className={`text-[10px] font-medium mt-0.5 inline-block ${
             action.source === 'custom'
-              ? 'text-indigo-600'
-              : 'text-slate-400'
+              ? 'text-indigo-600 dark:text-indigo-400'
+              : 'text-slate-400 dark:text-slate-500'
           }`}>
             {sourceLabel}
           </span>
@@ -529,7 +529,7 @@ function ActionItem({
       </div>
 
       {action.source === 'custom' && !disabled && (
-        <span className="text-[10px] text-indigo-500 font-semibold shrink-0 mt-0.5">
+        <span className="text-[10px] text-indigo-500 dark:text-indigo-400 font-semibold shrink-0 mt-0.5">
           ✎
         </span>
       )}

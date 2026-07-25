@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @layer utilities {
   /* Scrollbar styling for executive clean tables */
   .scrollbar-none::-webkit-scrollbar {
@@ -9,4 +11,10 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
+}
+
+/* Custom dark selection */
+.dark ::selection {
+  background-color: #334155;
+  color: #f8fafc;
 }

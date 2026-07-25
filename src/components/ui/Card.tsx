@@ -16,7 +16,7 @@ export function Card({ children, className = '', padding = 'md' }: CardProps) {
 
   return (
     <div
-      className={`bg-white rounded-xl border border-slate-200/80 shadow-xs transition-shadow hover:shadow-sm ${paddingStyles} ${className}`}
+      className={`bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-xs transition-colors ${paddingStyles} ${className}`}
     >
       {children}
     </div>
@@ -35,10 +35,10 @@ export function CardHeader({
   className?: string;
 }) {
   return (
-    <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 mb-4 border-b border-slate-100 ${className}`}>
+    <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 mb-4 border-b border-slate-100 dark:border-slate-800 ${className}`}>
       <div>
-        <h3 className="text-lg font-semibold text-slate-900 tracking-tight">{title}</h3>
-        {subtitle && <p className="text-xs font-normal text-slate-500 mt-0.5">{subtitle}</p>}
+        <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 tracking-tight">{title}</h3>
+        {subtitle && <p className="text-xs font-normal text-slate-500 dark:text-slate-400 mt-0.5">{subtitle}</p>}
       </div>
       {action && <div className="shrink-0">{action}</div>}
     </div>

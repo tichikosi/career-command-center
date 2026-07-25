@@ -8,8 +8,8 @@ import { IconAnalyze, IconAlertTriangle, IconRefresh } from '@/components/icons'
 import { alexVanceProfile } from '@/data/candidate';
 import { initialOpportunities } from '@/data/opportunities';
 import { DeterministicSyntheticEngine } from '@/lib/engine';
-import { saveOpportunity } from '@/lib/storage';
-import { buildStageActions, buildRoleActions } from '@/lib/stageActions';
+import { saveOpportunity, getOpportunityById } from '@/lib/storage';
+import { buildStageActions, buildRoleActions, mergeActionsForStage } from '@/lib/stageActions';
 import { JobOpportunity } from '@/types/opportunity';
 
 export default function AnalyzePage() {
@@ -25,20 +25,20 @@ export default function AnalyzePage() {
   const [sourceUrl, setSourceUrl] = useState('');
   const [jobDescription, setJobDescription] = useState('');
 
-  // Validation & Processing State
-  const [error, setError] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleAnalyzeSample = async () => {
-    setIsAnalyzing(true);
     setError(null);
+    const sampleOpp = initialOpportunities.find((o) => o.id === selectedSampleId);
+    if (!sampleOpp) {
+      setError('Selected sample role not found.');
+      return;
+    }
+
+    setIsAnalyzing(true);
 
     try {
-      const sampleOpp = initialOpportunities.find((o) => o.id === selectedSampleId);
-      if (!sampleOpp) {
-        throw new Error('Selected sample role not found.');
-      }
-
       const engine = new DeterministicSyntheticEngine();
       const report = await engine.analyzeRole(
         {
@@ -50,31 +50,67 @@ export default function AnalyzePage() {
         alexVanceProfile
       );
 
-      const newOpportunity: JobOpportunity = {
-        id: `opp-${Date.now()}`,
-        title: sampleOpp.title,
-        company: sampleOpp.company,
-        location: sampleOpp.location,
-        compensation: sampleOpp.compensation,
-        sourceUrl: sampleOpp.sourceUrl,
-        rawJobDescription: sampleOpp.rawJobDescription,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        stage: 'Identified',
-        analysis: report,
-        priority: report.overallFitScore >= 85 ? 'High' : report.overallFitScore >= 50 ? 'Medium' : 'Low',
-        notes: '',
-        actions: [
-          ...buildStageActions('Identified'),
-          ...buildRoleActions(`opp-${Date.now()}`, report.nextActions),
-        ],
-      };
+      const targetId = sampleOpp.id; // Reuse canonical fixture ID!
+      const existingOpp = getOpportunityById(targetId);
+
+      let opportunityToSave: JobOpportunity;
+
+      if (existingOpp) {
+        // Re-analyzing existing sample: refresh analysis & role actions while preserving user workflow history
+        const updatedActions = mergeActionsForStage(
+          targetId,
+          existingOpp.stage,
+          report.nextActions,
+          existingOpp.actions
+        );
+
+        opportunityToSave = {
+          ...existingOpp,
+          title: sampleOpp.title,
+          company: sampleOpp.company,
+          location: sampleOpp.location ?? existingOpp.location,
+          compensation: sampleOpp.compensation ?? existingOpp.compensation,
+          sourceUrl: sampleOpp.sourceUrl ?? existingOpp.sourceUrl,
+          rawJobDescription: sampleOpp.rawJobDescription,
+          analysis: report,
+          actions: updatedActions,
+          updatedAt: new Date().toISOString(),
+        };
+      } else {
+        // First time saving this sample opportunity
+        const stage = sampleOpp.stage || 'Identified';
+        const priority = sampleOpp.priority || (report.overallFitScore >= 85 ? 'High' : report.overallFitScore >= 50 ? 'Medium' : 'Low');
+
+        opportunityToSave = {
+          id: targetId,
+          title: sampleOpp.title,
+          company: sampleOpp.company,
+          location: sampleOpp.location,
+          compensation: sampleOpp.compensation,
+          sourceUrl: sampleOpp.sourceUrl,
+          companyWebsiteUrl: sampleOpp.companyWebsiteUrl,
+          applicationUrl: sampleOpp.applicationUrl,
+          rawJobDescription: sampleOpp.rawJobDescription,
+          createdAt: sampleOpp.createdAt || new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          stage,
+          analysis: report,
+          priority,
+          notes: sampleOpp.notes || '',
+          followUpDate: sampleOpp.followUpDate,
+          archivedReason: sampleOpp.archivedReason,
+          actions: [
+            ...buildStageActions(stage),
+            ...buildRoleActions(targetId, report.nextActions),
+          ],
+        };
+      }
 
       // Simulate engine processing delay
       await new Promise((r) => setTimeout(r, 600));
 
-      saveOpportunity(newOpportunity);
-      router.push(`/analysis/${newOpportunity.id}`);
+      saveOpportunity(opportunityToSave);
+      router.push(`/analysis/${opportunityToSave.id}`);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'An error occurred during analysis.');
       setIsAnalyzing(false);
@@ -153,14 +189,14 @@ export default function AnalyzePage() {
     <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-200">
       {/* Page Header */}
       <div>
-        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Analyze a Role</h1>
-        <p className="text-sm text-slate-600 mt-1">
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">Analyze a Role</h1>
+        <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
           Evaluate job descriptions against Alex Vance’s synthetic candidate profile to generate evidence-backed fit reports.
         </p>
       </div>
 
       {/* Candidate Context Read-Only Chip */}
-      <div className="bg-slate-900 text-white p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+      <div className="bg-slate-900 dark:bg-slate-900 border border-slate-800 text-white p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
         <div>
           <span className="text-[10px] font-bold tracking-wider uppercase text-slate-400">
             Active Candidate Context
@@ -180,13 +216,13 @@ export default function AnalyzePage() {
       </div>
 
       {/* Mode Selector Tabs */}
-      <div className="flex border-b border-slate-200">
+      <div className="flex border-b border-slate-200 dark:border-slate-800">
         <button
           onClick={() => setActiveTab('sample')}
           className={`py-3 px-6 text-sm font-semibold border-b-2 transition-colors ${
             activeTab === 'sample'
-              ? 'border-slate-900 text-slate-900'
-              : 'border-transparent text-slate-500 hover:text-slate-700'
+              ? 'border-slate-900 dark:border-slate-100 text-slate-900 dark:text-slate-100'
+              : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
           }`}
         >
           Select Pre-Loaded Sample Role
@@ -195,8 +231,8 @@ export default function AnalyzePage() {
           onClick={() => setActiveTab('custom')}
           className={`py-3 px-6 text-sm font-semibold border-b-2 transition-colors ${
             activeTab === 'custom'
-              ? 'border-slate-900 text-slate-900'
-              : 'border-transparent text-slate-500 hover:text-slate-700'
+              ? 'border-slate-900 dark:border-slate-100 text-slate-900 dark:text-slate-100'
+              : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
           }`}
         >
           Paste Custom Job Description
@@ -205,8 +241,8 @@ export default function AnalyzePage() {
 
       {/* Error Alert */}
       {error && (
-        <div className="bg-rose-50 border border-rose-200 text-rose-800 p-4 rounded-xl text-xs flex items-center gap-2">
-          <IconAlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
+        <div className="bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-200 p-4 rounded-xl text-xs flex items-center gap-2">
+          <IconAlertTriangle className="w-4 h-4 shrink-0 text-rose-600 dark:text-rose-400" />
           <span>{error}</span>
         </div>
       )}
@@ -229,29 +265,29 @@ export default function AnalyzePage() {
                   onClick={() => setSelectedSampleId(opp.id)}
                   className={`p-4 rounded-xl border cursor-pointer transition-all ${
                     isSelected
-                      ? 'border-slate-900 bg-slate-50/80 ring-1 ring-slate-900 shadow-xs'
-                      : 'border-slate-200 bg-white hover:border-slate-300'
+                      ? 'border-slate-900 dark:border-slate-100 bg-slate-50/80 dark:bg-slate-800/80 ring-1 ring-slate-900 dark:ring-slate-100 shadow-xs'
+                      : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700'
                   }`}
                 >
                   <div className="flex items-start justify-between">
                     <div>
-                      <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                      <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
                         {opp.company}
                       </span>
-                      <h4 className="font-semibold text-slate-900 mt-0.5">{opp.title}</h4>
+                      <h4 className="font-semibold text-slate-900 dark:text-slate-100 mt-0.5">{opp.title}</h4>
                     </div>
                     <input
                       type="radio"
                       name="sampleRole"
                       checked={isSelected}
                       onChange={() => setSelectedSampleId(opp.id)}
-                      className="mt-1 accent-slate-900"
+                      className="mt-1 accent-slate-900 dark:accent-slate-100"
                     />
                   </div>
-                  <p className="text-xs text-slate-600 mt-2 line-clamp-2 leading-relaxed">
+                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-2 line-clamp-2 leading-relaxed">
                     {opp.rawJobDescription}
                   </p>
-                  <div className="mt-3 text-[11px] text-slate-500 font-medium">
+                  <div className="mt-3 text-[11px] text-slate-500 dark:text-slate-400 font-medium">
                     Expected Fit: {opp.analysis.overallFitScore}% ({opp.analysis.recommendation})
                   </div>
                 </div>
@@ -259,15 +295,15 @@ export default function AnalyzePage() {
             })}
           </div>
 
-          <div className="pt-4 border-t border-slate-100 flex items-center justify-end">
+          <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end">
             <button
               onClick={handleAnalyzeSample}
               disabled={isAnalyzing}
-              className="px-6 py-2.5 text-sm font-semibold text-white bg-slate-900 hover:bg-slate-800 disabled:opacity-50 rounded-lg shadow-xs transition-colors flex items-center gap-2"
+              className="px-6 py-2.5 text-sm font-semibold text-white dark:text-slate-900 bg-slate-900 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-slate-200 disabled:opacity-50 rounded-lg shadow-xs transition-colors flex items-center gap-2"
             >
               {isAnalyzing ? (
                 <>
-                  <IconRefresh className="w-4 h-4 animate-spin text-white" />
+                  <IconRefresh className="w-4 h-4 animate-spin text-white dark:text-slate-900" />
                   <span>Evaluating Synthetic Engine...</span>
                 </>
               ) : (
@@ -294,7 +330,7 @@ export default function AnalyzePage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
                   Job Title *
                 </label>
                 <input
@@ -303,12 +339,12 @@ export default function AnalyzePage() {
                   onChange={(e) => setJobTitle(e.target.value)}
                   placeholder="e.g. Director of RevOps"
                   required
-                  className="w-full px-3.5 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
+                  className="w-full px-3.5 py-2 text-sm border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
                   Company Name *
                 </label>
                 <input
@@ -317,12 +353,12 @@ export default function AnalyzePage() {
                   onChange={(e) => setCompany(e.target.value)}
                   placeholder="e.g. Apex Enterprise"
                   required
-                  className="w-full px-3.5 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
+                  className="w-full px-3.5 py-2 text-sm border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
                   Location (Optional)
                 </label>
                 <input
@@ -330,12 +366,12 @@ export default function AnalyzePage() {
                   value={location}
                   onChange={(e) => setLocation(e.target.value)}
                   placeholder="e.g. San Francisco, CA (Hybrid)"
-                  className="w-full px-3.5 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
+                  className="w-full px-3.5 py-2 text-sm border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
                   Compensation Range (Optional)
                 </label>
                 <input
@@ -343,13 +379,13 @@ export default function AnalyzePage() {
                   value={compensation}
                   onChange={(e) => setCompensation(e.target.value)}
                   placeholder="e.g. $220,000 - $250,000"
-                  className="w-full px-3.5 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
+                  className="w-full px-3.5 py-2 text-sm border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
                 Job Description Text * (Min 50 words, Max 15,000 chars)
               </label>
               <textarea
@@ -358,9 +394,9 @@ export default function AnalyzePage() {
                 rows={10}
                 placeholder="Paste the full job description text here..."
                 required
-                className="w-full p-3.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 font-mono text-xs leading-relaxed"
+                className="w-full p-3.5 text-sm border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 font-mono text-xs leading-relaxed"
               />
-              <div className="flex items-center justify-between text-xs text-slate-400 mt-1">
+              <div className="flex items-center justify-between text-xs text-slate-400 dark:text-slate-500 mt-1">
                 <span>
                   Words:{' '}
                   {jobDescription.trim().split(/\s+/).filter((w) => w.length > 0).length} / 50 min
@@ -369,8 +405,8 @@ export default function AnalyzePage() {
               </div>
             </div>
 
-            <div className="bg-slate-50 border border-slate-200/80 p-4 rounded-xl text-xs text-slate-600 space-y-1">
-              <span className="font-semibold text-slate-900 block">
+            <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-800 p-4 rounded-xl text-xs text-slate-600 dark:text-slate-400 space-y-1">
+              <span className="font-semibold text-slate-900 dark:text-slate-100 block">
                 Privacy & Data Notice:
               </span>
               <p>
@@ -393,7 +429,7 @@ export default function AnalyzePage() {
                   setJobDescription('');
                   setError(null);
                 }}
-                className="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+                className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors"
               >
                 Clear Form
               </button>
@@ -401,11 +437,11 @@ export default function AnalyzePage() {
               <button
                 type="submit"
                 disabled={isAnalyzing}
-                className="px-6 py-2 text-sm font-semibold text-white bg-slate-900 hover:bg-slate-800 disabled:opacity-50 rounded-lg shadow-xs transition-colors flex items-center gap-2"
+                className="px-6 py-2 text-sm font-semibold text-white dark:text-slate-900 bg-slate-900 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-slate-200 disabled:opacity-50 rounded-lg shadow-xs transition-colors flex items-center gap-2"
               >
                 {isAnalyzing ? (
                   <>
-                    <IconRefresh className="w-4 h-4 animate-spin text-white" />
+                    <IconRefresh className="w-4 h-4 animate-spin text-white dark:text-slate-900" />
                     <span>Processing Analysis...</span>
                   </>
                 ) : (

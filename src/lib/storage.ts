@@ -57,7 +57,7 @@ function notifyStorageChange(): void {
 }
 
 // ---------------------------------------------------------------------------
-// Opportunity normalization — supply defaults for any missing V1.1A fields.
+// Opportunity normalization & ID deduplication
 // ---------------------------------------------------------------------------
 
 function derivePriorityFromScore(score: unknown): OpportunityPriority {
@@ -89,6 +89,29 @@ function safePriority(value: unknown, fallbackScore: unknown): OpportunityPriori
   return valid.includes(value as OpportunityPriority)
     ? (value as OpportunityPriority)
     : derivePriorityFromScore(fallbackScore);
+}
+
+/**
+ * Deduplicates an array of JobOpportunity strictly by opportunity.id.
+ * If identical IDs exist, preserves the most recently updated valid record.
+ * Does NOT merge distinct opportunities by company/title.
+ */
+function deduplicateOpportunities(opps: JobOpportunity[]): JobOpportunity[] {
+  const map = new Map<string, JobOpportunity>();
+  for (const opp of opps) {
+    if (!opp || !opp.id) continue;
+    const existing = map.get(opp.id);
+    if (!existing) {
+      map.set(opp.id, opp);
+    } else {
+      const existingTime = new Date(existing.updatedAt).getTime() || 0;
+      const newTime = new Date(opp.updatedAt).getTime() || 0;
+      if (newTime >= existingTime) {
+        map.set(opp.id, opp);
+      }
+    }
+  }
+  return Array.from(map.values());
 }
 
 /**
@@ -163,7 +186,8 @@ export function normalizeOpportunity(raw: any): JobOpportunity {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function normalizeAll(raws: any[]): JobOpportunity[] {
   if (!Array.isArray(raws)) return [];
-  return raws.map(normalizeOpportunity);
+  const normalizedList = raws.map(normalizeOpportunity);
+  return deduplicateOpportunities(normalizedList);
 }
 
 // ---------------------------------------------------------------------------
@@ -346,19 +370,24 @@ export function addCustomAction(
 export function resetDemoData(): void {
   inMemoryProfile = alexVanceProfile;
   const freshOpps = normalizeAll([...initialOpportunities]);
+  // Update caches before persistOpportunities so the notified listeners read fresh data
+  cachedOpportunities = freshOpps;
   inMemoryOpportunities = freshOpps;
 
   if (isLocalStorageAvailable()) {
     try {
       window.localStorage.setItem(PROFILE_KEY, JSON.stringify(alexVanceProfile));
+      // Preserve current UI settings (including theme) — only restore opportunity data
+      const currentSettings = getUISettings();
       window.localStorage.setItem(OPPORTUNITIES_KEY, JSON.stringify(freshOpps));
-      window.localStorage.removeItem(SETTINGS_KEY);
+      window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(currentSettings));
     } catch {
       // Ignore write errors
     }
   }
 
-  persistOpportunities(freshOpps);
+  // persistOpportunities writes + notifies; do NOT call it again after this
+  notifyStorageChange();
 }
 
 export function subscribeToStorage(listener: () => void): () => void {
@@ -396,6 +425,7 @@ const DEFAULT_SETTINGS: OpportunityUISettings = {
   priorityFilter: 'All',
   followUpFilter: 'All',
   searchTerm: '',
+  themeMode: 'system',
 };
 
 export function getUISettings(): OpportunityUISettings {
@@ -405,7 +435,14 @@ export function getUISettings(): OpportunityUISettings {
     const raw = window.localStorage.getItem(SETTINGS_KEY);
     if (!raw) return { ...DEFAULT_SETTINGS };
     const parsed = JSON.parse(raw);
-    return { ...DEFAULT_SETTINGS, ...parsed };
+    const themeMode =
+      parsed.themeMode === 'light' ||
+      parsed.themeMode === 'dark' ||
+      parsed.themeMode === 'system'
+        ? parsed.themeMode
+        : 'system';
+
+    return { ...DEFAULT_SETTINGS, ...parsed, themeMode };
   } catch {
     return { ...DEFAULT_SETTINGS };
   }
@@ -428,11 +465,12 @@ export function saveUISettings(settings: Partial<OpportunityUISettings>): void {
 // ---------------------------------------------------------------------------
 
 function persistOpportunities(opps: JobOpportunity[]): void {
-  cachedOpportunities = opps;
-  inMemoryOpportunities = opps;
+  const deduplicated = deduplicateOpportunities(opps);
+  cachedOpportunities = deduplicated;
+  inMemoryOpportunities = deduplicated;
   if (isLocalStorageAvailable()) {
     try {
-      window.localStorage.setItem(OPPORTUNITIES_KEY, JSON.stringify(opps));
+      window.localStorage.setItem(OPPORTUNITIES_KEY, JSON.stringify(deduplicated));
     } catch {
       // Ignore
     }
