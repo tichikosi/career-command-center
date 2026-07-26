@@ -4,18 +4,18 @@ import {
   FitAnalysisReport,
   QualificationMatch,
   RecommendationType,
+  CandidateProvenance,
 } from '@/types/opportunity';
 import { sanitizeInput } from './sanitize';
 
-// Import pre-authored sample fixtures
-import { fixtureRole1AIStrategy } from '@/data/fixtures/role-1-ai-strategy';
-import { fixtureRole2SalesOps } from '@/data/fixtures/role-2-sales-ops';
-import { fixtureRole3DataEngineer } from '@/data/fixtures/role-3-data-engineer';
-import { fixtureRole4ChiefOfStaff } from '@/data/fixtures/role-4-chief-of-staff';
-import { fixtureRole5StrategyLead } from '@/data/fixtures/role-5-strategy-lead';
+// Import pre-authored sample builders
+import { buildRole1Analysis, CandidateAnalysisContext } from '@/data/fixtures/role-1-ai-strategy';
+import { buildRole2Analysis } from '@/data/fixtures/role-2-sales-ops';
+import { buildRole3Analysis } from '@/data/fixtures/role-3-data-engineer';
+import { buildRole4Analysis } from '@/data/fixtures/role-4-chief-of-staff';
+import { buildRole5Analysis } from '@/data/fixtures/role-5-strategy-lead';
 
-import { collectReferencedEvidence } from './candidateAdapter';
-import { CandidateProvenance } from '@/types/opportunity';
+import { collectReferencedEvidence, getCandidatePossessiveName } from './candidateAdapter';
 
 export class DeterministicSyntheticEngine implements IFitAnalysisEngine {
   async analyzeRole(
@@ -26,47 +26,51 @@ export class DeterministicSyntheticEngine implements IFitAnalysisEngine {
     const sanitized = sanitizeInput(input.jobDescription);
     const textToAnalyze = sanitized.sanitizedText.toLowerCase();
 
+    const candidateName = (candidateProfile?.name || '').trim() || 'the candidate';
+    const candidatePossessive = getCandidatePossessiveName(candidateName);
+    const ctx: CandidateAnalysisContext = { candidateName, candidatePossessive };
+
     let rawReport: FitAnalysisReport;
 
-    // 2. Check Tier 1: Pre-Authored Sample Fixtures
+    // 2. Check Tier 1: Pre-Authored Sample Fixture Builders
     if (input.sampleRoleId) {
       switch (input.sampleRoleId) {
         case 'opp-role-1-ai-strategy':
         case 'role-1':
-          rawReport = fixtureRole1AIStrategy;
+          rawReport = buildRole1Analysis(ctx);
           break;
         case 'opp-role-2-sales-ops':
         case 'role-2':
-          rawReport = fixtureRole2SalesOps;
+          rawReport = buildRole2Analysis(ctx);
           break;
         case 'opp-role-3-data-engineer':
         case 'role-3':
-          rawReport = fixtureRole3DataEngineer;
+          rawReport = buildRole3Analysis(ctx);
           break;
         case 'opp-role-4-chief-of-staff':
         case 'role-4':
-          rawReport = fixtureRole4ChiefOfStaff;
+          rawReport = buildRole4Analysis(ctx);
           break;
         case 'opp-role-5-strategy-lead':
         case 'role-5':
-          rawReport = fixtureRole5StrategyLead;
+          rawReport = buildRole5Analysis(ctx);
           break;
         default:
-          rawReport = this.generateCustomFallbackReport(input, textToAnalyze);
+          rawReport = this.generateCustomFallbackReport(input, textToAnalyze, ctx);
       }
     } else {
       // Secondary title-based fixture lookup check
       const titleLower = (input.jobTitle || '').toLowerCase();
-      if (titleLower.includes('ai strategy')) rawReport = fixtureRole1AIStrategy;
-      else if (titleLower.includes('sales ops') || titleLower.includes('sales operations')) rawReport = fixtureRole2SalesOps;
-      else if (titleLower.includes('data engineer') || titleLower.includes('pyspark')) rawReport = fixtureRole3DataEngineer;
-      else if (titleLower.includes('chief of staff')) rawReport = fixtureRole4ChiefOfStaff;
-      else rawReport = this.generateCustomFallbackReport(input, textToAnalyze);
+      if (titleLower.includes('ai strategy')) rawReport = buildRole1Analysis(ctx);
+      else if (titleLower.includes('sales ops') || titleLower.includes('sales operations')) rawReport = buildRole2Analysis(ctx);
+      else if (titleLower.includes('data engineer') || titleLower.includes('pyspark')) rawReport = buildRole3Analysis(ctx);
+      else if (titleLower.includes('chief of staff')) rawReport = buildRole4Analysis(ctx);
+      else rawReport = this.generateCustomFallbackReport(input, textToAnalyze, ctx);
     }
 
     const provenance: CandidateProvenance = {
       candidateId: candidateProfile.id || 'cand-user-empty',
-      candidateName: candidateProfile.name || (candidateProfile.dataMode === 'synthetic' ? 'Alex Vance' : 'User Candidate'),
+      candidateName: (candidateProfile.name || '').trim() || (candidateProfile.dataMode === 'synthetic' ? 'Alex Vance' : 'Unconfigured Candidate'),
       dataMode: candidateProfile.dataMode || 'user',
       profileUpdatedAt: candidateProfile.updatedAt || '2026-01-01T00:00:00.000Z',
       analyzedAt: new Date().toISOString(),
@@ -84,8 +88,10 @@ export class DeterministicSyntheticEngine implements IFitAnalysisEngine {
 
   private generateCustomFallbackReport(
     input: AnalysisInput,
-    text: string
+    text: string,
+    ctx: CandidateAnalysisContext
   ): FitAnalysisReport {
+    const { candidatePossessive } = ctx;
     const qualifications: QualificationMatch[] = [];
 
     // Helper: Check signal presence in input text
@@ -127,7 +133,7 @@ export class DeterministicSyntheticEngine implements IFitAnalysisEngine {
       });
     }
 
-    // Extraction 4: Software Engineering / Coding (Material Gap for Alex)
+    // Extraction 4: Software Engineering / Coding
     if (hasWord('pyspark') || hasWord('scala') || hasWord('c++') || hasWord('software engineer') || hasWord('coding') || hasWord('developer')) {
       qualifications.push({
         id: 'cust-q4',
@@ -157,7 +163,7 @@ export class DeterministicSyntheticEngine implements IFitAnalysisEngine {
       category: 'Preferred',
       qualification: 'Custom proprietary tooling & industry-specific software credentials',
       matchType: 'Unverified',
-      explanation: 'Evidence cannot be conclusively verified from synthetic candidate profile for custom-pasted requirements.',
+      explanation: 'Evidence cannot be conclusively verified from candidate profile for custom-pasted requirements.',
       supportingEvidenceCitationIds: [],
     });
 
@@ -165,7 +171,7 @@ export class DeterministicSyntheticEngine implements IFitAnalysisEngine {
     const { fitScore, recommendation, explanation } = this.calculateFitScore(qualifications);
 
     return {
-      executiveSummary: `Simplified heuristic analysis for ${input.jobTitle || 'Custom Role'} at ${input.company || 'Target Enterprise'}. This analysis uses lightweight deterministic keyword matching against Alex Vance’s synthetic candidate profile.`,
+      executiveSummary: `Simplified heuristic analysis for ${input.jobTitle || 'Custom Role'} at ${input.company || 'Target Enterprise'}. This analysis uses lightweight deterministic keyword matching against ${candidatePossessive} candidate profile.`,
       likelyMandate: `Execute ${input.jobTitle || 'strategic'} priorities and lead cross-functional initiatives for ${input.company || 'the target organization'}.`,
       keyRequirements: qualifications.map((q) => q.qualification),
       overallFitScore: fitScore,
@@ -254,7 +260,6 @@ export class DeterministicSyntheticEngine implements IFitAnalysisEngine {
       };
     }
 
-    // Calculate percentage, floor at 0, clamp at 100
     let score = Math.round((weightedSum / maxPossibleWeight) * 100);
     if (score < 0) score = 0;
     if (score > 100) score = 100;

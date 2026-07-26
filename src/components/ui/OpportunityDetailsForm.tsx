@@ -370,11 +370,11 @@ export function OpportunityDetailsForm({ opportunity, onSave }: Props) {
         )}
       </Card>
 
-      {/* Next Actions Panel */}
-      <Card padding="lg" className="space-y-4">
-        <div className="flex items-center justify-between">
+      {/* Action Plan Items Panel */}
+      <Card padding="lg" className="space-y-6">
+        <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
           <div>
-            <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Next Action Items</h3>
+            <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">Action Plan Execution Checklist</h3>
             {opportunity.stage !== 'Archived' && pendingCount > 0 && (
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 <IconClock className="w-3 h-3 inline mr-1" />
@@ -389,80 +389,107 @@ export function OpportunityDetailsForm({ opportunity, onSave }: Props) {
           </div>
         </div>
 
-        {/* Stage-suggested actions */}
-        {stageActions.length > 0 && (
-          <div className="space-y-2">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-              Stage: {opportunity.stage}
-            </p>
-            {stageActions.map((action) => (
-              <ActionItem
-                key={action.id}
-                action={action}
-                disabled={opportunity.stage === 'Archived'}
-                onToggle={() => handleToggleAction(action.id)}
-              />
-            ))}
+        {/* Section B: Current Stage Checklist */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                Current Stage Checklist: {opportunity.stage}
+              </h4>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                Stage-specific checklist items update automatically when the pipeline stage changes.
+              </p>
+            </div>
           </div>
-        )}
+          {stageActions.length === 0 ? (
+            <p className="text-xs text-slate-400 dark:text-slate-500 italic">No checklist items for current stage.</p>
+          ) : (
+            <div className="space-y-2">
+              {stageActions.map((action) => (
+                <ActionItem
+                  key={action.id}
+                  action={action}
+                  disabled={opportunity.stage === 'Archived'}
+                  onToggle={() => handleToggleAction(action.id)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
 
-        {/* Role-specific actions */}
-        {roleActions.length > 0 && (
-          <div className="space-y-2">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-              Role-Specific
+        {/* Section C: Role-Specific Actions */}
+        <div className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+          <div>
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+              Role-Specific Actions
+            </h4>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+              Recommendations derived specifically from the role evaluation report.
             </p>
-            {roleActions.map((action) => (
-              <ActionItem
-                key={action.id}
-                action={action}
-                disabled={opportunity.stage === 'Archived'}
-                onToggle={() => handleToggleAction(action.id)}
-              />
-            ))}
           </div>
-        )}
+          {roleActions.length === 0 ? (
+            <p className="text-xs text-slate-400 dark:text-slate-500 italic">No role-specific recommendations generated.</p>
+          ) : (
+            <div className="space-y-2">
+              {roleActions.map((action) => (
+                <ActionItem
+                  key={action.id}
+                  action={action}
+                  disabled={opportunity.stage === 'Archived'}
+                  onToggle={() => handleToggleAction(action.id)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
 
-        {/* Custom actions */}
-        {customActions.length > 0 && (
-          <div className="space-y-2">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-              Custom Actions
+        {/* Section D: Your Custom Actions */}
+        <div className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+          <div>
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+              Your Custom Actions
+            </h4>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+              Personalized tasks and follow-up items created specifically for this opportunity.
             </p>
-            {customActions.map((action) => (
-              <ActionItem
-                key={action.id}
-                action={action}
-                disabled={opportunity.stage === 'Archived'}
-                onToggle={() => handleToggleAction(action.id)}
-              />
-            ))}
           </div>
-        )}
+          {customActions.length > 0 && (
+            <div className="space-y-2">
+              {customActions.map((action) => (
+                <ActionItem
+                  key={action.id}
+                  action={action}
+                  disabled={opportunity.stage === 'Archived'}
+                  onToggle={() => handleToggleAction(action.id)}
+                />
+              ))}
+            </div>
+          )}
 
-        {/* Add custom action input */}
-        {opportunity.stage !== 'Archived' && (
-          <div className="flex items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-            <input
-              type="text"
-              placeholder="Add a custom action..."
-              value={newActionText}
-              onChange={(e) => setNewActionText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleAddCustomAction();
-              }}
-              className="flex-1 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
-            />
-            <button
-              onClick={handleAddCustomAction}
-              disabled={!newActionText.trim()}
-              className="p-2 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 rounded-lg hover:bg-slate-800 dark:hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              aria-label="Add custom action"
-            >
-              <IconPlus className="w-4 h-4" />
-            </button>
-          </div>
-        )}
+          {/* Add custom action input */}
+          {opportunity.stage !== 'Archived' && (
+            <div className="flex items-center gap-2 pt-2">
+              <input
+                type="text"
+                placeholder="Add a custom action..."
+                value={newActionText}
+                onChange={(e) => setNewActionText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleAddCustomAction();
+                }}
+                className="flex-1 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
+              />
+              <button
+                onClick={handleAddCustomAction}
+                disabled={!newActionText.trim()}
+                className="p-2 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 rounded-lg hover:bg-slate-800 dark:hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                aria-label="Add custom action"
+              >
+                <IconPlus className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+        </div>
       </Card>
     </div>
   );

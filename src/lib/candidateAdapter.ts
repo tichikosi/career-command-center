@@ -7,6 +7,122 @@ export interface ResolvedEvidenceCitation extends EvidenceItem {
   citationId: string;
 }
 
+export function getCandidatePossessiveName(name: string): string {
+  const trimmed = (name || '').trim();
+  if (!trimmed || trimmed === 'the candidate') return 'the candidate’s';
+  return `${trimmed}’s`;
+}
+
+export interface OverviewDraft {
+  name: string;
+  headline: string;
+  location: string;
+  summary: string;
+  targetRoles: string[];
+  targetIndustries: string[];
+  preferredLocations: string[];
+  compensationTarget: string;
+  workAuthorization: string;
+  coreCompetencies: string[];
+}
+
+function normalizeStringArray(arr: string[] | undefined | null): string[] {
+  if (!Array.isArray(arr)) return [];
+  const result: string[] = [];
+  const seenLower = new Set<string>();
+
+  for (const item of arr) {
+    if (typeof item !== 'string') continue;
+    const trimmed = item.trim();
+    if (!trimmed) continue;
+    const lower = trimmed.toLowerCase();
+    if (!seenLower.has(lower)) {
+      seenLower.add(lower);
+      result.push(trimmed);
+    }
+  }
+
+  return result;
+}
+
+export function normalizeOverviewDraft(draft: OverviewDraft): OverviewDraft {
+  return {
+    name: (draft.name || '').trim(),
+    headline: (draft.headline || '').trim(),
+    location: (draft.location || '').trim(),
+    summary: (draft.summary || '').trim(),
+    targetRoles: normalizeStringArray(draft.targetRoles),
+    targetIndustries: normalizeStringArray(draft.targetIndustries),
+    preferredLocations: normalizeStringArray(draft.preferredLocations),
+    compensationTarget: (draft.compensationTarget || '').trim(),
+    workAuthorization: (draft.workAuthorization || '').trim(),
+    coreCompetencies: normalizeStringArray(draft.coreCompetencies),
+  };
+}
+
+export function isDraftPopulated(draft: OverviewDraft): boolean {
+  const norm = normalizeOverviewDraft(draft);
+  return (
+    Boolean(norm.name) ||
+    Boolean(norm.headline) ||
+    Boolean(norm.location) ||
+    Boolean(norm.summary) ||
+    Boolean(norm.compensationTarget) ||
+    Boolean(norm.workAuthorization) ||
+    norm.targetRoles.length > 0 ||
+    norm.targetIndustries.length > 0 ||
+    norm.preferredLocations.length > 0 ||
+    norm.coreCompetencies.length > 0
+  );
+}
+
+export function isCandidatePopulated(
+  profile: CandidateProfile | null | undefined,
+  normalizedDraft: OverviewDraft
+): boolean {
+  if (isDraftPopulated(normalizedDraft)) {
+    return true;
+  }
+
+  if (!profile) {
+    return false;
+  }
+
+  return (
+    (Array.isArray(profile.careerHistory) && profile.careerHistory.length > 0) ||
+    (Array.isArray(profile.evidenceItems) && profile.evidenceItems.length > 0) ||
+    (Array.isArray(profile.education) && profile.education.length > 0) ||
+    (Array.isArray(profile.certifications) && profile.certifications.length > 0)
+  );
+}
+
+export function isDraftEqual(a: OverviewDraft, b: OverviewDraft): boolean {
+  const normA = normalizeOverviewDraft(a);
+  const normB = normalizeOverviewDraft(b);
+
+  if (normA.name !== normB.name) return false;
+  if (normA.headline !== normB.headline) return false;
+  if (normA.location !== normB.location) return false;
+  if (normA.summary !== normB.summary) return false;
+  if (normA.compensationTarget !== normB.compensationTarget) return false;
+  if (normA.workAuthorization !== normB.workAuthorization) return false;
+
+  const compareArrays = (arrA: string[], arrB: string[]) => {
+    if (arrA.length !== arrB.length) return false;
+    for (let i = 0; i < arrA.length; i++) {
+      if (arrA[i] !== arrB[i]) return false;
+    }
+    return true;
+  };
+
+  return (
+    compareArrays(normA.targetRoles, normB.targetRoles) &&
+    compareArrays(normA.targetIndustries, normB.targetIndustries) &&
+    compareArrays(normA.preferredLocations, normB.preferredLocations) &&
+    compareArrays(normA.coreCompetencies, normB.coreCompetencies)
+  );
+}
+
 export type AnalysisFreshness = 'current' | 'stale' | 'unknown';
 
 /**

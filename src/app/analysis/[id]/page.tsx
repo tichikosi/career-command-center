@@ -4,13 +4,12 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { Card, CardHeader } from '@/components/ui/Card';
-import { RecommendationBadge, MatchTypeBadge, PipelineStageBadge } from '@/components/ui/Badge';
+import { RecommendationBadge, MatchTypeBadge } from '@/components/ui/Badge';
 import { FallbackAnalysisNotice } from '@/components/ui/Notice';
 import { Modal } from '@/components/ui/Modal';
 import { OpportunityDetailsForm } from '@/components/ui/OpportunityDetailsForm';
 import {
   IconArrowRight,
-  IconCheckCircle,
   IconAlertTriangle,
   IconTrash,
   IconExternalLink,
@@ -42,7 +41,7 @@ export default function AnalysisResultsPage() {
   const opportunity = useOpportunity(idFromPath);
 
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'qualifications' | 'evidence' | 'prep' | 'workflow' | 'next'
+    'overview' | 'qualifications' | 'evidence' | 'prep' | 'action-plan'
   >('overview');
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
@@ -97,16 +96,6 @@ export default function AnalysisResultsPage() {
     opportunity.stage !== 'Archived'
       ? opportunity.actions.filter((a) => !a.completed).length
       : 0;
-
-  const currentStageActions = opportunity.actions.filter((a) => a.source === 'stage');
-  const roleSpecificActions = opportunity.actions.filter((a) => a.source === 'role');
-
-  const stageActionTexts = new Set(currentStageActions.map((a) => a.text.toLowerCase()));
-  const rawRoleActions = roleSpecificActions.length > 0
-    ? roleSpecificActions.map((a) => ({ text: a.text, completed: a.completed }))
-    : (analysis.nextActions ?? [])
-        .filter((text) => !stageActionTexts.has(text.toLowerCase()))
-        .map((text) => ({ text, completed: false }));
 
   return (
     <div className="space-y-8 animate-in fade-in duration-200">
@@ -261,8 +250,7 @@ export default function AnalysisResultsPage() {
             { key: 'qualifications', label: `Qualifications & Gaps (${analysis.qualifications.length})` },
             { key: 'evidence', label: `Evidence & Objections (${resolvedAchievements.length})` },
             { key: 'prep', label: 'Interview Preparation' },
-            { key: 'workflow', label: `Workflow${pendingActionCount > 0 ? ` (${pendingActionCount})` : ''}` },
-            { key: 'next', label: `Next Actions (${currentStageActions.length + rawRoleActions.length})` },
+            { key: 'action-plan', label: `Action Plan${pendingActionCount > 0 ? ` (${pendingActionCount})` : ''}` },
           ] as const
         ).map(({ key, label }) => (
           <button
@@ -616,102 +604,12 @@ export default function AnalysisResultsPage() {
         </div>
       )}
 
-      {/* Tab 5: Workflow (Opportunity Details + Actions) */}
-      {activeTab === 'workflow' && (
+      {/* Tab 5: Action Plan */}
+      {activeTab === 'action-plan' && (
         <OpportunityDetailsForm
           opportunity={opportunity}
           onSave={() => {}}
         />
-      )}
-
-      {/* Tab 6: Analysis-Derived Next Actions */}
-      {activeTab === 'next' && (
-        <div className="space-y-6">
-          {/* Current Stage Recommendations */}
-          <Card padding="lg" className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardHeader
-                  title="Current Stage Recommendations"
-                  subtitle="Actionable steps derived dynamically from the active pipeline stage"
-                />
-              </div>
-              <PipelineStageBadge stage={opportunity.stage} />
-            </div>
-            {currentStageActions.length === 0 ? (
-              <p className="text-xs text-slate-500 dark:text-slate-400">No stage recommendations for current stage.</p>
-            ) : (
-              <ul className="space-y-3">
-                {currentStageActions.map((act) => (
-                  <li
-                    key={act.id}
-                    className={`p-4 rounded-xl border flex items-center justify-between gap-3 text-sm font-medium transition-colors ${
-                      act.completed
-                        ? 'bg-slate-50 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-500'
-                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <IconCheckCircle
-                        className={`w-5 h-5 shrink-0 ${
-                          act.completed ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-300 dark:text-slate-600'
-                        }`}
-                      />
-                      <span className={act.completed ? 'line-through' : ''}>
-                        {act.text}
-                      </span>
-                    </div>
-                    {act.completed && (
-                      <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800/80 shrink-0">
-                        Completed
-                      </span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
-
-          {/* Role-Specific Recommendations */}
-          <Card padding="lg" className="space-y-4">
-            <CardHeader
-              title="Role-Specific Recommendations"
-              subtitle="Tailored recommendations derived from the role analysis report"
-            />
-            {rawRoleActions.length === 0 ? (
-              <p className="text-xs text-slate-500 dark:text-slate-400">No role-specific recommendations generated.</p>
-            ) : (
-              <ul className="space-y-3">
-                {rawRoleActions.map((act, idx) => (
-                  <li
-                    key={idx}
-                    className={`p-4 rounded-xl border flex items-center justify-between gap-3 text-sm font-medium transition-colors ${
-                      act.completed
-                        ? 'bg-slate-50 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-500'
-                        : 'bg-slate-50/70 dark:bg-slate-800/60 border-slate-200/80 dark:border-slate-800 text-slate-800 dark:text-slate-200'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <IconCheckCircle
-                        className={`w-5 h-5 shrink-0 ${
-                          act.completed ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'
-                        }`}
-                      />
-                      <span className={act.completed ? 'line-through' : ''}>
-                        {act.text}
-                      </span>
-                    </div>
-                    {act.completed && (
-                      <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800/80 shrink-0">
-                        Completed
-                      </span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
-        </div>
       )}
 
       {/* Delete Confirmation Modal */}

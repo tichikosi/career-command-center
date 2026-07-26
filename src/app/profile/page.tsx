@@ -4,17 +4,20 @@ import React, { useState } from 'react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { useCandidateProfile } from '@/lib/useCandidate';
 import { EvidenceItem } from '@/types/candidate';
+import { CandidateOverviewEditor } from '@/components/candidate/CandidateOverviewEditor';
 
 export default function ProfilePage() {
   const {
     profile,
     mounted,
     isSynthetic,
+    updateProfile,
     resetCandidateDemoData,
     clearCandidateData,
     exportCandidateData,
   } = useCandidateProfile();
 
+  const [isEditing, setIsEditing] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
 
   // Map of evidence items for quick lookup by ID
@@ -44,6 +47,21 @@ export default function ProfilePage() {
 
   const isEmpty = profile.dataMode === 'user' && !profile.name && profile.careerHistory.length === 0;
 
+  // Edit Mode
+  if (isEditing) {
+    return (
+      <CandidateOverviewEditor
+        profile={profile}
+        onSave={(updated) => {
+          updateProfile(updated);
+          setIsEditing(false);
+        }}
+        onCancel={() => setIsEditing(false)}
+      />
+    );
+  }
+
+  // View Mode
   return (
     <div className="space-y-8 animate-in fade-in duration-200">
       {/* Candidate Data Mode Header */}
@@ -68,10 +86,19 @@ export default function ProfilePage() {
             {profile.headline && (
               <p className="text-sm text-slate-300 font-medium">{profile.headline}</p>
             )}
+            {profile.location && (
+              <p className="text-xs text-slate-400 font-normal">{profile.location}</p>
+            )}
           </div>
 
           {/* Action Toolbar */}
           <div className="flex items-center gap-2 flex-wrap shrink-0">
+            <button
+              onClick={() => setIsEditing(true)}
+              className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-semibold text-slate-900 dark:text-slate-100 rounded-lg border border-slate-300 dark:border-slate-700 transition-colors"
+            >
+              Edit Candidate Overview
+            </button>
             <button
               onClick={exportCandidateData}
               title="Downloads your candidate profile as a JSON file."
@@ -132,13 +159,19 @@ export default function ProfilePage() {
             Candidate Profile is Currently Empty
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto">
-            You have cleared candidate data. Opportunities and application settings remain untouched. You can click &ldquo;Restore Demo Candidate&rdquo; at any time to restore the Alex Vance synthetic fixture.
+            You have cleared candidate data. Opportunities and application settings remain untouched. You can click &ldquo;Create Candidate Profile&rdquo; to build your profile or &ldquo;Restore Demo Candidate&rdquo; to reload the Alex Vance synthetic fixture.
           </p>
-          <div className="pt-2">
+          <div className="pt-2 flex items-center justify-center gap-3 flex-wrap">
+            <button
+              onClick={() => setIsEditing(true)}
+              className="px-4 py-2 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-xs font-semibold rounded-lg shadow-xs transition-colors"
+            >
+              Create Candidate Profile
+            </button>
             <button
               onClick={resetCandidateDemoData}
               title="Restore the Alex Vance demo candidate? Your current candidate profile will be replaced. Opportunities and workflow data will not be changed."
-              className="px-4 py-2 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-xs font-semibold rounded-lg shadow-xs"
+              className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-semibold rounded-lg border border-slate-200 dark:border-slate-700 transition-colors"
             >
               Restore Demo Candidate
             </button>
@@ -169,6 +202,39 @@ export default function ProfilePage() {
                   ))}
                 </div>
               )}
+            </Card>
+          )}
+
+          {/* Preferences & Compensation Targets (if present) */}
+          {(profile.compensationTarget || profile.workAuthorization || profile.targetIndustries.length > 0 || profile.preferredLocations.length > 0) && (
+            <Card padding="lg" className="space-y-4">
+              <CardHeader title="Career Targets & Preferences" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                {profile.compensationTarget && (
+                  <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-lg border border-slate-200/80 dark:border-slate-800">
+                    <span className="font-bold text-slate-500 dark:text-slate-400 block uppercase tracking-wider text-[10px]">Target Compensation</span>
+                    <span className="font-semibold text-slate-900 dark:text-slate-100 mt-1 block">{profile.compensationTarget}</span>
+                  </div>
+                )}
+                {profile.workAuthorization && (
+                  <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-lg border border-slate-200/80 dark:border-slate-800">
+                    <span className="font-bold text-slate-500 dark:text-slate-400 block uppercase tracking-wider text-[10px]">Work Authorization</span>
+                    <span className="font-semibold text-slate-900 dark:text-slate-100 mt-1 block">{profile.workAuthorization}</span>
+                  </div>
+                )}
+                {profile.targetIndustries.length > 0 && (
+                  <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-lg border border-slate-200/80 dark:border-slate-800 col-span-1 sm:col-span-2">
+                    <span className="font-bold text-slate-500 dark:text-slate-400 block uppercase tracking-wider text-[10px] mb-1">Target Industries</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {profile.targetIndustries.map((ind, idx) => (
+                        <span key={idx} className="px-2 py-0.5 bg-white dark:bg-slate-900 rounded border border-slate-200 dark:border-slate-700 text-[11px] font-medium text-slate-800 dark:text-slate-200">
+                          {ind}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </Card>
           )}
 
