@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useOpportunities } from '@/lib/useOpportunities';
+import { useCandidateProfile } from '@/lib/useCandidate';
 import { buildSearchIndex, searchGlobalIndex, SearchGroup, SearchIndexItem } from '@/lib/search';
 import { IconSearch, IconClose, IconArrowRight } from '@/components/icons';
 
@@ -21,6 +22,7 @@ const GROUP_LABELS: Record<SearchGroup, string> = {
 export function GlobalSearchModal({ isOpen, onClose }: Props) {
   const router = useRouter();
   const opportunities = useOpportunities();
+  const { profile, mounted } = useCandidateProfile();
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
 
@@ -45,8 +47,12 @@ export function GlobalSearchModal({ isOpen, onClose }: Props) {
     }
   }
 
-  // Build search index reactively from current opportunities
-  const index = useMemo(() => buildSearchIndex(opportunities), [opportunities]);
+  // Build search index reactively from current opportunities and active candidate profile when mounted
+  const activeProfile = mounted ? profile : undefined;
+  const index = useMemo(
+    () => buildSearchIndex(opportunities, activeProfile),
+    [opportunities, activeProfile]
+  );
 
   // Perform search query
   const results = useMemo(() => searchGlobalIndex(query, index), [query, index]);

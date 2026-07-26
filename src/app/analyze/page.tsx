@@ -1,11 +1,13 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { FallbackAnalysisNotice } from '@/components/ui/Notice';
 import { IconAnalyze, IconAlertTriangle, IconRefresh } from '@/components/icons';
-import { alexVanceProfile } from '@/data/candidate';
+import { useCandidateProfile } from '@/lib/useCandidate';
+import { toAnalysisCandidate } from '@/lib/candidateAdapter';
 import { initialOpportunities } from '@/data/opportunities';
 import { DeterministicSyntheticEngine } from '@/lib/engine';
 import { saveOpportunity, getOpportunityById } from '@/lib/storage';
@@ -14,6 +16,8 @@ import { JobOpportunity } from '@/types/opportunity';
 
 export default function AnalyzePage() {
   const router = useRouter();
+  const { profile, isSynthetic, mounted } = useCandidateProfile();
+  const isProfileEmpty = profile.dataMode === 'user' && !profile.name && profile.careerHistory.length === 0;
   const [activeTab, setActiveTab] = useState<'sample' | 'custom'>('sample');
   const [selectedSampleId, setSelectedSampleId] = useState<string>('opp-role-1-ai-strategy');
 
@@ -29,6 +33,7 @@ export default function AnalyzePage() {
   const [error, setError] = useState<string | null>(null);
 
   const handleAnalyzeSample = async () => {
+    if (!mounted) return;
     setError(null);
     const sampleOpp = initialOpportunities.find((o) => o.id === selectedSampleId);
     if (!sampleOpp) {
@@ -47,7 +52,7 @@ export default function AnalyzePage() {
           jobDescription: sampleOpp.rawJobDescription,
           sampleRoleId: sampleOpp.id,
         },
-        alexVanceProfile
+        toAnalysisCandidate(profile)
       );
 
       const targetId = sampleOpp.id; // Reuse canonical fixture ID!
@@ -150,7 +155,7 @@ export default function AnalyzePage() {
           compensation: compensation.trim() || undefined,
           sourceUrl: sourceUrl.trim() || undefined,
         },
-        alexVanceProfile
+        toAnalysisCandidate(profile)
       );
 
       const newOppId = `opp-custom-${Date.now()}`;
@@ -191,29 +196,42 @@ export default function AnalyzePage() {
       <div>
         <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">Analyze a Role</h1>
         <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-          Evaluate job descriptions against Alex Vance’s synthetic candidate profile to generate evidence-backed fit reports.
+          Evaluate job descriptions against active candidate profile evidence to generate evidence-backed fit reports.
         </p>
       </div>
 
       {/* Candidate Context Read-Only Chip */}
-      <div className="bg-slate-900 dark:bg-slate-900 border border-slate-800 text-white p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
-        <div>
-          <span className="text-[10px] font-bold tracking-wider uppercase text-slate-400">
-            Active Candidate Context
-          </span>
-          <h2 className="text-base font-semibold tracking-tight text-white mt-0.5">
-            Alex Vance — Director of AI Strategy & GTM Ops
-          </h2>
-          <p className="text-xs text-slate-300 mt-0.5">
-            12+ years experience | 16 verified synthetic evidence citations
-          </p>
+      {!mounted ? (
+        <div className="bg-slate-900 dark:bg-slate-900 border border-slate-800 text-white p-4 rounded-xl flex items-center justify-between shadow-xs animate-pulse">
+          <div className="space-y-1">
+            <span className="text-[10px] font-bold tracking-wider uppercase text-slate-400">
+              Active Candidate Context
+            </span>
+            <h2 className="text-base font-semibold tracking-tight text-white mt-0.5">
+              Loading candidate context...
+            </h2>
+          </div>
         </div>
-        <div className="shrink-0">
-          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-slate-800 text-emerald-300 border border-slate-700">
-            100% Synthetic Persona
-          </span>
+      ) : (
+        <div className="bg-slate-900 dark:bg-slate-900 border border-slate-800 text-white p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+          <div>
+            <span className="text-[10px] font-bold tracking-wider uppercase text-slate-400">
+              Active Candidate Context
+            </span>
+            <h2 className="text-base font-semibold tracking-tight text-white mt-0.5">
+              {profile.name || 'Empty Candidate Profile'} {profile.headline ? `— ${profile.headline}` : ''}
+            </h2>
+            <p className="text-xs text-slate-300 mt-0.5">
+              {profile.careerHistory.length} Career Roles | {profile.evidenceItems.length} Evidence Records
+            </p>
+          </div>
+          <div className="shrink-0">
+            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-slate-800 text-emerald-300 border border-slate-700">
+              {isSynthetic ? '100% Synthetic Persona' : 'User Evidence Profile'}
+            </span>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Mode Selector Tabs */}
       <div className="flex border-b border-slate-200 dark:border-slate-800">
@@ -287,18 +305,40 @@ export default function AnalyzePage() {
                   <p className="text-xs text-slate-600 dark:text-slate-400 mt-2 line-clamp-2 leading-relaxed">
                     {opp.rawJobDescription}
                   </p>
-                  <div className="mt-3 text-[11px] text-slate-500 dark:text-slate-400 font-medium">
-                    Expected Fit: {opp.analysis.overallFitScore}% ({opp.analysis.recommendation})
+                  <div className="mt-3 text-[11px] text-slate-500 dark:text-slate-400 font-medium flex items-center justify-between border-t border-slate-100 dark:border-slate-800/60 pt-2.5">
+                    <span className="text-[10px] font-bold tracking-wider uppercase text-indigo-600 dark:text-indigo-400">
+                      Demo Benchmark
+                    </span>
+                    <span>
+                      Alex Vance Fit: <strong className="text-slate-800 dark:text-slate-200">{opp.analysis.overallFitScore}%</strong> ({opp.analysis.recommendation})
+                    </span>
                   </div>
                 </div>
               );
             })}
           </div>
 
+          {mounted && isProfileEmpty && (
+            <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/80 text-amber-900 dark:text-amber-200 p-4 rounded-xl text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <span className="font-bold block text-sm">Add Candidate Evidence to Calculate Fit</span>
+                <span className="text-slate-700 dark:text-slate-300 mt-0.5 block">
+                  Your active candidate profile is currently empty. Add work experience or restore demo data to evaluate roles.
+                </span>
+              </div>
+              <Link
+                href="/profile"
+                className="px-3 py-1.5 bg-amber-900 dark:bg-amber-100 text-white dark:text-amber-900 font-semibold rounded-lg text-xs shrink-0 w-fit"
+              >
+                Go to Profile
+              </Link>
+            </div>
+          )}
+
           <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end">
             <button
               onClick={handleAnalyzeSample}
-              disabled={isAnalyzing}
+              disabled={isAnalyzing || !mounted || isProfileEmpty}
               className="px-6 py-2.5 text-sm font-semibold text-white dark:text-slate-900 bg-slate-900 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-slate-200 disabled:opacity-50 rounded-lg shadow-xs transition-colors flex items-center gap-2"
             >
               {isAnalyzing ? (
@@ -436,7 +476,7 @@ export default function AnalyzePage() {
 
               <button
                 type="submit"
-                disabled={isAnalyzing}
+                disabled={isAnalyzing || !mounted || isProfileEmpty}
                 className="px-6 py-2 text-sm font-semibold text-white dark:text-slate-900 bg-slate-900 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-slate-200 disabled:opacity-50 rounded-lg shadow-xs transition-colors flex items-center gap-2"
               >
                 {isAnalyzing ? (

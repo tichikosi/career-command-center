@@ -14,46 +14,72 @@ import { fixtureRole3DataEngineer } from '@/data/fixtures/role-3-data-engineer';
 import { fixtureRole4ChiefOfStaff } from '@/data/fixtures/role-4-chief-of-staff';
 import { fixtureRole5StrategyLead } from '@/data/fixtures/role-5-strategy-lead';
 
+import { collectReferencedEvidence } from './candidateAdapter';
+import { CandidateProvenance } from '@/types/opportunity';
+
 export class DeterministicSyntheticEngine implements IFitAnalysisEngine {
   async analyzeRole(
     input: AnalysisInput,
     _candidateProfile: CandidateProfile
   ): Promise<FitAnalysisReport> {
-    void _candidateProfile;
-    // 1. Sanitize text
+    const candidateProfile = _candidateProfile;
     const sanitized = sanitizeInput(input.jobDescription);
     const textToAnalyze = sanitized.sanitizedText.toLowerCase();
+
+    let rawReport: FitAnalysisReport;
 
     // 2. Check Tier 1: Pre-Authored Sample Fixtures
     if (input.sampleRoleId) {
       switch (input.sampleRoleId) {
         case 'opp-role-1-ai-strategy':
         case 'role-1':
-          return fixtureRole1AIStrategy;
+          rawReport = fixtureRole1AIStrategy;
+          break;
         case 'opp-role-2-sales-ops':
         case 'role-2':
-          return fixtureRole2SalesOps;
+          rawReport = fixtureRole2SalesOps;
+          break;
         case 'opp-role-3-data-engineer':
         case 'role-3':
-          return fixtureRole3DataEngineer;
+          rawReport = fixtureRole3DataEngineer;
+          break;
         case 'opp-role-4-chief-of-staff':
         case 'role-4':
-          return fixtureRole4ChiefOfStaff;
+          rawReport = fixtureRole4ChiefOfStaff;
+          break;
         case 'opp-role-5-strategy-lead':
         case 'role-5':
-          return fixtureRole5StrategyLead;
+          rawReport = fixtureRole5StrategyLead;
+          break;
+        default:
+          rawReport = this.generateCustomFallbackReport(input, textToAnalyze);
       }
+    } else {
+      // Secondary title-based fixture lookup check
+      const titleLower = (input.jobTitle || '').toLowerCase();
+      if (titleLower.includes('ai strategy')) rawReport = fixtureRole1AIStrategy;
+      else if (titleLower.includes('sales ops') || titleLower.includes('sales operations')) rawReport = fixtureRole2SalesOps;
+      else if (titleLower.includes('data engineer') || titleLower.includes('pyspark')) rawReport = fixtureRole3DataEngineer;
+      else if (titleLower.includes('chief of staff')) rawReport = fixtureRole4ChiefOfStaff;
+      else rawReport = this.generateCustomFallbackReport(input, textToAnalyze);
     }
 
-    // Secondary title-based fixture lookup check
-    const titleLower = (input.jobTitle || '').toLowerCase();
-    if (titleLower.includes('ai strategy')) return fixtureRole1AIStrategy;
-    if (titleLower.includes('sales ops') || titleLower.includes('sales operations')) return fixtureRole2SalesOps;
-    if (titleLower.includes('data engineer') || titleLower.includes('pyspark')) return fixtureRole3DataEngineer;
-    if (titleLower.includes('chief of staff')) return fixtureRole4ChiefOfStaff;
+    const provenance: CandidateProvenance = {
+      candidateId: candidateProfile.id || 'cand-user-empty',
+      candidateName: candidateProfile.name || (candidateProfile.dataMode === 'synthetic' ? 'Alex Vance' : 'User Candidate'),
+      dataMode: candidateProfile.dataMode || 'user',
+      profileUpdatedAt: candidateProfile.updatedAt || '2026-01-01T00:00:00.000Z',
+      analyzedAt: new Date().toISOString(),
+      provenanceStatus: 'known',
+    };
 
-    // 3. Tier 2: Keyword-Extraction Fallback for Custom Job Descriptions
-    return this.generateCustomFallbackReport(input, textToAnalyze);
+    const evidenceSnapshot = collectReferencedEvidence(candidateProfile, rawReport);
+
+    return {
+      ...rawReport,
+      candidateProvenance: provenance,
+      evidenceSnapshot: evidenceSnapshot.length > 0 ? evidenceSnapshot : rawReport.evidenceSnapshot,
+    };
   }
 
   private generateCustomFallbackReport(

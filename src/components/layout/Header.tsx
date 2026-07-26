@@ -4,6 +4,7 @@ import React from 'react';
 import { SyntheticDisclaimerBanner } from '@/components/ui/Notice';
 import { ThemeSelector } from '@/components/ui/ThemeSelector';
 import { IconMenu, IconSearch } from '@/components/icons';
+import { useCandidateProfile } from '@/lib/useCandidate';
 
 interface HeaderProps {
   onOpenMobileNav?: () => void;
@@ -11,6 +12,18 @@ interface HeaderProps {
 }
 
 export function Header({ onOpenMobileNav, onOpenSearch }: HeaderProps) {
+  const { profile, mounted, isSynthetic } = useCandidateProfile();
+
+  const isProfileEmpty = profile.dataMode === 'user' && !profile.name && profile.careerHistory.length === 0;
+
+  const candidateDisplayName = !mounted
+    ? null
+    : isSynthetic
+    ? profile.name || 'Alex Vance'
+    : profile.name
+    ? profile.name
+    : 'No Active Candidate';
+
   return (
     <header className="sticky top-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 transition-colors">
       <SyntheticDisclaimerBanner />
@@ -60,10 +73,22 @@ export function Header({ onOpenMobileNav, onOpenSearch }: HeaderProps) {
           {/* Theme Selector */}
           <ThemeSelector />
 
-          {/* Candidate Badge */}
-          <div className="hidden lg:flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 bg-slate-100/80 dark:bg-slate-800/80 px-3 py-1.5 rounded-full border border-slate-200/60 dark:border-slate-700/60">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
-            <span>Alex Vance</span>
+          {/* Dynamic Candidate Identity Badge */}
+          <div className="hidden lg:flex items-center gap-2 text-xs font-medium text-slate-700 dark:text-slate-300 bg-slate-100/80 dark:bg-slate-800/80 px-3 py-1.5 rounded-full border border-slate-200/60 dark:border-slate-700/60">
+            {!mounted ? (
+              <span className="w-24 h-3 bg-slate-300 dark:bg-slate-700 rounded animate-pulse"></span>
+            ) : (
+              <>
+                <span className={`w-2 h-2 rounded-full shrink-0 ${
+                  isProfileEmpty
+                    ? 'bg-slate-400'
+                    : isSynthetic
+                    ? 'bg-emerald-500'
+                    : 'bg-indigo-500'
+                }`}></span>
+                <span>{candidateDisplayName}</span>
+              </>
+            )}
           </div>
         </div>
       </div>

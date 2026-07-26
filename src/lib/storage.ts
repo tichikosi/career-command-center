@@ -1,35 +1,77 @@
-import { CandidateProfile } from '@/types/candidate';
+import {
+  CandidateProfile,
+  EvidenceItem,
+  CareerRole,
+  CandidateSource,
+  EducationItem,
+  CertificationItem,
+} from '@/types/candidate';
 import {
   JobOpportunity,
   PipelineStage,
   OpportunityPriority,
   OpportunityUISettings,
+  CandidateProvenance,
+  FitAnalysisReport,
 } from '@/types/opportunity';
-import { alexVanceProfile } from '@/data/candidate';
+import { defaultSyntheticCandidateProfile } from '@/data/candidate';
 import { initialOpportunities } from '@/data/opportunities';
 import { mergeActionsForStage, buildStageActions, buildRoleActions } from '@/lib/stageActions';
+import { collectReferencedEvidence } from '@/lib/candidateAdapter';
 
-const PROFILE_KEY = 'ccc_candidate_profile_v1';
+export const CCC_CANDIDATE_KEY = 'ccc_candidate_v1';
+const LEGACY_PROFILE_KEY = 'ccc_candidate_profile_v1';
 const OPPORTUNITIES_KEY = 'ccc_opportunities_v1';
 const SETTINGS_KEY = 'ccc_settings_v1';
 
 export const STORAGE_CHANGE_EVENT = 'ccc_storage_change';
+export const CCC_CANDIDATE_CHANGE_EVENT = 'ccc_candidate_change';
 
 // ---------------------------------------------------------------------------
 // Stable Module-level Snapshots & Memory Cache
 // ---------------------------------------------------------------------------
 
-// Frozen deterministic server snapshot for SSR and initial hydration
-const SERVER_SNAPSHOT: JobOpportunity[] = Object.freeze(normalizeAll([...initialOpportunities])) as unknown as JobOpportunity[];
+// Frozen deterministic server snapshots for SSR and initial hydration
+const SERVER_OPPORTUNITIES_SNAPSHOT: JobOpportunity[] = Object.freeze(
+  normalizeAll([...initialOpportunities])
+) as unknown as JobOpportunity[];
+
+const NEUTRAL_SERVER_CANDIDATE_SNAPSHOT: CandidateProfile = Object.freeze({
+  id: 'cand-neutral-server',
+  name: '',
+  headline: '',
+  location: '',
+  summary: '',
+  targetRoles: [],
+  targetIndustries: [],
+  preferredLocations: [],
+  compensationTarget: '',
+  workAuthorization: '',
+  coreCompetencies: [],
+  careerHistory: [],
+  education: [],
+  certifications: [],
+  evidenceItems: [],
+  sources: [],
+  updatedAt: '2026-01-01T00:00:00.000Z',
+  dataMode: 'user',
+});
 
 export function getInitialOpportunitiesServerSnapshot(): JobOpportunity[] {
-  return SERVER_SNAPSHOT;
+  return SERVER_OPPORTUNITIES_SNAPSHOT;
 }
 
-// Module-level cached client snapshot reference (reassigned ONLY when data mutates)
+export function getInitialCandidateServerSnapshot(): CandidateProfile {
+  return NEUTRAL_SERVER_CANDIDATE_SNAPSHOT;
+}
+
+// Module-level cached client snapshot references
 let cachedOpportunities: JobOpportunity[] | null = null;
-let inMemoryProfile: CandidateProfile = alexVanceProfile;
+let cachedCandidateProfile: CandidateProfile | null = null;
+
 let inMemoryOpportunities: JobOpportunity[] = normalizeAll([...initialOpportunities]);
+let inMemoryCandidateProfile: CandidateProfile = normalizeCandidateProfile(defaultSyntheticCandidateProfile);
+
 let storageAvailableChecked = false;
 let storageAvailableResult = false;
 
@@ -56,6 +98,490 @@ function notifyStorageChange(): void {
   }
 }
 
+function notifyCandidateStorageChange(): void {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event(CCC_CANDIDATE_CHANGE_EVENT));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Candidate Normalization & Validation
+// ---------------------------------------------------------------------------
+
+function safeString(value: unknown, fallback = ''): string {
+  return typeof value === 'string' ? value : fallback;
+}
+
+function safeStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((x): x is string => typeof x === 'string');
+}
+
+function safeDateString(value: unknown, fallback = '2026-01-01T00:00:00.000Z'): string {
+  if (typeof value === 'string' && value.length > 0) return value;
+  return fallback;
+}
+
+/**
+ * Normalizes a raw candidate profile object.
+ * Guarantees a non-null, non-throwing, fully typed CandidateProfile.
+ * Automatically converts legacy embedded role.achievements objects into EvidenceItem records.
+ * Preserves evidence IDs, descriptions, metrics, citation tags, and skills.
+ * Removes orphan evidenceItemIds from roles if they do not match any EvidenceItem.
+ * Strips source.rawText if retainRawText === false.
+ * Deterministic: repeated reads of the same input produce identical output without fresh timestamps.
+ */
+export function normalizeCandidateProfile(raw: unknown): CandidateProfile {
+  if (!raw || typeof raw !== 'object') {
+    return { ...defaultSyntheticCandidateProfile };
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const r = raw as any;
+  const dataMode: CandidateProfile['dataMode'] = r.dataMode === 'user' ? 'user' : 'synthetic';
+  const profileUpdatedAt = safeDateString(r.updatedAt, '2026-01-01T00:00:00.000Z');
+
+  // Map of Evidence Items
+  const evidenceMap = new Map<string, EvidenceItem>();
+
+  // 1. Process explicit root evidenceItems if present
+  const rawEvidenceItems: unknown[] = Array.isArray(r.evidenceItems) ? r.evidenceItems : [];
+  for (const item of rawEvidenceItems) {
+    if (!item || typeof item !== 'object') continue;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const it = item as any;
+    const id = safeString(it.id);
+    if (!id) continue;
+
+    const validTypes: EvidenceItem['type'][] = [
+      'achievement', 'metric', 'responsibility', 'skill',
+      'leadership', 'project', 'industry', 'education', 'certification',
+    ];
+    const type: EvidenceItem['type'] = validTypes.includes(it.type) ? it.type : 'achievement';
+    const validStatus: EvidenceItem['verificationStatus'][] = [
+      'candidate-confirmed', 'imported-unverified', 'synthetic',
+    ];
+    const defaultStatus: EvidenceItem['verificationStatus'] =
+      dataMode === 'user' ? 'candidate-confirmed' : 'synthetic';
+    const verificationStatus: EvidenceItem['verificationStatus'] = validStatus.includes(it.verificationStatus)
+      ? it.verificationStatus
+      : defaultStatus;
+
+    const normalizedItem: EvidenceItem = {
+      id,
+      type,
+      title: safeString(it.title, 'Untitled Evidence Item'),
+      description: safeString(it.description, ''),
+      metric: typeof it.metric === 'string' ? it.metric : undefined,
+      organization: typeof it.organization === 'string' ? it.organization : undefined,
+      roleId: typeof it.roleId === 'string' ? it.roleId : undefined,
+      skills: safeStringArray(it.skills),
+      tags: safeStringArray(it.tags),
+      sourceId: typeof it.sourceId === 'string' ? it.sourceId : undefined,
+      verificationStatus,
+      createdAt: safeDateString(it.createdAt, profileUpdatedAt),
+      updatedAt: safeDateString(it.updatedAt, profileUpdatedAt),
+    };
+
+    evidenceMap.set(id, normalizedItem);
+  }
+
+  // 2. Process careerHistory roles & convert legacy embedded achievements if present
+  const rawRoles: unknown[] = Array.isArray(r.careerHistory) ? r.careerHistory : [];
+  const roleMap = new Map<string, CareerRole>();
+
+  for (const role of rawRoles) {
+    if (!role || typeof role !== 'object') continue;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const ro = role as any;
+    const roleId = safeString(ro.id);
+    if (!roleId) continue;
+
+    const roleCompany = safeString(ro.company, 'Unknown Company');
+    const roleUpdatedAt = safeDateString(ro.updatedAt, profileUpdatedAt);
+
+    // Extract & convert legacy achievements if present as objects
+    const collectedEvidenceIds: string[] = [];
+
+    // First collect explicitly provided evidenceItemIds
+    if (Array.isArray(ro.evidenceItemIds)) {
+      for (const id of safeStringArray(ro.evidenceItemIds)) {
+        if (id && !collectedEvidenceIds.includes(id)) {
+          collectedEvidenceIds.push(id);
+        }
+      }
+    }
+
+    // Next inspect ro.achievements for legacy achievement objects
+    if (Array.isArray(ro.achievements)) {
+      for (const ach of ro.achievements) {
+        if (!ach) continue;
+        if (typeof ach === 'string' && ach) {
+          if (!collectedEvidenceIds.includes(ach)) {
+            collectedEvidenceIds.push(ach);
+          }
+        } else if (typeof ach === 'object' && ach !== null) {
+          // Legacy achievement object
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const a = ach as any;
+          const achId = safeString(a.id);
+          if (!achId) continue;
+
+          if (!collectedEvidenceIds.includes(achId)) {
+            collectedEvidenceIds.push(achId);
+          }
+
+          // If not already in evidenceMap (or if existing is legacy), convert legacy object
+          if (!evidenceMap.has(achId)) {
+            const citationId = safeString(a.citationId);
+            const tags: string[] = citationId ? [citationId] : [];
+            const metric = typeof a.metric === 'string' ? a.metric : undefined;
+            const description = safeString(a.description);
+            const skills = safeStringArray(a.skillsDemonstrated || a.skills);
+            const achUpdatedAt = safeDateString(a.updatedAt, roleUpdatedAt);
+
+            const convertedItem: EvidenceItem = {
+              id: achId,
+              type: metric ? 'metric' : 'achievement',
+              title: metric || citationId || 'Achievement',
+              description,
+              metric,
+              organization: roleCompany,
+              roleId,
+              skills,
+              tags,
+              sourceId: dataMode === 'synthetic' ? 'src-synthetic-fixture' : undefined,
+              verificationStatus: dataMode === 'user' ? 'candidate-confirmed' : 'synthetic',
+              createdAt: safeDateString(a.createdAt, achUpdatedAt),
+              updatedAt: achUpdatedAt,
+            };
+
+            evidenceMap.set(achId, convertedItem);
+          }
+        }
+      }
+    }
+
+    // Role normalization
+    const normalizedRole: CareerRole = {
+      id: roleId,
+      company: roleCompany,
+      title: safeString(ro.title, 'Untitled Role'),
+      location: safeString(ro.location, ''),
+      startDate: safeString(ro.startDate, ''),
+      endDate: safeString(ro.endDate, 'Present'),
+      isCurrent: typeof ro.isCurrent === 'boolean' ? ro.isCurrent : ro.endDate === 'Present',
+      summary: safeString(ro.summary, ''),
+      evidenceItemIds: collectedEvidenceIds, // Will be filtered against validEvidenceIdSet
+      skills: safeStringArray(ro.skills),
+      sourceIds: safeStringArray(ro.sourceIds),
+      createdAt: safeDateString(ro.createdAt, profileUpdatedAt),
+      updatedAt: roleUpdatedAt,
+    };
+
+    roleMap.set(roleId, normalizedRole);
+  }
+
+  const allEvidenceItems = Array.from(evidenceMap.values());
+  const validEvidenceIdSet = new Set(allEvidenceItems.map((e) => e.id));
+
+  // Filter roles to ensure evidenceItemIds contain only valid evidence IDs
+  const finalCareerHistory: CareerRole[] = [];
+  for (const role of Array.from(roleMap.values())) {
+    const validIds = role.evidenceItemIds.filter((evId) => validEvidenceIdSet.has(evId));
+    finalCareerHistory.push({
+      ...role,
+      evidenceItemIds: validIds,
+    });
+  }
+
+  // 3. Candidate Sources
+  const rawSources: unknown[] = Array.isArray(r.sources) ? r.sources : [];
+  const sourceMap = new Map<string, CandidateSource>();
+
+  // Ensure default synthetic source exists if in synthetic mode and sources array is empty
+  if (dataMode === 'synthetic' && rawSources.length === 0) {
+    sourceMap.set(defaultSyntheticCandidateProfile.sources[0].id, defaultSyntheticCandidateProfile.sources[0]);
+  }
+
+  for (const src of rawSources) {
+    if (!src || typeof src !== 'object') continue;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sc = src as any;
+    const id = safeString(sc.id);
+    if (!id) continue;
+    const retainRawText = Boolean(sc.retainRawText);
+    const rawText = retainRawText && typeof sc.rawText === 'string' ? sc.rawText : undefined;
+
+    const normalizedSource: CandidateSource = {
+      id,
+      type: safeString(sc.type, 'manual') as CandidateSource['type'],
+      name: safeString(sc.name, 'Source Document'),
+      importedAt: safeDateString(sc.importedAt, profileUpdatedAt),
+      rawText,
+      retainRawText,
+      fileName: typeof sc.fileName === 'string' ? sc.fileName : undefined,
+      dataClassification: sc.dataClassification === 'user-provided' ? 'user-provided' : 'synthetic',
+    };
+
+    sourceMap.set(id, normalizedSource);
+  }
+
+  // 4. Education & Certifications
+  const rawEdu: unknown[] = Array.isArray(r.education) ? r.education : [];
+  const education: EducationItem[] = rawEdu
+    .filter((e): e is Record<string, unknown> => Boolean(e) && typeof e === 'object')
+    .map((e, idx) => ({
+      id: safeString(e.id, `edu-${idx}`),
+      institution: safeString(e.institution, ''),
+      degree: safeString(e.degree, ''),
+      fieldOfStudy: typeof e.fieldOfStudy === 'string' ? e.fieldOfStudy : undefined,
+      startDate: typeof e.startDate === 'string' ? e.startDate : undefined,
+      endDate: typeof e.endDate === 'string' ? e.endDate : undefined,
+      location: typeof e.location === 'string' ? e.location : undefined,
+      notes: typeof e.notes === 'string' ? e.notes : undefined,
+    }));
+
+  const rawCert: unknown[] = Array.isArray(r.certifications) ? r.certifications : [];
+  const certifications: CertificationItem[] = rawCert
+    .filter((c): c is Record<string, unknown> => Boolean(c) && typeof c === 'object')
+    .map((c, idx) => ({
+      id: safeString(c.id, `cert-${idx}`),
+      name: safeString(c.name, ''),
+      issuingOrganization: safeString(c.issuingOrganization, ''),
+      issueDate: typeof c.issueDate === 'string' ? c.issueDate : undefined,
+      expirationDate: typeof c.expirationDate === 'string' ? c.expirationDate : undefined,
+      credentialId: typeof c.credentialId === 'string' ? c.credentialId : undefined,
+      verificationUrl: typeof c.verificationUrl === 'string' ? c.verificationUrl : undefined,
+    }));
+
+  return {
+    id: safeString(r.id, dataMode === 'user' ? 'cand-user-empty' : 'cand-alex-vance-v1'),
+    name: safeString(r.name, ''),
+    headline: safeString(r.headline, ''),
+    location: safeString(r.location, ''),
+    summary: safeString(r.summary, ''),
+    targetRoles: safeStringArray(r.targetRoles),
+    targetIndustries: safeStringArray(r.targetIndustries),
+    preferredLocations: safeStringArray(r.preferredLocations),
+    compensationTarget: typeof r.compensationTarget === 'string' ? r.compensationTarget : undefined,
+    workAuthorization: typeof r.workAuthorization === 'string' ? r.workAuthorization : undefined,
+    coreCompetencies: safeStringArray(r.coreCompetencies),
+    careerHistory: finalCareerHistory,
+    education,
+    certifications,
+    evidenceItems: allEvidenceItems,
+    sources: Array.from(sourceMap.values()),
+    updatedAt: profileUpdatedAt,
+    dataMode,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Candidate Storage & Stable Snapshot Cache
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns the current candidate profile.
+ * Preserves exact module reference until candidate data is mutated.
+ * Migrates legacy `ccc_candidate_profile_v1` seamlessly if present.
+ * Persists migrated schema once to local storage without dispatching event loops.
+ */
+export function getCandidateProfile(): CandidateProfile {
+  if (cachedCandidateProfile !== null) {
+    return cachedCandidateProfile;
+  }
+
+  if (!isLocalStorageAvailable()) {
+    cachedCandidateProfile = inMemoryCandidateProfile;
+    return cachedCandidateProfile;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(CCC_CANDIDATE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      const normalized = normalizeCandidateProfile(parsed);
+
+      // Detect if legacy migration occurred (e.g. parsed lacked root evidenceItems or had fewer evidenceItems than normalized)
+      const needsMigrationSave =
+        !Array.isArray(parsed.evidenceItems) ||
+        normalized.evidenceItems.length > (parsed.evidenceItems?.length ?? 0);
+
+      if (needsMigrationSave) {
+        try {
+          window.localStorage.setItem(CCC_CANDIDATE_KEY, JSON.stringify(normalized));
+        } catch {
+          // Ignore write failure
+        }
+      }
+
+      cachedCandidateProfile = normalized;
+      return cachedCandidateProfile;
+    }
+
+    // Check legacy key migration (ccc_candidate_profile_v1)
+    const legacyRaw = window.localStorage.getItem(LEGACY_PROFILE_KEY);
+    if (legacyRaw) {
+      const parsedLegacy = JSON.parse(legacyRaw);
+      const migrated = normalizeCandidateProfile(parsedLegacy);
+      try {
+        window.localStorage.setItem(CCC_CANDIDATE_KEY, JSON.stringify(migrated));
+      } catch {
+        // Ignore write failure
+      }
+      cachedCandidateProfile = migrated;
+      return cachedCandidateProfile;
+    }
+
+    // Fall back to default synthetic fixture
+    const defaultProfile = normalizeCandidateProfile(defaultSyntheticCandidateProfile);
+    try {
+      window.localStorage.setItem(CCC_CANDIDATE_KEY, JSON.stringify(defaultProfile));
+    } catch {
+      // Ignore write failure
+    }
+    cachedCandidateProfile = defaultProfile;
+    return cachedCandidateProfile;
+  } catch {
+    cachedCandidateProfile = inMemoryCandidateProfile;
+    return cachedCandidateProfile;
+  }
+}
+
+/**
+ * Save updated CandidateProfile.
+ * Updates in-memory cache and dispatches candidate-scoped storage event.
+ */
+export function saveCandidateProfile(profile: CandidateProfile): CandidateProfile {
+  const normalized = normalizeCandidateProfile({
+    ...profile,
+    updatedAt: new Date().toISOString(),
+  });
+
+  cachedCandidateProfile = normalized;
+  inMemoryCandidateProfile = normalized;
+
+  if (isLocalStorageAvailable()) {
+    try {
+      window.localStorage.setItem(CCC_CANDIDATE_KEY, JSON.stringify(normalized));
+    } catch {
+      // Ignore
+    }
+  }
+
+  notifyCandidateStorageChange();
+  return normalized;
+}
+
+/**
+ * Resets candidate data to original synthetic benchmark fixture.
+ * Does NOT clear opportunities, theme, or settings.
+ */
+export function resetCandidateDemoData(): void {
+  const freshSynthetic = normalizeCandidateProfile(defaultSyntheticCandidateProfile);
+  cachedCandidateProfile = freshSynthetic;
+  inMemoryCandidateProfile = freshSynthetic;
+
+  if (isLocalStorageAvailable()) {
+    try {
+      window.localStorage.setItem(CCC_CANDIDATE_KEY, JSON.stringify(freshSynthetic));
+    } catch {
+      // Ignore
+    }
+  }
+
+  notifyCandidateStorageChange();
+}
+
+/**
+ * Clears candidate data, creating a valid empty user candidate profile.
+ * Does NOT clear opportunities, theme, or settings.
+ */
+export function clearCandidateData(): void {
+  const emptyCandidateProfile: CandidateProfile = {
+    id: 'cand-user-empty',
+    name: '',
+    headline: '',
+    location: '',
+    summary: '',
+    targetRoles: [],
+    targetIndustries: [],
+    preferredLocations: [],
+    coreCompetencies: [],
+    careerHistory: [],
+    education: [],
+    certifications: [],
+    evidenceItems: [],
+    sources: [],
+    updatedAt: new Date().toISOString(),
+    dataMode: 'user',
+  };
+
+  cachedCandidateProfile = emptyCandidateProfile;
+  inMemoryCandidateProfile = emptyCandidateProfile;
+
+  if (isLocalStorageAvailable()) {
+    try {
+      window.localStorage.setItem(CCC_CANDIDATE_KEY, JSON.stringify(emptyCandidateProfile));
+    } catch {
+      // Ignore
+    }
+  }
+
+  notifyCandidateStorageChange();
+}
+
+/**
+ * Triggers a browser download of the active candidate profile in clean JSON format.
+ * Timestamp generated strictly on user click.
+ */
+export function exportCandidateData(profileToExport?: CandidateProfile): void {
+  if (typeof window === 'undefined') return;
+
+  const target = profileToExport ?? getCandidateProfile();
+  const jsonString = JSON.stringify(target, null, 2);
+  const blob = new Blob([jsonString], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+
+  const dateStr = new Date().toISOString().split('T')[0];
+  const filename = `candidate_profile_${target.dataMode}_${dateStr}.json`;
+
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Subscribes to candidate storage changes specifically.
+ */
+export function subscribeToCandidateStorage(listener: () => void): () => void {
+  if (typeof window === 'undefined') return () => {};
+
+  const handleStorageEvent = (e: StorageEvent) => {
+    if (!e.key || e.key === CCC_CANDIDATE_KEY) {
+      cachedCandidateProfile = null; // Invalidate cache so next getCandidateProfile() re-parses
+      listener();
+    }
+  };
+
+  const handleCustomEvent = () => {
+    listener();
+  };
+
+  window.addEventListener(CCC_CANDIDATE_CHANGE_EVENT, handleCustomEvent);
+  window.addEventListener('storage', handleStorageEvent);
+
+  return () => {
+    window.removeEventListener(CCC_CANDIDATE_CHANGE_EVENT, handleCustomEvent);
+    window.removeEventListener('storage', handleStorageEvent);
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Opportunity normalization & ID deduplication
 // ---------------------------------------------------------------------------
@@ -65,14 +591,6 @@ function derivePriorityFromScore(score: unknown): OpportunityPriority {
   if (n >= 85) return 'High';
   if (n >= 50) return 'Medium';
   return 'Low';
-}
-
-function safeString(value: unknown, fallback = ''): string {
-  return typeof value === 'string' ? value : fallback;
-}
-
-function safeStringOrUndefined(value: unknown): string | undefined {
-  return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
 function safePipelineStage(value: unknown): PipelineStage {
@@ -91,11 +609,6 @@ function safePriority(value: unknown, fallbackScore: unknown): OpportunityPriori
     : derivePriorityFromScore(fallbackScore);
 }
 
-/**
- * Deduplicates an array of JobOpportunity strictly by opportunity.id.
- * If identical IDs exist, preserves the most recently updated valid record.
- * Does NOT merge distinct opportunities by company/title.
- */
 function deduplicateOpportunities(opps: JobOpportunity[]): JobOpportunity[] {
   const map = new Map<string, JobOpportunity>();
   for (const opp of opps) {
@@ -114,11 +627,6 @@ function deduplicateOpportunities(opps: JobOpportunity[]): JobOpportunity[] {
   return Array.from(map.values());
 }
 
-/**
- * Normalize a raw stored/parsed object into a fully-typed JobOpportunity.
- * Safe to call on legacy V1 records that are missing V1.1A fields.
- * Never throws.
- */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function normalizeOpportunity(raw: any): JobOpportunity {
   const stage = safePipelineStage(raw?.stage);
@@ -143,6 +651,63 @@ export function normalizeOpportunity(raw: any): JobOpportunity {
     actions = [...stageActions, ...roleActions];
   }
 
+  const rawAnalysis = raw?.analysis ?? {
+    executiveSummary: '',
+    likelyMandate: '',
+    keyRequirements: [],
+    overallFitScore: 0,
+    scoreExplanation: '',
+    recommendation: 'Monitor',
+    positioningNarrative: '',
+    qualifications: [],
+    objections: [],
+    recruiterQuestions: [],
+    hiringManagerQuestions: [],
+    recommendedStarStories: [],
+    nextActions: [],
+  };
+
+  const KNOWN_BENCHMARK_IDS = [
+    'opp-role-1-ai-strategy',
+    'opp-role-2-sales-ops',
+    'opp-role-3-data-engineer',
+    'opp-role-4-chief-of-staff',
+    'opp-role-5-strategy-lead',
+  ];
+  const isKnownFixture = KNOWN_BENCHMARK_IDS.includes(opportunityId);
+
+  const candidateProvenance: CandidateProvenance = rawAnalysis.candidateProvenance ?? (
+    isKnownFixture
+      ? {
+          candidateId: 'cand-alex-vance-v1',
+          candidateName: 'Alex Vance',
+          dataMode: 'synthetic',
+          profileUpdatedAt: '2026-01-01T00:00:00.000Z',
+          analyzedAt: safeString(raw?.createdAt, '2026-01-01T00:00:00.000Z'),
+          provenanceStatus: 'inferred',
+        }
+      : {
+          candidateId: null,
+          candidateName: null,
+          dataMode: null,
+          profileUpdatedAt: null,
+          analyzedAt: safeString(raw?.createdAt, '2026-01-01T00:00:00.000Z'),
+          provenanceStatus: 'unknown',
+        }
+  );
+
+  const evidenceSnapshot: EvidenceItem[] = Array.isArray(rawAnalysis.evidenceSnapshot)
+    ? rawAnalysis.evidenceSnapshot
+    : (isKnownFixture
+        ? collectReferencedEvidence(defaultSyntheticCandidateProfile, rawAnalysis)
+        : []);
+
+  const normalizedAnalysis: FitAnalysisReport = {
+    ...rawAnalysis,
+    candidateProvenance,
+    evidenceSnapshot,
+  };
+
   const normalized: JobOpportunity = {
     id: opportunityId,
     title: safeString(raw?.title, 'Untitled Role'),
@@ -154,21 +719,7 @@ export function normalizeOpportunity(raw: any): JobOpportunity {
     createdAt: safeString(raw?.createdAt, new Date().toISOString()),
     updatedAt: safeString(raw?.updatedAt, new Date().toISOString()),
     stage,
-    analysis: raw?.analysis ?? {
-      executiveSummary: '',
-      likelyMandate: '',
-      keyRequirements: [],
-      overallFitScore: 0,
-      scoreExplanation: '',
-      recommendation: 'Monitor',
-      positioningNarrative: '',
-      qualifications: [],
-      objections: [],
-      recruiterQuestions: [],
-      hiringManagerQuestions: [],
-      recommendedStarStories: [],
-      nextActions: [],
-    },
+    analysis: normalizedAnalysis,
     priority: safePriority(raw?.priority, fitScore),
     notes: safeString(raw?.notes),
     followUpDate: safeStringOrUndefined(raw?.followUpDate),
@@ -183,6 +734,10 @@ export function normalizeOpportunity(raw: any): JobOpportunity {
   return normalized;
 }
 
+function safeStringOrUndefined(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function normalizeAll(raws: any[]): JobOpportunity[] {
   if (!Array.isArray(raws)) return [];
@@ -191,32 +746,9 @@ function normalizeAll(raws: any[]): JobOpportunity[] {
 }
 
 // ---------------------------------------------------------------------------
-// Profile
-// ---------------------------------------------------------------------------
-
-export function getCandidateProfile(): CandidateProfile {
-  if (!isLocalStorageAvailable()) return inMemoryProfile;
-
-  try {
-    const raw = window.localStorage.getItem(PROFILE_KEY);
-    if (!raw) {
-      window.localStorage.setItem(PROFILE_KEY, JSON.stringify(alexVanceProfile));
-      return alexVanceProfile;
-    }
-    return JSON.parse(raw) as CandidateProfile;
-  } catch {
-    return inMemoryProfile;
-  }
-}
-
-// ---------------------------------------------------------------------------
 // Opportunities Storage & Stable Snapshot Cache
 // ---------------------------------------------------------------------------
 
-/**
- * Returns the array of opportunities.
- * Returns the exact same array reference until a mutation occurs.
- */
 export function getOpportunities(): JobOpportunity[] {
   if (cachedOpportunities !== null) {
     return cachedOpportunities;
@@ -266,12 +798,6 @@ export function saveOpportunity(opportunity: JobOpportunity): JobOpportunity {
   return withTimestamp;
 }
 
-/**
- * Single Authoritative Stage Updater
- * Updates stage and re-merges stage actions using central templates.
- * Preserves role-specific actions, custom actions, and completion state.
- * Returns the complete updated JobOpportunity.
- */
 export function updateOpportunityStage(
   id: string,
   stage: PipelineStage
@@ -299,7 +825,6 @@ export function updateOpportunityStage(
     return updatedTargetOpp;
   }
 
-  // Fallback if ID not found
   const fallback = getOpportunityById(id)!;
   return fallback;
 }
@@ -367,17 +892,17 @@ export function addCustomAction(
   return updatedTargetOpp;
 }
 
+/**
+ * Resets opportunities demo data ONLY.
+ * Does NOT reset candidate profile, theme, or UI settings.
+ */
 export function resetDemoData(): void {
-  inMemoryProfile = alexVanceProfile;
   const freshOpps = normalizeAll([...initialOpportunities]);
-  // Update caches before persistOpportunities so the notified listeners read fresh data
   cachedOpportunities = freshOpps;
   inMemoryOpportunities = freshOpps;
 
   if (isLocalStorageAvailable()) {
     try {
-      window.localStorage.setItem(PROFILE_KEY, JSON.stringify(alexVanceProfile));
-      // Preserve current UI settings (including theme) — only restore opportunity data
       const currentSettings = getUISettings();
       window.localStorage.setItem(OPPORTUNITIES_KEY, JSON.stringify(freshOpps));
       window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(currentSettings));
@@ -386,7 +911,6 @@ export function resetDemoData(): void {
     }
   }
 
-  // persistOpportunities writes + notifies; do NOT call it again after this
   notifyStorageChange();
 }
 
@@ -395,7 +919,7 @@ export function subscribeToStorage(listener: () => void): () => void {
 
   const handleStorageEvent = (e: StorageEvent) => {
     if (!e.key || e.key === OPPORTUNITIES_KEY) {
-      cachedOpportunities = null; // Invalidate cache so next getOpportunities() re-parses
+      cachedOpportunities = null;
       listener();
     }
   };

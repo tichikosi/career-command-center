@@ -9,6 +9,9 @@ import {
   PriorityBadge,
   FollowUpStatusBadge,
 } from '@/components/ui/Badge';
+import { AnalysisFreshnessBadge } from '@/components/ui/AnalysisFreshnessBadge';
+import { useCandidateProfile } from '@/lib/useCandidate';
+import { getAnalysisFreshness } from '@/lib/candidateAdapter';
 import { Modal } from '@/components/ui/Modal';
 import {
   IconSearch,
@@ -157,6 +160,7 @@ function OpportunitiesContent() {
   const initialStageFilter = searchParams ? searchParams.get('stage') || 'All' : 'All';
 
   const opportunities = useOpportunities();
+  const { profile, mounted } = useCandidateProfile();
   const [settings] = useState(() => getUISettings());
 
   const [searchTerm, setSearchTerm] = useState(settings.searchTerm ?? '');
@@ -261,7 +265,7 @@ function OpportunitiesContent() {
             className="px-3.5 py-2 text-xs font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors flex items-center gap-1.5"
           >
             <IconRefresh className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
-            <span>Reset Demo Data</span>
+            <span>Restore Demo Opportunities</span>
           </button>
           <Link
             href="/analyze"
@@ -449,9 +453,12 @@ function OpportunitiesContent() {
 
                       {/* Fit Score */}
                       <td className="py-3.5 px-4">
-                        <span className="font-extrabold text-slate-900 dark:text-slate-100 text-sm">
-                          {opp.analysis.overallFitScore}%
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-extrabold text-slate-900 dark:text-slate-100 text-sm">
+                            {opp.analysis.overallFitScore}%
+                          </span>
+                          <AnalysisFreshnessBadge freshness={mounted ? getAnalysisFreshness(opp.analysis, profile) : 'current'} compact />
+                        </div>
                       </td>
 
                       {/* Recommendation */}
@@ -560,9 +567,9 @@ function OpportunitiesContent() {
         isOpen={isResetModalOpen}
         onClose={() => setIsResetModalOpen(false)}
         onConfirm={() => { resetDemoData(); setIsResetModalOpen(false); }}
-        title="Reset Demo Data"
-        description="Are you sure you want to clear all locally stored opportunities and restore the default 5 synthetic benchmark roles?"
-        confirmText="Reset All Data"
+        title="Restore demo opportunities?"
+        description="Restore demo opportunities? Opportunity stages, workflow actions, notes, and follow-ups will be reset. Candidate data will not be changed."
+        confirmText="Restore Opportunities"
         isDanger={true}
       />
     </div>

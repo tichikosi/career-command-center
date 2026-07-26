@@ -1,3 +1,5 @@
+import { EvidenceItem } from '@/types/candidate';
+
 export type PipelineStage =
   | 'Identified'
   | 'Applied'
@@ -74,6 +76,17 @@ export interface StarStory {
   citationIds: string[];
 }
 
+export type ProvenanceStatus = 'known' | 'inferred' | 'unknown';
+
+export interface CandidateProvenance {
+  candidateId: string | null;
+  candidateName: string | null;
+  dataMode: 'synthetic' | 'user' | null;
+  profileUpdatedAt: string | null;
+  analyzedAt: string;
+  provenanceStatus: ProvenanceStatus;
+}
+
 export interface FitAnalysisReport {
   executiveSummary: string;
   likelyMandate: string;
@@ -90,6 +103,8 @@ export interface FitAnalysisReport {
   nextActions: string[];
   isFallbackAnalysis?: boolean;
   analysisNotice?: string;
+  candidateProvenance?: CandidateProvenance;
+  evidenceSnapshot?: EvidenceItem[];
 }
 
 export interface JobOpportunity {

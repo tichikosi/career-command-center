@@ -16,7 +16,11 @@ import {
   IconExternalLink,
 } from '@/components/icons';
 import { PipelineStage } from '@/types/opportunity';
-import { alexVanceProfile } from '@/data/candidate';
+import { useCandidateProfile } from '@/lib/useCandidate';
+import {
+  resolveEvidenceForReportCitations,
+  getAnalysisFreshness,
+} from '@/lib/candidateAdapter';
 import {
   updateOpportunityStage,
   deleteOpportunity,
@@ -27,6 +31,7 @@ import { validateUrl } from '@/lib/dateUtils';
 export default function AnalysisResultsPage() {
   const router = useRouter();
   const params = useParams();
+  const { profile, mounted } = useCandidateProfile();
   const idFromPath =
     typeof params?.id === 'string'
       ? params.id
@@ -60,6 +65,7 @@ export default function AnalysisResultsPage() {
   }
 
   const { analysis } = opportunity;
+  const freshness = mounted ? getAnalysisFreshness(analysis, profile) : 'current';
 
   const strongMatches = analysis.qualifications.filter((q) => q.matchType === 'Strong Match');
   const partialMatches = analysis.qualifications.filter((q) => q.matchType === 'Partial Match');
@@ -73,15 +79,7 @@ export default function AnalysisResultsPage() {
         .flatMap((q) => q.supportingEvidenceCitationIds)
     )
   );
-  const resolvedAchievements = alexVanceProfile.careerHistory
-    .flatMap((role) =>
-      role.achievements.map((ach) => ({
-        ...ach,
-        company: role.company,
-        roleTitle: role.title,
-      }))
-    )
-    .filter((ach) => uniqueCitationIds.includes(ach.citationId));
+  const resolvedAchievements = mounted ? resolveEvidenceForReportCitations(analysis, profile, uniqueCitationIds) : [];
 
   const handleStageChange = (newStage: PipelineStage) => {
     updateOpportunityStage(opportunity.id, newStage);
@@ -133,6 +131,46 @@ export default function AnalysisResultsPage() {
       {/* Fallback notice */}
       {analysis.isFallbackAnalysis && (
         <FallbackAnalysisNotice text={analysis.analysisNotice} />
+      )}
+
+      {/* Historical Provenance & Freshness Warning Banners */}
+      {mounted && freshness === 'stale' && (
+        <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200 p-4 rounded-xl text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+          <div className="space-y-1">
+            <span className="font-bold flex items-center gap-1.5 text-sm">
+              <IconAlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+              Historical Analysis (Candidate Profile Changed)
+            </span>
+            <p className="text-amber-800 dark:text-amber-300">
+              Historical analysis generated using {analysis.candidateProvenance?.candidateName || 'Alex Vance'}. The active candidate profile has changed. Re-run the analysis to evaluate the current profile.
+            </p>
+          </div>
+          <Link
+            href="/analyze"
+            className="px-3.5 py-2 bg-amber-900 dark:bg-amber-100 text-white dark:text-amber-900 font-semibold rounded-lg text-xs shrink-0 w-fit"
+          >
+            Re-analyze Role
+          </Link>
+        </div>
+      )}
+
+      {mounted && freshness === 'unknown' && (
+        <div className="bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 p-4 rounded-xl text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+          <div className="space-y-1">
+            <span className="font-bold flex items-center gap-1.5 text-sm text-slate-900 dark:text-slate-100">
+              Historical Legacy Analysis
+            </span>
+            <p className="text-slate-600 dark:text-slate-400">
+              Historical analysis created before candidate provenance was tracked. Re-run the analysis to evaluate the active profile.
+            </p>
+          </div>
+          <Link
+            href="/analyze"
+            className="px-3.5 py-2 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-semibold rounded-lg text-xs shrink-0 w-fit"
+          >
+            Re-analyze Role
+          </Link>
+        </div>
       )}
 
       {/* Executive Header Banner */}
@@ -438,10 +476,14 @@ export default function AnalysisResultsPage() {
           <Card padding="lg" className="space-y-4">
             <CardHeader
               title="Supporting Candidate Evidence"
-              subtitle="UI-derived view: Verifiable achievements from Alex Vance profile cited in analysis"
+              subtitle="Verifiable evidence records from candidate snapshot cited in this analysis"
             />
             {resolvedAchievements.length === 0 ? (
-              <p className="text-xs text-slate-500 dark:text-slate-400">No specific evidence achievements cited for positive matches.</p>
+              <div className="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400">
+                {uniqueCitationIds.length > 0
+                  ? 'Supporting evidence from the original candidate profile is unavailable for this legacy analysis.'
+                  : 'No specific evidence citations recorded for positive matches.'}
+              </div>
             ) : (
               <div className="space-y-3">
                 {resolvedAchievements.map((ach) => (
