@@ -88,6 +88,73 @@ export interface CertificationItem {
   verificationUrl?: string;
 }
 
+// --- Work Authorization Types (v1.2A2.1.1) ---
+
+export type WorkAuthorizationStatus =
+  | 'us-citizen'
+  | 'us-permanent-resident'
+  | 'employment-authorization-document'
+  | 'h1b'
+  | 'l1'
+  | 'o1'
+  | 'tn'
+  | 'f1-opt'
+  | 'f1-stem-opt'
+  | 'j1'
+  | 'other-visa'
+  | 'sponsorship-required'
+  | 'prefer-not-to-say'
+  | 'unspecified';
+
+export interface WorkAuthorizationDetails {
+  status: WorkAuthorizationStatus;
+  visaType?: string;
+  expirationDate?: string;
+  sponsorshipRequiredNow?: boolean;
+  sponsorshipRequiredFuture?: boolean;
+  notes?: string;
+}
+
+// --- Compensation Types (v1.2A2.1.1) ---
+
+export type CompensationCurrency =
+  | 'USD'
+  | 'CAD'
+  | 'GBP'
+  | 'EUR'
+  | 'ZAR'
+  | 'KES'
+  | 'AUD'
+  | 'CHF'
+  | 'SGD'
+  | 'AED'
+  | 'NGN'
+  | 'GHS'
+  | 'ZWL'
+  | 'OTHER';
+
+export type CompensationPreference =
+  | 'required'
+  | 'preferred'
+  | 'not-important';
+
+export interface CompensationPreferences {
+  currency: CompensationCurrency;
+  baseSalaryMin?: number;
+  baseSalaryMax?: number;
+  bonusPreference: CompensationPreference;
+  targetBonusPercent?: number;
+  equityPreference: CompensationPreference;
+  notes?: string;
+}
+
+// TODO: Future expansion roadmap markers:
+// - current compensation
+// - total compensation
+// - structured locations / Google Places IDs
+// - employer sponsorship matching
+// - richer compensation compatibility scoring
+
 export interface CandidateProfile {
   id: string;
   name: string;
@@ -97,8 +164,15 @@ export interface CandidateProfile {
   targetRoles: string[];
   targetIndustries: string[];
   preferredLocations: string[];
+
+  // Structured Canonical Models (v1.2A2.1.1)
+  compensationPreferences?: CompensationPreferences;
+  workAuthorizationDetails?: WorkAuthorizationDetails;
+
+  // Legacy Fields (Temporarily Retained for Backward Compatibility & Migration)
   compensationTarget?: string;
   workAuthorization?: string;
+
   coreCompetencies: string[];
   careerHistory: CareerRole[];
   education: EducationItem[];

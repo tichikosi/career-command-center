@@ -1,4 +1,4 @@
-import { CandidateProfile, EvidenceItem } from '@/types/candidate';
+import { CandidateProfile, EvidenceItem, CompensationPreferences, WorkAuthorizationDetails } from '@/types/candidate';
 import { FitAnalysisReport } from '@/types/opportunity';
 
 export interface ResolvedEvidenceCitation extends EvidenceItem {
@@ -21,8 +21,8 @@ export interface OverviewDraft {
   targetRoles: string[];
   targetIndustries: string[];
   preferredLocations: string[];
-  compensationTarget: string;
-  workAuthorization: string;
+  compensationPreferences: CompensationPreferences;
+  workAuthorizationDetails: WorkAuthorizationDetails;
   coreCompetencies: string[];
 }
 
@@ -46,6 +46,9 @@ function normalizeStringArray(arr: string[] | undefined | null): string[] {
 }
 
 export function normalizeOverviewDraft(draft: OverviewDraft): OverviewDraft {
+  const comp = draft.compensationPreferences;
+  const auth = draft.workAuthorizationDetails;
+
   return {
     name: (draft.name || '').trim(),
     headline: (draft.headline || '').trim(),
@@ -54,21 +57,58 @@ export function normalizeOverviewDraft(draft: OverviewDraft): OverviewDraft {
     targetRoles: normalizeStringArray(draft.targetRoles),
     targetIndustries: normalizeStringArray(draft.targetIndustries),
     preferredLocations: normalizeStringArray(draft.preferredLocations),
-    compensationTarget: (draft.compensationTarget || '').trim(),
-    workAuthorization: (draft.workAuthorization || '').trim(),
+    compensationPreferences: {
+      currency: comp?.currency || 'USD',
+      baseSalaryMin: typeof comp?.baseSalaryMin === 'number' && !isNaN(comp.baseSalaryMin) && comp.baseSalaryMin >= 0 ? comp.baseSalaryMin : undefined,
+      baseSalaryMax: typeof comp?.baseSalaryMax === 'number' && !isNaN(comp.baseSalaryMax) && comp.baseSalaryMax >= 0 ? comp.baseSalaryMax : undefined,
+      bonusPreference: comp?.bonusPreference || 'not-important',
+      targetBonusPercent:
+        (comp?.bonusPreference || 'not-important') !== 'not-important' &&
+        typeof comp?.targetBonusPercent === 'number' &&
+        !isNaN(comp.targetBonusPercent) &&
+        comp.targetBonusPercent >= 0 &&
+        comp.targetBonusPercent <= 100
+          ? comp.targetBonusPercent
+          : undefined,
+      equityPreference: comp?.equityPreference || 'not-important',
+      notes: (comp?.notes || '').trim() || undefined,
+    },
+    workAuthorizationDetails: {
+      status: auth?.status || 'unspecified',
+      visaType: (auth?.visaType || '').trim() || undefined,
+      expirationDate: (auth?.expirationDate || '').trim() || undefined,
+      sponsorshipRequiredNow: Boolean(auth?.sponsorshipRequiredNow),
+      sponsorshipRequiredFuture: Boolean(auth?.sponsorshipRequiredFuture),
+      notes: (auth?.notes || '').trim() || undefined,
+    },
     coreCompetencies: normalizeStringArray(draft.coreCompetencies),
   };
 }
 
 export function isDraftPopulated(draft: OverviewDraft): boolean {
   const norm = normalizeOverviewDraft(draft);
+  const comp = norm.compensationPreferences;
+  const auth = norm.workAuthorizationDetails;
+
+  const hasCompensation =
+    comp.baseSalaryMin !== undefined ||
+    comp.baseSalaryMax !== undefined ||
+    comp.bonusPreference !== 'not-important' ||
+    comp.equityPreference !== 'not-important' ||
+    Boolean(comp.notes);
+
+  const hasWorkAuth =
+    auth.status !== 'unspecified' && auth.status !== 'prefer-not-to-say' ||
+    Boolean(auth.visaType) ||
+    Boolean(auth.notes);
+
   return (
     Boolean(norm.name) ||
     Boolean(norm.headline) ||
     Boolean(norm.location) ||
     Boolean(norm.summary) ||
-    Boolean(norm.compensationTarget) ||
-    Boolean(norm.workAuthorization) ||
+    hasCompensation ||
+    hasWorkAuth ||
     norm.targetRoles.length > 0 ||
     norm.targetIndustries.length > 0 ||
     norm.preferredLocations.length > 0 ||
@@ -104,8 +144,35 @@ export function isDraftEqual(a: OverviewDraft, b: OverviewDraft): boolean {
   if (normA.headline !== normB.headline) return false;
   if (normA.location !== normB.location) return false;
   if (normA.summary !== normB.summary) return false;
-  if (normA.compensationTarget !== normB.compensationTarget) return false;
-  if (normA.workAuthorization !== normB.workAuthorization) return false;
+
+  // Compensation Comparison
+  const compA = normA.compensationPreferences;
+  const compB = normB.compensationPreferences;
+  if (
+    compA.currency !== compB.currency ||
+    compA.baseSalaryMin !== compB.baseSalaryMin ||
+    compA.baseSalaryMax !== compB.baseSalaryMax ||
+    compA.bonusPreference !== compB.bonusPreference ||
+    compA.targetBonusPercent !== compB.targetBonusPercent ||
+    compA.equityPreference !== compB.equityPreference ||
+    compA.notes !== compB.notes
+  ) {
+    return false;
+  }
+
+  // Work Authorization Comparison
+  const authA = normA.workAuthorizationDetails;
+  const authB = normB.workAuthorizationDetails;
+  if (
+    authA.status !== authB.status ||
+    authA.visaType !== authB.visaType ||
+    authA.expirationDate !== authB.expirationDate ||
+    authA.sponsorshipRequiredNow !== authB.sponsorshipRequiredNow ||
+    authA.sponsorshipRequiredFuture !== authB.sponsorshipRequiredFuture ||
+    authA.notes !== authB.notes
+  ) {
+    return false;
+  }
 
   const compareArrays = (arrA: string[], arrB: string[]) => {
     if (arrA.length !== arrB.length) return false;

@@ -27,8 +27,8 @@ export function CandidateOverviewEditor({ profile, onSave, onCancel }: Props) {
     targetRoles: Array.isArray(profile.targetRoles) ? [...profile.targetRoles] : [],
     targetIndustries: Array.isArray(profile.targetIndustries) ? [...profile.targetIndustries] : [],
     preferredLocations: Array.isArray(profile.preferredLocations) ? [...profile.preferredLocations] : [],
-    compensationTarget: profile.compensationTarget || '',
-    workAuthorization: profile.workAuthorization || '',
+    compensationPreferences: profile.compensationPreferences ? { ...profile.compensationPreferences } : { currency: 'USD', bonusPreference: 'not-important', equityPreference: 'not-important' },
+    workAuthorizationDetails: profile.workAuthorizationDetails ? { ...profile.workAuthorizationDetails } : { status: 'unspecified', sponsorshipRequiredNow: false, sponsorshipRequiredFuture: false },
     coreCompetencies: Array.isArray(profile.coreCompetencies) ? [...profile.coreCompetencies] : [],
   };
 
@@ -38,6 +38,9 @@ export function CandidateOverviewEditor({ profile, onSave, onCancel }: Props) {
   const [showUnsavedModal, setShowUnsavedModal] = useState(false);
 
   const nameInputRef = useRef<HTMLInputElement>(null);
+  const minSalaryRef = useRef<HTMLInputElement>(null);
+  const maxSalaryRef = useRef<HTMLInputElement>(null);
+  const visaTypeRef = useRef<HTMLInputElement>(null);
 
   const isDirty = !isDraftEqual(draft, initialDraft);
 
@@ -47,6 +50,21 @@ export function CandidateOverviewEditor({ profile, onSave, onCancel }: Props) {
       setErrors((prev) => {
         const next = { ...prev };
         delete next.name;
+        return next;
+      });
+    }
+    if (fields.compensationPreferences && (errors.baseSalaryMin || errors.baseSalaryMax)) {
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next.baseSalaryMin;
+        delete next.baseSalaryMax;
+        return next;
+      });
+    }
+    if (fields.workAuthorizationDetails && errors.visaType) {
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next.visaType;
         return next;
       });
     }
@@ -62,10 +80,36 @@ export function CandidateOverviewEditor({ profile, onSave, onCancel }: Props) {
       newErrors.name = 'Full Name is required for candidate profile.';
     }
 
+    const comp = draft.compensationPreferences;
+    if (
+      comp.baseSalaryMin !== undefined &&
+      comp.baseSalaryMax !== undefined &&
+      comp.baseSalaryMax < comp.baseSalaryMin
+    ) {
+      newErrors.baseSalaryMax = 'Maximum base salary cannot be less than minimum base salary.';
+    }
+
+    if (
+      comp.bonusPreference !== 'not-important' &&
+      comp.targetBonusPercent !== undefined &&
+      (isNaN(comp.targetBonusPercent) || comp.targetBonusPercent < 0 || comp.targetBonusPercent > 100)
+    ) {
+      newErrors.targetBonusPercent = 'Target Bonus % must be between 0 and 100.';
+    }
+
+    const auth = normalized.workAuthorizationDetails;
+    if (auth.status === 'other-visa' && !auth.visaType) {
+      newErrors.visaType = 'Specific visa type is required when "Other Visa" status is selected.';
+    }
+
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       if (newErrors.name && nameInputRef.current) {
         nameInputRef.current.focus();
+      } else if (newErrors.baseSalaryMax && maxSalaryRef.current) {
+        maxSalaryRef.current.focus();
+      } else if (newErrors.visaType && visaTypeRef.current) {
+        visaTypeRef.current.focus();
       }
       return;
     }
@@ -98,6 +142,8 @@ export function CandidateOverviewEditor({ profile, onSave, onCancel }: Props) {
     }
   };
 
+  const hasValidationErrors = Object.keys(errors).length > 0;
+
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
       {/* Editor Top Bar */}
@@ -111,7 +157,7 @@ export function CandidateOverviewEditor({ profile, onSave, onCancel }: Props) {
               {draft.name || 'New Candidate Overview'}
             </h1>
             <p className="text-xs text-slate-400">
-              Update core candidate background, target roles, and executive competencies.
+              Update core candidate background, target roles, compensation preferences, and work authorization.
             </p>
           </div>
 
@@ -128,7 +174,7 @@ export function CandidateOverviewEditor({ profile, onSave, onCancel }: Props) {
             <button
               type="button"
               onClick={handleSave}
-              disabled={!isDirty || isSaving}
+              disabled={!isDirty || isSaving || hasValidationErrors}
               className="px-5 py-2 text-xs font-bold text-slate-900 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 rounded-lg shadow-xs transition-colors flex items-center gap-1.5"
             >
               <IconCheckCircle className="w-4 h-4 text-emerald-600" />
@@ -151,6 +197,9 @@ export function CandidateOverviewEditor({ profile, onSave, onCancel }: Props) {
         draft={draft}
         onChange={handleFieldChange}
         errors={errors}
+        minSalaryRef={minSalaryRef}
+        maxSalaryRef={maxSalaryRef}
+        visaTypeRef={visaTypeRef}
       />
 
       {/* Bottom Actions Bar */}
@@ -170,7 +219,7 @@ export function CandidateOverviewEditor({ profile, onSave, onCancel }: Props) {
           <button
             type="button"
             onClick={handleSave}
-            disabled={!isDirty || isSaving}
+            disabled={!isDirty || isSaving || hasValidationErrors}
             className="px-5 py-2 text-xs font-bold text-white dark:text-slate-900 bg-slate-900 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-slate-200 disabled:opacity-40 rounded-lg shadow-xs transition-colors flex items-center gap-1.5"
           >
             <IconCheckCircle className="w-4 h-4 text-emerald-500 dark:text-emerald-600" />

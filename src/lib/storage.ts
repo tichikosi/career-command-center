@@ -18,6 +18,8 @@ import { defaultSyntheticCandidateProfile } from '@/data/candidate';
 import { initialOpportunities } from '@/data/opportunities';
 import { mergeActionsForStage, buildStageActions, buildRoleActions } from '@/lib/stageActions';
 import { collectReferencedEvidence } from '@/lib/candidateAdapter';
+import { parseLegacyCompensationString, DEFAULT_COMPENSATION_PREFERENCES } from '@/lib/compensationHelpers';
+import { parseLegacyWorkAuthString, DEFAULT_WORK_AUTHORIZATION_DETAILS } from '@/lib/workAuthHelpers';
 
 export const CCC_CANDIDATE_KEY = 'ccc_candidate_v1';
 const LEGACY_PROFILE_KEY = 'ccc_candidate_profile_v1';
@@ -45,6 +47,8 @@ const NEUTRAL_SERVER_CANDIDATE_SNAPSHOT: CandidateProfile = Object.freeze({
   targetRoles: [],
   targetIndustries: [],
   preferredLocations: [],
+  compensationPreferences: DEFAULT_COMPENSATION_PREFERENCES,
+  workAuthorizationDetails: DEFAULT_WORK_AUTHORIZATION_DETAILS,
   compensationTarget: '',
   workAuthorization: '',
   coreCompetencies: [],
@@ -355,27 +359,63 @@ export function normalizeCandidateProfile(raw: unknown): CandidateProfile {
       verificationUrl: typeof c.verificationUrl === 'string' ? c.verificationUrl : undefined,
     }));
 
-  return {
-    id: safeString(r.id, dataMode === 'user' ? 'cand-user-empty' : 'cand-alex-vance-v1'),
-    name: safeString(r.name, ''),
-    headline: safeString(r.headline, ''),
-    location: safeString(r.location, ''),
-    summary: safeString(r.summary, ''),
-    targetRoles: safeStringArray(r.targetRoles),
-    targetIndustries: safeStringArray(r.targetIndustries),
-    preferredLocations: safeStringArray(r.preferredLocations),
-    compensationTarget: typeof r.compensationTarget === 'string' ? r.compensationTarget : undefined,
-    workAuthorization: typeof r.workAuthorization === 'string' ? r.workAuthorization : undefined,
-    coreCompetencies: safeStringArray(r.coreCompetencies),
-    careerHistory: finalCareerHistory,
-    education,
-    certifications,
-    evidenceItems: allEvidenceItems,
-    sources: Array.from(sourceMap.values()),
-    updatedAt: profileUpdatedAt,
-    dataMode,
-  };
-}
+  // Structured Compensation & Migration
+    const compensationTarget = typeof r.compensationTarget === 'string' ? r.compensationTarget : undefined;
+    let compensationPreferences: CandidateProfile['compensationPreferences'] = undefined;
+    if (r.compensationPreferences && typeof r.compensationPreferences === 'object') {
+      const cp = r.compensationPreferences;
+      const bonusPref = cp.bonusPreference || 'not-important';
+      const targetBonusPercent =
+        bonusPref !== 'not-important' &&
+        typeof cp.targetBonusPercent === 'number' &&
+        !isNaN(cp.targetBonusPercent) &&
+        cp.targetBonusPercent >= 0 &&
+        cp.targetBonusPercent <= 100
+          ? cp.targetBonusPercent
+          : undefined;
+
+      compensationPreferences = {
+        currency: cp.currency || 'USD',
+        baseSalaryMin: typeof cp.baseSalaryMin === 'number' && !isNaN(cp.baseSalaryMin) && cp.baseSalaryMin >= 0 ? cp.baseSalaryMin : undefined,
+        baseSalaryMax: typeof cp.baseSalaryMax === 'number' && !isNaN(cp.baseSalaryMax) && cp.baseSalaryMax >= 0 ? cp.baseSalaryMax : undefined,
+        bonusPreference: bonusPref,
+        targetBonusPercent,
+        equityPreference: cp.equityPreference || 'not-important',
+        notes: typeof cp.notes === 'string' ? cp.notes.trim() || undefined : undefined,
+      };
+    } else {
+      compensationPreferences = parseLegacyCompensationString(compensationTarget);
+    }
+
+    // Structured Work Authorization & Migration
+    const workAuthorization = typeof r.workAuthorization === 'string' ? r.workAuthorization : undefined;
+    const workAuthorizationDetails = r.workAuthorizationDetails && typeof r.workAuthorizationDetails === 'object'
+      ? r.workAuthorizationDetails
+      : parseLegacyWorkAuthString(workAuthorization);
+
+    return {
+      id: safeString(r.id, dataMode === 'user' ? 'cand-user-empty' : 'cand-alex-vance-v1'),
+      name: safeString(r.name, ''),
+      headline: safeString(r.headline, ''),
+      location: safeString(r.location, ''),
+      summary: safeString(r.summary, ''),
+      targetRoles: safeStringArray(r.targetRoles),
+      targetIndustries: safeStringArray(r.targetIndustries),
+      preferredLocations: safeStringArray(r.preferredLocations),
+      compensationPreferences,
+      workAuthorizationDetails,
+      compensationTarget,
+      workAuthorization,
+      coreCompetencies: safeStringArray(r.coreCompetencies),
+      careerHistory: finalCareerHistory,
+      education,
+      certifications,
+      evidenceItems: allEvidenceItems,
+      sources: Array.from(sourceMap.values()),
+      updatedAt: profileUpdatedAt,
+      dataMode,
+    };
+  }
 
 // ---------------------------------------------------------------------------
 // Candidate Storage & Stable Snapshot Cache

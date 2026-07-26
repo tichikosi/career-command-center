@@ -5,6 +5,8 @@ import { Card, CardHeader } from '@/components/ui/Card';
 import { useCandidateProfile } from '@/lib/useCandidate';
 import { EvidenceItem } from '@/types/candidate';
 import { CandidateOverviewEditor } from '@/components/candidate/CandidateOverviewEditor';
+import { formatCompensationPreferences } from '@/lib/compensationHelpers';
+import { getWorkAuthorizationLabel } from '@/lib/workAuthHelpers';
 
 export default function ProfilePage() {
   const {
@@ -205,38 +207,80 @@ export default function ProfilePage() {
             </Card>
           )}
 
-          {/* Preferences & Compensation Targets (if present) */}
-          {(profile.compensationTarget || profile.workAuthorization || profile.targetIndustries.length > 0 || profile.preferredLocations.length > 0) && (
-            <Card padding="lg" className="space-y-4">
-              <CardHeader title="Career Targets & Preferences" />
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-xs">
-                {profile.compensationTarget && (
-                  <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-lg border border-slate-200/80 dark:border-slate-800">
-                    <span className="font-bold text-slate-500 dark:text-slate-400 block uppercase tracking-wider text-[10px]">Target Compensation</span>
-                    <span className="font-semibold text-slate-900 dark:text-slate-100 mt-1 block">{profile.compensationTarget}</span>
-                  </div>
-                )}
-                {profile.workAuthorization && (
-                  <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-lg border border-slate-200/80 dark:border-slate-800">
-                    <span className="font-bold text-slate-500 dark:text-slate-400 block uppercase tracking-wider text-[10px]">Work Authorization</span>
-                    <span className="font-semibold text-slate-900 dark:text-slate-100 mt-1 block">{profile.workAuthorization}</span>
-                  </div>
-                )}
-                {profile.targetIndustries.length > 0 && (
-                  <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-lg border border-slate-200/80 dark:border-slate-800 col-span-1 sm:col-span-2">
-                    <span className="font-bold text-slate-500 dark:text-slate-400 block uppercase tracking-wider text-[10px] mb-1">Target Industries</span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {profile.targetIndustries.map((ind, idx) => (
-                        <span key={idx} className="px-2 py-0.5 bg-white dark:bg-slate-900 rounded border border-slate-200 dark:border-slate-700 text-[11px] font-medium text-slate-800 dark:text-slate-200">
-                          {ind}
-                        </span>
-                      ))}
+          {/* Preferences & Compensation Targets */}
+          {(() => {
+            const formattedComp = formatCompensationPreferences(profile.compensationPreferences);
+            const formattedAuth = getWorkAuthorizationLabel(profile.workAuthorizationDetails) || profile.workAuthorization;
+
+            const salaryText = formattedComp.salaryFormatted || profile.compensationTarget;
+            const hasCompInfo = Boolean(salaryText) || Boolean(formattedComp.bonusFormatted) || Boolean(formattedComp.equityFormatted);
+            const hasAuthInfo = Boolean(formattedAuth);
+            const hasIndustries = profile.targetIndustries.length > 0;
+            const hasLocations = profile.preferredLocations.length > 0;
+
+            if (!hasCompInfo && !hasAuthInfo && !hasIndustries && !hasLocations) {
+              return null;
+            }
+
+            return (
+              <Card padding="lg" className="space-y-4">
+                <CardHeader title="Career Targets & Preferences" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                  {salaryText && (
+                    <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-lg border border-slate-200/80 dark:border-slate-800">
+                      <span className="font-bold text-slate-500 dark:text-slate-400 block uppercase tracking-wider text-[10px]">Base Salary Target</span>
+                      <span className="font-semibold text-slate-900 dark:text-slate-100 mt-1 block">{salaryText}</span>
                     </div>
-                  </div>
-                )}
-              </div>
-            </Card>
-          )}
+                  )}
+                  {formattedComp.bonusFormatted && (
+                    <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-lg border border-slate-200/80 dark:border-slate-800">
+                      <span className="font-bold text-slate-500 dark:text-slate-400 block uppercase tracking-wider text-[10px]">Bonus</span>
+                      <span className="font-semibold text-slate-900 dark:text-slate-100 mt-1 block">
+                        {formattedComp.bonusFormatted}
+                        {formattedComp.bonusPercentFormatted ? ` · Target ${formattedComp.bonusPercentFormatted}` : ''}
+                      </span>
+                    </div>
+                  )}
+                  {formattedComp.equityFormatted && (
+                    <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-lg border border-slate-200/80 dark:border-slate-800">
+                      <span className="font-bold text-slate-500 dark:text-slate-400 block uppercase tracking-wider text-[10px]">Equity</span>
+                      <span className="font-semibold text-slate-900 dark:text-slate-100 mt-1 block">{formattedComp.equityFormatted}</span>
+                    </div>
+                  )}
+                  {formattedAuth && (
+                    <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-lg border border-slate-200/80 dark:border-slate-800">
+                      <span className="font-bold text-slate-500 dark:text-slate-400 block uppercase tracking-wider text-[10px]">Work Authorization</span>
+                      <span className="font-semibold text-slate-900 dark:text-slate-100 mt-1 block">{formattedAuth}</span>
+                    </div>
+                  )}
+                  {hasIndustries && (
+                    <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-lg border border-slate-200/80 dark:border-slate-800 col-span-1 sm:col-span-2">
+                      <span className="font-bold text-slate-500 dark:text-slate-400 block uppercase tracking-wider text-[10px] mb-1">Target Industries</span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {profile.targetIndustries.map((ind, idx) => (
+                          <span key={idx} className="px-2 py-0.5 bg-white dark:bg-slate-900 rounded border border-slate-200 dark:border-slate-700 text-[11px] font-medium text-slate-800 dark:text-slate-200">
+                            {ind}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {hasLocations && (
+                    <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-lg border border-slate-200/80 dark:border-slate-800 col-span-1 sm:col-span-2">
+                      <span className="font-bold text-slate-500 dark:text-slate-400 block uppercase tracking-wider text-[10px] mb-1">Preferred Locations</span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {profile.preferredLocations.map((loc, idx) => (
+                          <span key={idx} className="px-2 py-0.5 bg-white dark:bg-slate-900 rounded border border-slate-200 dark:border-slate-700 text-[11px] font-medium text-slate-800 dark:text-slate-200">
+                            {loc}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </Card>
+            );
+          })()}
 
           {/* Core Competencies */}
           {profile.coreCompetencies.length > 0 && (

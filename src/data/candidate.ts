@@ -346,6 +346,19 @@ export const defaultSyntheticCandidateProfile: CandidateProfile = {
     'Austin, TX',
     'Remote',
   ],
+  compensationPreferences: {
+    currency: 'USD',
+    baseSalaryMin: 220000,
+    baseSalaryMax: 260000,
+    bonusPreference: 'preferred',
+    equityPreference: 'preferred',
+    notes: 'Plus Equity',
+  },
+  workAuthorizationDetails: {
+    status: 'us-citizen',
+    sponsorshipRequiredNow: false,
+    sponsorshipRequiredFuture: false,
+  },
   compensationTarget: '$220,000 - $260,000 + Equity',
   workAuthorization: 'US Citizen',
   coreCompetencies: [

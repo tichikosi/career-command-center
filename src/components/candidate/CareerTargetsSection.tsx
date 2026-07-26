@@ -2,21 +2,33 @@ import React from 'react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { OverviewDraft } from '@/lib/candidateAdapter';
 import { EditableStringList } from './EditableStringList';
+import { CompensationPreferencesSection } from './CompensationPreferencesSection';
+import { WorkAuthorizationSection } from './WorkAuthorizationSection';
 
 interface Props {
   draft: OverviewDraft;
   onChange: (fields: Partial<OverviewDraft>) => void;
   errors: Record<string, string>;
+  minSalaryRef?: React.RefObject<HTMLInputElement | null>;
+  maxSalaryRef?: React.RefObject<HTMLInputElement | null>;
+  visaTypeRef?: React.RefObject<HTMLInputElement | null>;
 }
 
-export function CareerTargetsSection({ draft, onChange, errors }: Props) {
+export function CareerTargetsSection({
+  draft,
+  onChange,
+  errors,
+  minSalaryRef,
+  maxSalaryRef,
+  visaTypeRef,
+}: Props) {
   return (
     <div className="space-y-6">
       {/* Career Targets Card */}
       <Card padding="lg" className="space-y-6">
         <CardHeader
           title="Career Targets & Preferences"
-          subtitle="Target executive roles, industries, locations, and compensation targets"
+          subtitle="Target executive roles, industries, locations, compensation, and work authorization"
         />
 
         <EditableStringList
@@ -49,65 +61,22 @@ export function CareerTargetsSection({ draft, onChange, errors }: Props) {
           maxItemLength={80}
         />
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-100 dark:border-slate-800">
-          {/* Compensation Target */}
-          <div className="space-y-1">
-            <div className="flex items-center justify-between">
-              <label
-                htmlFor="compensation-target-input"
-                className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300"
-              >
-                Compensation Target
-              </label>
-              <span className="text-[10px] text-slate-400">
-                {draft.compensationTarget.length}/100
-              </span>
-            </div>
-            <input
-              id="compensation-target-input"
-              type="text"
-              value={draft.compensationTarget}
-              onChange={(e) => onChange({ compensationTarget: e.target.value })}
-              maxLength={100}
-              placeholder="e.g. $250k - $300k Base + Equity"
-              className="w-full px-3.5 py-2 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
-            />
-            {errors.compensationTarget && (
-              <p className="text-xs font-semibold text-rose-600 dark:text-rose-400">
-                {errors.compensationTarget}
-              </p>
-            )}
-          </div>
+        {/* Structured Compensation Section */}
+        <CompensationPreferencesSection
+          preferences={draft.compensationPreferences}
+          onChange={(compensationPreferences) => onChange({ compensationPreferences })}
+          errors={errors}
+          minSalaryRef={minSalaryRef}
+          maxSalaryRef={maxSalaryRef}
+        />
 
-          {/* Work Authorization */}
-          <div className="space-y-1">
-            <div className="flex items-center justify-between">
-              <label
-                htmlFor="work-authorization-input"
-                className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300"
-              >
-                Work Authorization
-              </label>
-              <span className="text-[10px] text-slate-400">
-                {draft.workAuthorization.length}/100
-              </span>
-            </div>
-            <input
-              id="work-authorization-input"
-              type="text"
-              value={draft.workAuthorization}
-              onChange={(e) => onChange({ workAuthorization: e.target.value })}
-              maxLength={100}
-              placeholder="e.g. US Citizen / Authorized to work in US"
-              className="w-full px-3.5 py-2 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
-            />
-            {errors.workAuthorization && (
-              <p className="text-xs font-semibold text-rose-600 dark:text-rose-400">
-                {errors.workAuthorization}
-              </p>
-            )}
-          </div>
-        </div>
+        {/* Structured Work Authorization Section */}
+        <WorkAuthorizationSection
+          details={draft.workAuthorizationDetails}
+          onChange={(workAuthorizationDetails) => onChange({ workAuthorizationDetails })}
+          errors={errors}
+          visaTypeRef={visaTypeRef}
+        />
       </Card>
 
       {/* Core Competencies Card */}
