@@ -13,6 +13,81 @@ export function getCandidatePossessiveName(name: string): string {
   return `${trimmed}’s`;
 }
 
+export interface CareerRoleDraft {
+  company: string;
+  title: string;
+  location: string;
+  startDate: string;
+  endDate: string;
+  isCurrent: boolean;
+  summary: string;
+  skills: string[];
+
+  // Read-only preserved metadata/relationship fields
+  id?: string;
+  evidenceItemIds?: string[];
+  sourceIds?: string[];
+  displayOrder?: number;
+  createdAt?: string;
+}
+
+export function normalizeRoleDraft(draft: CareerRoleDraft): CareerRoleDraft {
+  const isCurrent = Boolean(draft.isCurrent);
+  const rawSkills = Array.isArray(draft.skills) ? draft.skills : [];
+
+  const normalizedSkills: string[] = [];
+  const seenLower = new Set<string>();
+
+  for (const s of rawSkills) {
+    if (typeof s !== 'string') continue;
+    const trimmed = s.trim();
+    if (!trimmed) continue;
+    const truncated = trimmed.slice(0, 80);
+    const lower = truncated.toLowerCase();
+    if (!seenLower.has(lower)) {
+      seenLower.add(lower);
+      normalizedSkills.push(truncated);
+    }
+    if (normalizedSkills.length >= 30) break;
+  }
+
+  return {
+    id: draft.id,
+    company: (draft.company || '').trim(),
+    title: (draft.title || '').trim(),
+    location: (draft.location || '').trim(),
+    startDate: (draft.startDate || '').trim(),
+    endDate: isCurrent ? 'Present' : (draft.endDate || '').trim(),
+    isCurrent,
+    summary: (draft.summary || '').trim(),
+    skills: normalizedSkills,
+    evidenceItemIds: Array.isArray(draft.evidenceItemIds) ? [...draft.evidenceItemIds] : [],
+    sourceIds: Array.isArray(draft.sourceIds) ? [...draft.sourceIds] : [],
+    displayOrder: draft.displayOrder,
+    createdAt: draft.createdAt,
+  };
+}
+
+export function areRoleDraftsEqual(a: CareerRoleDraft, b: CareerRoleDraft): boolean {
+  const normA = normalizeRoleDraft(a);
+  const normB = normalizeRoleDraft(b);
+
+  if (normA.company !== normB.company) return false;
+  if (normA.title !== normB.title) return false;
+  if (normA.location !== normB.location) return false;
+  if (normA.startDate !== normB.startDate) return false;
+  if (normA.endDate !== normB.endDate) return false;
+  if (normA.isCurrent !== normB.isCurrent) return false;
+  if (normA.summary !== normB.summary) return false;
+
+  if (normA.skills.length !== normB.skills.length) return false;
+  for (let i = 0; i < normA.skills.length; i++) {
+    if (normA.skills[i] !== normB.skills[i]) return false;
+  }
+
+  return true;
+}
+
 export interface OverviewDraft {
   name: string;
   headline: string;

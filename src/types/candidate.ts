@@ -61,10 +61,17 @@ export interface CareerRole {
   isCurrent?: boolean;
   summary: string;
   evidenceItemIds: string[]; // Stable IDs referencing EvidenceItem records
+
+  // TODO: Transitional field retained for backward compatibility & current editor.
+  // Role skills may later migrate to a top-level candidate skill graph or first-class Skill entity.
   skills: string[];
+
   sourceIds?: string[];
   createdAt: string;
   updatedAt: string;
+
+  // TODO: Reserved for supporting future manual/chronological reordering.
+  displayOrder?: number;
 }
 
 export interface EducationItem {

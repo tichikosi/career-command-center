@@ -267,6 +267,10 @@ export function normalizeCandidateProfile(raw: unknown): CandidateProfile {
     }
 
     // Role normalization
+    const displayOrder = typeof ro.displayOrder === 'number' && !isNaN(ro.displayOrder)
+      ? ro.displayOrder
+      : (rawRoles.indexOf(role) + 1) * 100;
+
     const normalizedRole: CareerRole = {
       id: roleId,
       company: roleCompany,
@@ -281,6 +285,7 @@ export function normalizeCandidateProfile(raw: unknown): CandidateProfile {
       sourceIds: safeStringArray(ro.sourceIds),
       createdAt: safeDateString(ro.createdAt, profileUpdatedAt),
       updatedAt: roleUpdatedAt,
+      displayOrder,
     };
 
     roleMap.set(roleId, normalizedRole);
@@ -298,6 +303,9 @@ export function normalizeCandidateProfile(raw: unknown): CandidateProfile {
       evidenceItemIds: validIds,
     });
   }
+
+  // Sort careerHistory by displayOrder ascending (preserving deterministic order)
+  finalCareerHistory.sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
 
   // 3. Candidate Sources
   const rawSources: unknown[] = Array.isArray(r.sources) ? r.sources : [];

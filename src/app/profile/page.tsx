@@ -3,8 +3,8 @@
 import React, { useState } from 'react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { useCandidateProfile } from '@/lib/useCandidate';
-import { EvidenceItem } from '@/types/candidate';
 import { CandidateOverviewEditor } from '@/components/candidate/CandidateOverviewEditor';
+import { CareerHistorySection } from '@/components/candidate/CareerHistorySection';
 import { formatCompensationPreferences } from '@/lib/compensationHelpers';
 import { getWorkAuthorizationLabel } from '@/lib/workAuthHelpers';
 
@@ -21,16 +21,6 @@ export default function ProfilePage() {
 
   const [isEditing, setIsEditing] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
-
-  // Map of evidence items for quick lookup by ID
-  const evidenceMap = new Map<string, EvidenceItem>();
-  if (Array.isArray(profile.evidenceItems)) {
-    for (const ev of profile.evidenceItems) {
-      if (ev && ev.id && !evidenceMap.has(ev.id)) {
-        evidenceMap.set(ev.id, ev);
-      }
-    }
-  }
 
   // Pre-hydration neutral skeleton placeholder
   if (!mounted) {
@@ -301,105 +291,10 @@ export default function ProfilePage() {
           )}
 
           {/* Career History & Referenced Evidence Items */}
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100 tracking-tight">
-                Career History & Evidence Index ({profile.evidenceItems.length} Referenced Records)
-              </h2>
-            </div>
-
-            {profile.careerHistory.map((role) => {
-              const roleEvidences = role.evidenceItemIds
-                .map((evId) => evidenceMap.get(evId))
-                .filter((ev): ev is EvidenceItem => Boolean(ev));
-
-              return (
-                <Card key={role.id} padding="lg" className="space-y-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-slate-100 dark:border-slate-800 pb-3">
-                    <div>
-                      <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                        {role.company}
-                      </span>
-                      <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">
-                        {role.title}
-                      </h3>
-                    </div>
-                    <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full w-fit">
-                      {role.startDate} &mdash; {role.endDate} {role.location ? `| ${role.location}` : ''}
-                    </div>
-                  </div>
-
-                  {/* Role Summary */}
-                  {role.summary && (
-                    <div>
-                      <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1">
-                        Role Scope & Overview
-                      </span>
-                      <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
-                        {role.summary}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Verified Evidence Items */}
-                  {roleEvidences.length > 0 && (
-                    <div className="space-y-3 pt-2">
-                      <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
-                        Evidence Records & Citations ({roleEvidences.length})
-                      </span>
-                      <div className="space-y-2.5">
-                        {roleEvidences.map((ev) => {
-                          const citationTag = ev.tags && ev.tags.find((t) => t.startsWith('EVID-'));
-
-                          return (
-                            <div
-                              key={ev.id}
-                              className="p-3.5 bg-slate-50/80 dark:bg-slate-800/50 rounded-xl border border-slate-200/80 dark:border-slate-800 space-y-1.5"
-                            >
-                              <div className="flex items-center justify-between flex-wrap gap-2">
-                                <div className="flex items-center gap-2">
-                                  {citationTag && (
-                                    <span className="px-2 py-0.5 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 rounded text-[10px] font-mono font-bold">
-                                      {citationTag}
-                                    </span>
-                                  )}
-                                  <span className="text-xs font-bold text-slate-900 dark:text-slate-100">
-                                    {ev.title}
-                                  </span>
-                                </div>
-                                {ev.metric && (
-                                  <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 px-2.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800/80">
-                                    {ev.metric}
-                                  </span>
-                                )}
-                              </div>
-
-                              <p className="text-xs font-normal text-slate-700 dark:text-slate-300 leading-relaxed">
-                                {ev.description}
-                              </p>
-
-                              {ev.skills.length > 0 && (
-                                <div className="flex items-center gap-1.5 flex-wrap pt-1">
-                                  {ev.skills.map((skill, sIdx) => (
-                                    <span
-                                      key={sIdx}
-                                      className="px-2 py-0.5 bg-slate-200/60 dark:bg-slate-700/60 text-slate-700 dark:text-slate-300 rounded text-[10px] font-medium"
-                                    >
-                                      {skill}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </Card>
-              );
-            })}
-          </div>
+          <CareerHistorySection
+            profile={profile}
+            onUpdateProfile={updateProfile}
+          />
         </>
       )}
     </div>

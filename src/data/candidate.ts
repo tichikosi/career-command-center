@@ -274,6 +274,7 @@ const syntheticCareerRoles: CareerRole[] = [
     sourceIds: ['src-synthetic-fixture'],
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
+    displayOrder: 100,
   },
   {
     id: 'role-nexus',
@@ -289,6 +290,7 @@ const syntheticCareerRoles: CareerRole[] = [
     sourceIds: ['src-synthetic-fixture'],
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
+    displayOrder: 200,
   },
   {
     id: 'role-horizon',
@@ -304,6 +306,7 @@ const syntheticCareerRoles: CareerRole[] = [
     sourceIds: ['src-synthetic-fixture'],
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
+    displayOrder: 300,
   },
   {
     id: 'role-meridian',
@@ -319,6 +322,7 @@ const syntheticCareerRoles: CareerRole[] = [
     sourceIds: ['src-synthetic-fixture'],
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
+    displayOrder: 400,
   },
 ];
 
