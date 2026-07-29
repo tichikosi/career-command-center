@@ -1,4 +1,4 @@
-import { CandidateProfile, EvidenceItem, CompensationPreferences, WorkAuthorizationDetails } from '@/types/candidate';
+import { CandidateProfile, EvidenceItem, CareerRole, CompensationPreferences, WorkAuthorizationDetails } from '@/types/candidate';
 import { FitAnalysisReport } from '@/types/opportunity';
 
 export interface ResolvedEvidenceCitation extends EvidenceItem {
@@ -366,10 +366,11 @@ export function collectReferencedEvidence(
     }
   }
 
+  const eligibleEvidence = getEligibleEvidenceForAnalysis(profile);
   const result: EvidenceItem[] = [];
   const addedIds = new Set<string>();
 
-  for (const item of profile.evidenceItems) {
+  for (const item of eligibleEvidence) {
     if (!item || !item.id || addedIds.has(item.id)) continue;
 
     const isReferenced =
@@ -386,8 +387,28 @@ export function collectReferencedEvidence(
 }
 
 /**
+ * Returns evidence items from candidate profile that are eligible for new analysis.
+ * An EvidenceItem is eligible ONLY when its roleId matches an existing CareerRole.id in the active profile.
+ */
+export function getEligibleEvidenceForAnalysis(
+  profile: CandidateProfile | null | undefined
+): EvidenceItem[] {
+  if (!profile || !Array.isArray(profile.evidenceItems)) return [];
+
+  const validRoleIds = new Set(
+    Array.isArray(profile.careerHistory)
+      ? profile.careerHistory.map((r) => r.id).filter(Boolean)
+      : []
+  );
+
+  return profile.evidenceItems.filter(
+    (item) => item && typeof item.roleId === 'string' && item.roleId.trim() !== '' && validRoleIds.has(item.roleId)
+  );
+}
+
+/**
  * Converts a CandidateProfile into the minimal shape required by the analysis engine adapter.
- * Ensures pure, safe conversion without fabricating evidence when the profile is empty.
+ * Filters evidenceItems so new analyses ONLY consume evidence linked to active existing career roles.
  */
 export function toAnalysisCandidate(profile: CandidateProfile): CandidateProfile {
   if (!profile || typeof profile !== 'object') {
@@ -410,7 +431,10 @@ export function toAnalysisCandidate(profile: CandidateProfile): CandidateProfile
       dataMode: 'user',
     };
   }
-  return profile;
+  return {
+    ...profile,
+    evidenceItems: getEligibleEvidenceForAnalysis(profile),
+  };
 }
 
 /**
@@ -498,4 +522,128 @@ export function resolveEvidenceForCitations(
     evidenceSnapshot: profile.evidenceItems,
   };
   return resolveEvidenceForReportCitations(dummyReport, profile, citationIds);
+}
+
+export function getOrderedCareerRoles(roles: CareerRole[]): CareerRole[] {
+  if (!Array.isArray(roles)) return [];
+  const copy = [...roles];
+  copy.sort((a, b) => {
+    const aOrd = typeof a.displayOrder === 'number' && !isNaN(a.displayOrder) ? a.displayOrder : undefined;
+    const bOrd = typeof b.displayOrder === 'number' && !isNaN(b.displayOrder) ? b.displayOrder : undefined;
+
+    if (aOrd !== undefined && bOrd !== undefined) {
+      return aOrd - bOrd;
+    }
+    if (aOrd !== undefined) return -1;
+    if (bOrd !== undefined) return 1;
+    return roles.indexOf(a) - roles.indexOf(b);
+  });
+  return copy;
+}
+
+export function moveCareerRole(
+  roles: CareerRole[],
+  roleId: string,
+  direction: 'up' | 'down'
+): CareerRole[] {
+  if (!Array.isArray(roles) || !roleId) return roles;
+
+  const ordered = getOrderedCareerRoles(roles);
+  const idx = ordered.findIndex((r) => r.id === roleId);
+
+  if (idx < 0) return roles;
+  const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+  if (targetIdx < 0 || targetIdx >= ordered.length) return roles;
+
+  const currentRole = ordered[idx];
+  const targetRole = ordered[targetIdx];
+
+  const currentOrd =
+    typeof currentRole.displayOrder === 'number' && !isNaN(currentRole.displayOrder)
+      ? currentRole.displayOrder
+      : (idx + 1) * 100;
+
+  const targetOrd =
+    typeof targetRole.displayOrder === 'number' && !isNaN(targetRole.displayOrder)
+      ? targetRole.displayOrder
+      : (targetIdx + 1) * 100;
+
+  const updatedCurrent: CareerRole = { ...currentRole, displayOrder: targetOrd };
+  const updatedTarget: CareerRole = { ...targetRole, displayOrder: currentOrd };
+
+  const result = roles.map((r) => {
+    if (r.id === currentRole.id) return updatedCurrent;
+    if (r.id === targetRole.id) return updatedTarget;
+    return r;
+  });
+
+  return getOrderedCareerRoles(result);
+}
+
+export function getEvidenceLinkedToRole(
+  profile: CandidateProfile | null | undefined,
+  roleId: string
+): EvidenceItem[] {
+  if (!profile || !roleId) return [];
+
+  const role = Array.isArray(profile.careerHistory)
+    ? profile.careerHistory.find((r) => r.id === roleId)
+    : undefined;
+
+  const roleEvIds = role && Array.isArray(role.evidenceItemIds) ? new Set(role.evidenceItemIds) : new Set<string>();
+  const validRoleIds = new Set(Array.isArray(profile.careerHistory) ? profile.careerHistory.map((r) => r.id) : []);
+
+  const result: EvidenceItem[] = [];
+  const seenIds = new Set<string>();
+
+  if (Array.isArray(profile.evidenceItems)) {
+    for (const ev of profile.evidenceItems) {
+      if (!ev || !ev.id) continue;
+
+      const matchesExplicitRole = ev.roleId === roleId;
+      const matchesUnassignedRef = roleEvIds.has(ev.id) && (!ev.roleId || !validRoleIds.has(ev.roleId));
+
+      if ((matchesExplicitRole || matchesUnassignedRef) && !seenIds.has(ev.id)) {
+        seenIds.add(ev.id);
+        result.push(ev);
+      }
+    }
+  }
+
+  return result;
+}
+
+export function deleteCareerRoleFromProfile(
+  profile: CandidateProfile,
+  roleId: string,
+  updatedAt: string
+): CandidateProfile {
+  if (!profile || !roleId) return profile;
+
+  const existingRoles = Array.isArray(profile.careerHistory) ? profile.careerHistory : [];
+  const roleExists = existingRoles.some((r) => r.id === roleId);
+
+  if (!roleExists) return profile;
+
+  const updatedCareerHistory = existingRoles.filter((r) => r.id !== roleId);
+
+  const updatedEvidenceItems = Array.isArray(profile.evidenceItems)
+    ? profile.evidenceItems.map((ev) => {
+        if (ev.roleId === roleId) {
+          return {
+            ...ev,
+            roleId: undefined,
+          };
+        }
+        return ev;
+      })
+    : [];
+
+  return {
+    ...profile,
+    careerHistory: updatedCareerHistory,
+    evidenceItems: updatedEvidenceItems,
+    dataMode: 'user',
+    updatedAt,
+  };
 }

@@ -1,9 +1,16 @@
 import React, { useState } from 'react';
 import { CandidateProfile, CareerRole, EvidenceItem } from '@/types/candidate';
-import { CareerRoleDraft } from '@/lib/candidateAdapter';
+import {
+  CareerRoleDraft,
+  getOrderedCareerRoles,
+  moveCareerRole,
+  getEvidenceLinkedToRole,
+  deleteCareerRoleFromProfile,
+} from '@/lib/candidateAdapter';
 import { generateId } from '@/lib/idUtils';
 import { CareerRoleCard } from './CareerRoleCard';
 import { CareerRoleEditorPanel } from './CareerRoleEditorPanel';
+import { DeleteCareerRoleDialog } from './DeleteCareerRoleDialog';
 
 interface Props {
   profile: CandidateProfile;
@@ -13,6 +20,7 @@ interface Props {
 export function CareerHistorySection({ profile, onUpdateProfile }: Props) {
   const [editingRole, setEditingRole] = useState<CareerRole | null>(null);
   const [isAdding, setIsAdding] = useState(false);
+  const [deletingRole, setDeletingRole] = useState<CareerRole | null>(null);
 
   // Evidence Item Lookup Map
   const evidenceMap = new Map<string, EvidenceItem>();
@@ -23,6 +31,9 @@ export function CareerHistorySection({ profile, onUpdateProfile }: Props) {
       }
     }
   }
+
+  // Visible ordered career roles
+  const orderedRoles = getOrderedCareerRoles(profile.careerHistory);
 
   const handleStartAdd = () => {
     setEditingRole(null);
@@ -37,6 +48,50 @@ export function CareerHistorySection({ profile, onUpdateProfile }: Props) {
   const handleCancelEditor = () => {
     setIsAdding(false);
     setEditingRole(null);
+  };
+
+  const handleMoveUp = (role: CareerRole) => {
+    const updatedHistory = moveCareerRole(profile.careerHistory, role.id, 'up');
+    if (updatedHistory === profile.careerHistory) return;
+
+    onUpdateProfile({
+      ...profile,
+      careerHistory: updatedHistory,
+      dataMode: 'user',
+      updatedAt: new Date().toISOString(),
+    });
+  };
+
+  const handleMoveDown = (role: CareerRole) => {
+    const updatedHistory = moveCareerRole(profile.careerHistory, role.id, 'down');
+    if (updatedHistory === profile.careerHistory) return;
+
+    onUpdateProfile({
+      ...profile,
+      careerHistory: updatedHistory,
+      dataMode: 'user',
+      updatedAt: new Date().toISOString(),
+    });
+  };
+
+  const handleStartDelete = (role: CareerRole) => {
+    setDeletingRole(role);
+  };
+
+  const handleConfirmDelete = () => {
+    if (!deletingRole) return;
+
+    // Safely close editor if currently editing the deleted role
+    if (editingRole?.id === deletingRole.id) {
+      setEditingRole(null);
+      setIsAdding(false);
+    }
+
+    const nowStr = new Date().toISOString();
+    const updatedProfile = deleteCareerRoleFromProfile(profile, deletingRole.id, nowStr);
+
+    onUpdateProfile(updatedProfile);
+    setDeletingRole(null);
   };
 
   const handleSaveRole = (draft: CareerRoleDraft) => {
@@ -150,13 +205,18 @@ export function CareerHistorySection({ profile, onUpdateProfile }: Props) {
       }
     : null;
 
+  // Actual resolved linked evidence count for deletion dialog
+  const deletingLinkedEvidence = deletingRole
+    ? getEvidenceLinkedToRole(profile, deletingRole.id)
+    : [];
+
   return (
     <div className="space-y-6">
       {/* Section Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100 tracking-tight">
-            Career History ({profile.careerHistory.length} Roles)
+            Career History ({orderedRoles.length} Roles)
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400">
             Executive positions, leadership functions, and verified evidence indexes
@@ -186,23 +246,37 @@ export function CareerHistorySection({ profile, onUpdateProfile }: Props) {
 
       {/* Role Cards List */}
       <div className="space-y-4">
-        {profile.careerHistory.length === 0 ? (
+        {orderedRoles.length === 0 ? (
           <div className="p-8 text-center bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 space-y-2">
             <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
               No career roles configured yet. Click &ldquo;Add Career Role&rdquo; to add your first executive role.
             </p>
           </div>
         ) : (
-          profile.careerHistory.map((role) => (
+          orderedRoles.map((role, idx) => (
             <CareerRoleCard
               key={role.id}
               role={role}
               evidenceMap={evidenceMap}
+              isFirst={idx === 0}
+              isLast={idx === orderedRoles.length - 1}
               onEdit={handleStartEdit}
+              onMoveUp={handleMoveUp}
+              onMoveDown={handleMoveDown}
+              onDelete={handleStartDelete}
             />
           ))
         )}
       </div>
+
+      {/* Safe Delete Role Confirmation Modal */}
+      <DeleteCareerRoleDialog
+        isOpen={Boolean(deletingRole)}
+        role={deletingRole}
+        linkedEvidenceCount={deletingLinkedEvidence.length}
+        onClose={() => setDeletingRole(null)}
+        onConfirm={handleConfirmDelete}
+      />
     </div>
   );
 }

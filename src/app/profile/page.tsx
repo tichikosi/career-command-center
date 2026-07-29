@@ -1,12 +1,24 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { useCandidateProfile } from '@/lib/useCandidate';
 import { CandidateOverviewEditor } from '@/components/candidate/CandidateOverviewEditor';
 import { CareerHistorySection } from '@/components/candidate/CareerHistorySection';
+import { EvidenceLibrarySection } from '@/components/candidate/EvidenceLibrarySection';
 import { formatCompensationPreferences } from '@/lib/compensationHelpers';
 import { getWorkAuthorizationLabel } from '@/lib/workAuthHelpers';
+
+function ProfileQueryHandler({
+  children,
+}: {
+  children: (params: { evidenceId?: string }) => React.ReactNode;
+}) {
+  const searchParams = useSearchParams();
+  const evidenceId = searchParams.get('evidenceId') ?? undefined;
+  return <>{children({ evidenceId })}</>;
+}
 
 export default function ProfilePage() {
   const {
@@ -295,6 +307,18 @@ export default function ProfilePage() {
             profile={profile}
             onUpdateProfile={updateProfile}
           />
+
+          {/* Full Evidence Library Index */}
+          <Suspense fallback={null}>
+            <ProfileQueryHandler>
+              {({ evidenceId }) => (
+                <EvidenceLibrarySection
+                  profile={profile}
+                  selectedEvidenceId={evidenceId}
+                />
+              )}
+            </ProfileQueryHandler>
+          </Suspense>
         </>
       )}
     </div>

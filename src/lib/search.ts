@@ -88,19 +88,33 @@ export function buildSearchIndex(
       badge: candidateBadge,
     });
 
+    // Build map of active roles for subtitle resolution
+    const roleMap = new Map<string, { title: string; company: string }>();
+    if (Array.isArray(profile.careerHistory)) {
+      profile.careerHistory.forEach((r) => {
+        if (r && r.id) {
+          roleMap.set(r.id, { title: r.title, company: r.company });
+        }
+      });
+    }
+
     // Index evidence items
     if (Array.isArray(profile.evidenceItems)) {
       profile.evidenceItems.forEach((ev) => {
         const citationTag = ev.tags && ev.tags.find((t) => t.startsWith('EVID-'));
         const displayLabel = citationTag ? `${citationTag}: ${ev.title}` : ev.title;
+        const roleInfo = ev.roleId ? roleMap.get(ev.roleId) : undefined;
+        const subtitlePrefix = roleInfo
+          ? `${roleInfo.title} (${roleInfo.company})`
+          : `Unassigned Evidence • ${ev.organization ?? 'General Experience'}`;
 
         items.push({
           id: `profile:evidence:${ev.id}`,
           group: 'profile',
           title: displayLabel,
-          subtitle: `${ev.organization ?? 'General Experience'} • ${ev.metric ?? ev.type}`,
+          subtitle: `${subtitlePrefix} • ${ev.metric ?? ev.type}`,
           searchableText: `${ev.title} ${ev.description} ${ev.metric ?? ''} ${ev.organization ?? ''} ${ev.skills.join(' ')} ${ev.tags.join(' ')}`,
-          href: '/profile',
+          href: `/profile?section=evidence&evidenceId=${encodeURIComponent(ev.id)}`,
           badge: ev.verificationStatus === 'synthetic' ? 'Synthetic Evidence' : 'Evidence',
         });
       });
