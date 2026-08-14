@@ -13,6 +13,7 @@ import {
   IconAlertTriangle,
   IconTrash,
   IconExternalLink,
+  IconPrinter,
 } from '@/components/icons';
 import { PipelineStage } from '@/types/opportunity';
 import { useCandidateProfile } from '@/lib/useCandidate';
@@ -25,6 +26,7 @@ import {
   deleteOpportunity,
 } from '@/lib/storage';
 import { useOpportunity } from '@/lib/useOpportunities';
+import { getDisplayActions } from '@/lib/stageActions';
 import { validateUrl } from '@/lib/dateUtils';
 
 export default function AnalysisResultsPage() {
@@ -92,10 +94,8 @@ export default function AnalysisResultsPage() {
   const companyUrl = validateUrl(opportunity.companyWebsiteUrl ?? '');
   const appUrl = validateUrl(opportunity.applicationUrl ?? '');
 
-  const pendingActionCount =
-    opportunity.stage !== 'Archived'
-      ? opportunity.actions.filter((a) => !a.completed).length
-      : 0;
+  const visibleActions = getDisplayActions(opportunity.actions, opportunity.stage);
+  const visibleActionCount = visibleActions.length;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-200">
@@ -108,13 +108,24 @@ export default function AnalysisResultsPage() {
           <span>/</span>
           <span className="text-slate-900 dark:text-slate-100 font-semibold">{opportunity.title}</span>
         </div>
-        <button
-          onClick={() => setIsDeleteModalOpen(true)}
-          className="text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 flex items-center gap-1.5 transition-colors"
-        >
-          <IconTrash className="w-4 h-4" />
-          <span>Delete Role</span>
-        </button>
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => window.print()}
+            className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 flex items-center gap-1.5 transition-colors"
+            title="Print or Save PDF"
+            aria-label="Print Report"
+          >
+            <IconPrinter className="w-4 h-4" />
+            <span>Print Report</span>
+          </button>
+          <button
+            onClick={() => setIsDeleteModalOpen(true)}
+            className="text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 flex items-center gap-1.5 transition-colors"
+          >
+            <IconTrash className="w-4 h-4" />
+            <span>Delete Role</span>
+          </button>
+        </div>
       </div>
 
       {/* Fallback notice */}
@@ -250,7 +261,7 @@ export default function AnalysisResultsPage() {
             { key: 'qualifications', label: `Qualifications & Gaps (${analysis.qualifications.length})` },
             { key: 'evidence', label: `Evidence & Objections (${resolvedAchievements.length})` },
             { key: 'prep', label: 'Interview Preparation' },
-            { key: 'action-plan', label: `Action Plan${pendingActionCount > 0 ? ` (${pendingActionCount})` : ''}` },
+            { key: 'action-plan', label: `Action Plan${visibleActionCount > 0 ? ` (${visibleActionCount})` : ''}` },
           ] as const
         ).map(({ key, label }) => (
           <button

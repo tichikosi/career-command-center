@@ -23,7 +23,6 @@ import {
   IconSortDesc,
   IconSortNeutral,
   IconExternalLink,
-  IconCalendar,
 } from '@/components/icons';
 import {
   JobOpportunity,
@@ -36,12 +35,14 @@ import {
   updateOpportunityStage,
   deleteOpportunity,
   archiveOpportunity,
+  updateOpportunityFollowUpDate,
+  updateOpportunityNotes,
   resetDemoData,
   getUISettings,
   saveUISettings,
 } from '@/lib/storage';
 import { useOpportunities } from '@/lib/useOpportunities';
-import { classifyFollowUpDate, formatShortDate, validateUrl } from '@/lib/dateUtils';
+import { classifyFollowUpDate, validateUrl } from '@/lib/dateUtils';
 
 const RECOMMENDATION_ORDER: Record<string, number> = {
   Apply: 0,
@@ -181,6 +182,8 @@ function OpportunitiesContent() {
   const [sortDirection, setSortDirection] = useState<SortDirection>(settings.sortDirection ?? 'desc');
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [editingNotesOpp, setEditingNotesOpp] = useState<JobOpportunity | null>(null);
+  const [notesDraft, setNotesDraft] = useState('');
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
 
   useEffect(() => {
@@ -490,19 +493,18 @@ function OpportunitiesContent() {
 
                       {/* Follow-up Date */}
                       <td className="py-3.5 px-4">
-                        {opp.followUpDate ? (
-                          <div className="space-y-0.5">
-                            <div className="flex items-center gap-1 text-slate-600 dark:text-slate-300">
-                              <IconCalendar className="w-3 h-3 shrink-0" />
-                              <span className="text-xs">{formatShortDate(opp.followUpDate)}</span>
-                            </div>
-                            {followUpStatus !== 'No Date' && (
-                              <FollowUpStatusBadge status={followUpStatus} />
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-xs text-slate-400 dark:text-slate-500">—</span>
-                        )}
+                        <div className="flex flex-col gap-1 min-w-[140px]">
+                          <input
+                            type="date"
+                            value={opp.followUpDate ?? ''}
+                            onChange={(e) => updateOpportunityFollowUpDate(opp.id, e.target.value)}
+                            aria-label={`Follow-up date for ${opp.title}`}
+                            className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-1.5 py-0.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-slate-900 dark:focus:ring-slate-400"
+                          />
+                          {followUpStatus !== 'No Date' && (
+                            <FollowUpStatusBadge status={followUpStatus} />
+                          )}
+                        </div>
                       </td>
 
                       {/* Date Analyzed */}
@@ -517,7 +519,25 @@ function OpportunitiesContent() {
 
                       {/* Actions */}
                       <td className="py-3.5 pl-4 pr-6 text-right">
-                        <div className="flex items-center justify-end gap-3">
+                        <div className="flex items-center justify-end gap-2.5">
+                          <button
+                            onClick={() => {
+                              setEditingNotesOpp(opp);
+                              setNotesDraft(opp.notes ?? '');
+                            }}
+                            className={`text-xs flex items-center gap-1 font-medium transition-colors ${
+                              opp.notes
+                                ? 'text-indigo-700 dark:text-indigo-400 hover:text-indigo-900 dark:hover:text-indigo-300'
+                                : 'text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                            }`}
+                            title={opp.notes ? 'View/Edit Notes' : 'Add Notes'}
+                            aria-label={`Edit notes for ${opp.title}`}
+                          >
+                            <span>Notes</span>
+                            {opp.notes && (
+                              <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 dark:bg-indigo-400 shrink-0" />
+                            )}
+                          </button>
                           <Link
                             href={`/analysis/${opp.id}`}
                             className="font-semibold text-slate-900 dark:text-slate-100 hover:text-indigo-600 dark:hover:text-indigo-400 flex items-center gap-1"
@@ -572,6 +592,30 @@ function OpportunitiesContent() {
         confirmText="Restore Opportunities"
         isDanger={true}
       />
+      {editingNotesOpp && (
+        <Modal
+          isOpen={Boolean(editingNotesOpp)}
+          onClose={() => setEditingNotesOpp(null)}
+          onConfirm={() => {
+            updateOpportunityNotes(editingNotesOpp.id, notesDraft);
+            setEditingNotesOpp(null);
+          }}
+          title={`Opportunity Notes — ${editingNotesOpp.company}`}
+          description={`Edit notes for ${editingNotesOpp.title}`}
+          confirmText="Save Notes"
+          isDanger={false}
+        >
+          <div className="space-y-3 pt-2">
+            <textarea
+              rows={5}
+              value={notesDraft}
+              onChange={(e) => setNotesDraft(e.target.value)}
+              placeholder="Enter interview notes, recruiter contacts, or reminders..."
+              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-3 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
+            />
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

@@ -18,3 +18,33 @@
   background-color: #334155;
   color: #f8fafc;
 }
+
+/* Standard browser print stylesheet for executive reports and interview prep */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+  }
+  header,
+  nav,
+  aside,
+  button,
+  .no-print {
+    display: none !important;
+  }
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+  }
+  .card,
+  [class*="rounded-xl"],
+  [class*="border"] {
+    box-shadow: none !important;
+    border-color: #e2e8f0 !important;
+  }
+  a {
+    text-decoration: none !important;
+    color: inherit !important;
+  }
+}

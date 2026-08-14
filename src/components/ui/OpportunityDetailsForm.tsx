@@ -18,7 +18,7 @@ import {
   toggleActionCompleted,
   addCustomAction,
 } from '@/lib/storage';
-import { generateCustomActionId } from '@/lib/stageActions';
+import { generateCustomActionId, countPendingActions, getDisplayActions } from '@/lib/stageActions';
 import { validateUrl, formatShortDate, classifyFollowUpDate } from '@/lib/dateUtils';
 
 interface Props {
@@ -158,14 +158,13 @@ export function OpportunityDetailsForm({ opportunity, onSave }: Props) {
     setNewActionText('');
   };
 
-  // Group actions for display directly from authoritative opportunity prop
-  const stageActions = opportunity.actions.filter((a) => a.source === 'stage');
-  const roleActions = opportunity.actions.filter((a) => a.source === 'role');
-  const customActions = opportunity.actions.filter((a) => a.source === 'custom');
+  // Shared single-source derivation of visible action set
+  const visibleActions = getDisplayActions(opportunity.actions, opportunity.stage);
+  const stageActions = visibleActions.filter((a) => a.source === 'stage');
+  const roleActions = visibleActions.filter((a) => a.source === 'role');
+  const customActions = visibleActions.filter((a) => a.source === 'custom');
 
-  const pendingCount = opportunity.stage !== 'Archived'
-    ? opportunity.actions.filter((a) => !a.completed).length
-    : 0;
+  const pendingCount = countPendingActions(opportunity.actions, opportunity.stage);
 
   return (
     <div className="space-y-6">
@@ -509,54 +508,88 @@ function ActionItem({
   onToggle: () => void;
 }) {
   const sourceLabel =
-    action.source === 'custom' ? 'Custom' :
-    action.source === 'role' ? 'Role-specific' :
-    null;
+    action.source === 'custom'
+      ? 'Custom'
+      : action.source === 'role'
+      ? 'Role-specific'
+      : null;
+
+  const formattedCompletedDate = action.completedAt
+    ? formatShortDate(action.completedAt.slice(0, 10))
+    : null;
 
   return (
     <div
       className={`flex items-start gap-3 p-3 rounded-lg border transition-colors ${
         action.completed
-          ? 'bg-slate-50 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 opacity-60'
+          ? 'bg-slate-50 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 opacity-75'
           : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
       }`}
     >
       <button
+        type="button"
         onClick={onToggle}
         disabled={disabled}
-        aria-label={action.completed ? 'Mark incomplete' : 'Mark complete'}
-        className={`w-4.5 h-4.5 mt-0.5 rounded-full border-2 shrink-0 flex items-center justify-center transition-colors ${
+        aria-label={
           action.completed
-            ? 'border-emerald-500 bg-emerald-500 text-white'
-            : 'border-slate-300 dark:border-slate-600 hover:border-slate-500 dark:hover:border-slate-400'
+            ? `Reopen action: ${action.text}`
+            : `Mark action complete: ${action.text}`
+        }
+        className={`w-5 h-5 mt-0.5 rounded-full border-2 shrink-0 flex items-center justify-center transition-all focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-100 ${
+          action.completed
+            ? 'border-emerald-600 bg-emerald-600 dark:border-emerald-500 dark:bg-emerald-500 text-white'
+            : 'border-slate-300 dark:border-slate-600 hover:border-slate-500 dark:hover:border-slate-400 bg-white dark:bg-slate-800'
         } ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
       >
         {action.completed && (
-          <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+          <svg
+            className="w-3 h-3"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={3}
+            aria-hidden="true"
+          >
             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
           </svg>
         )}
       </button>
 
       <div className="flex-1 min-w-0">
-        <p className={`text-xs text-slate-800 dark:text-slate-200 leading-relaxed ${
-          action.completed ? 'line-through text-slate-400 dark:text-slate-500' : ''
-        }`}>
+        <p
+          className={`text-xs leading-relaxed font-medium ${
+            action.completed
+              ? 'line-through text-slate-500 dark:text-slate-400'
+              : 'text-slate-900 dark:text-slate-100'
+          }`}
+        >
           {action.text}
         </p>
-        {sourceLabel && (
-          <span className={`text-[10px] font-medium mt-0.5 inline-block ${
-            action.source === 'custom'
-              ? 'text-indigo-600 dark:text-indigo-400'
-              : 'text-slate-400 dark:text-slate-500'
-          }`}>
-            {sourceLabel}
-          </span>
-        )}
+        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+          {sourceLabel && (
+            <span
+              className={`text-[10px] font-semibold ${
+                action.source === 'custom'
+                  ? 'text-indigo-700 dark:text-indigo-400'
+                  : 'text-slate-500 dark:text-slate-400'
+              }`}
+            >
+              {sourceLabel}
+            </span>
+          )}
+          {action.completed && formattedCompletedDate && (
+            <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-medium">
+              Completed {formattedCompletedDate}
+            </span>
+          )}
+        </div>
       </div>
 
       {action.source === 'custom' && !disabled && (
-        <span className="text-[10px] text-indigo-500 dark:text-indigo-400 font-semibold shrink-0 mt-0.5">
+        <span
+          aria-hidden="true"
+          className="text-[10px] text-indigo-500 dark:text-indigo-400 font-semibold shrink-0 mt-0.5"
+        >
           ✎
         </span>
       )}

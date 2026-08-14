@@ -896,10 +896,17 @@ export function toggleActionCompleted(
 
   const updatedList = opps.map((o) => {
     if (o.id !== opportunityId) return o;
-    const newActions = o.actions.map((a) =>
-      a.id === actionId ? { ...a, completed: !a.completed } : a
-    );
-    updatedTargetOpp = { ...o, actions: newActions, updatedAt: new Date().toISOString() };
+    const nowStr = new Date().toISOString();
+    const newActions = o.actions.map((a) => {
+      if (a.id !== actionId) return a;
+      const isCompleting = !a.completed;
+      return {
+        ...a,
+        completed: isCompleting,
+        completedAt: isCompleting ? nowStr : undefined,
+      };
+    });
+    updatedTargetOpp = { ...o, actions: newActions, updatedAt: nowStr };
     return updatedTargetOpp;
   });
 
@@ -907,6 +914,59 @@ export function toggleActionCompleted(
     persistOpportunities(updatedList);
   }
   return updatedTargetOpp;
+}
+
+export function updateOpportunityFollowUpDate(
+  id: string,
+  followUpDate: string | undefined
+): JobOpportunity {
+  const opps = getOpportunities();
+  let updatedTargetOpp: JobOpportunity | undefined = undefined;
+
+  const updatedList = opps.map((o) => {
+    if (o.id !== id) return o;
+    const cleanDate = typeof followUpDate === 'string' && followUpDate.trim().length > 0
+      ? followUpDate.trim()
+      : undefined;
+    updatedTargetOpp = {
+      ...o,
+      followUpDate: cleanDate,
+      updatedAt: new Date().toISOString(),
+    };
+    return updatedTargetOpp;
+  });
+
+  if (updatedTargetOpp) {
+    persistOpportunities(updatedList);
+    return updatedTargetOpp;
+  }
+
+  return getOpportunityById(id)!;
+}
+
+export function updateOpportunityNotes(
+  id: string,
+  notes: string
+): JobOpportunity {
+  const opps = getOpportunities();
+  let updatedTargetOpp: JobOpportunity | undefined = undefined;
+
+  const updatedList = opps.map((o) => {
+    if (o.id !== id) return o;
+    updatedTargetOpp = {
+      ...o,
+      notes: (notes || '').trim(),
+      updatedAt: new Date().toISOString(),
+    };
+    return updatedTargetOpp;
+  });
+
+  if (updatedTargetOpp) {
+    persistOpportunities(updatedList);
+    return updatedTargetOpp;
+  }
+
+  return getOpportunityById(id)!;
 }
 
 export function addCustomAction(

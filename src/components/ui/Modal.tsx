@@ -12,6 +12,7 @@ interface ModalProps {
   confirmText?: string;
   cancelText?: string;
   isDanger?: boolean;
+  children?: React.ReactNode;
 }
 
 export function Modal({
@@ -23,6 +24,7 @@ export function Modal({
   confirmText = 'Confirm',
   cancelText = 'Cancel',
   isDanger = false,
+  children,
 }: ModalProps) {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -51,6 +53,7 @@ export function Modal({
         </div>
 
         <p className="text-sm text-slate-600 dark:text-slate-300 mt-2 leading-relaxed">{description}</p>
+        {children}
 
         <div className="mt-6 flex items-center justify-end gap-3">
           <button

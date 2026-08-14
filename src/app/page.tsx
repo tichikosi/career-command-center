@@ -24,7 +24,8 @@ import { AnalysisFreshnessBadge } from '@/components/ui/AnalysisFreshnessBadge';
 import { useCandidateProfile } from '@/lib/useCandidate';
 import { getAnalysisFreshness } from '@/lib/candidateAdapter';
 import { PipelineStage } from '@/types/opportunity';
-import { resetDemoData } from '@/lib/storage';
+import { resetDemoData, toggleActionCompleted } from '@/lib/storage';
+import { countPendingActions } from '@/lib/stageActions';
 import { useOpportunities } from '@/lib/useOpportunities';
 import { classifyFollowUpDate, formatShortDate } from '@/lib/dateUtils';
 
@@ -51,9 +52,9 @@ export default function DashboardPage() {
     (o) => classifyFollowUpDate(o.followUpDate) === 'Due Today'
   );
 
-  // Dynamic pending actions: count incomplete actions across non-archived opportunities
+  // Dynamic pending actions: count incomplete actions across active opportunities for their current stage
   const totalPendingActions = activeOpportunities.reduce((sum, o) => {
-    return sum + o.actions.filter((a) => !a.completed).length;
+    return sum + countPendingActions(o.actions, o.stage);
   }, 0);
 
   // Highest-priority active opportunity (High > Medium > Low, then by fit score)
@@ -65,7 +66,9 @@ export default function DashboardPage() {
   })[0] ?? null;
 
   const topNextAction = topOpportunity
-    ? topOpportunity.actions.find((a) => !a.completed)
+    ? topOpportunity.actions.find(
+        (a) => !a.completed && (a.source !== 'stage' || a.stage === topOpportunity.stage || !a.stage)
+      )
     : null;
 
   // Recent 3 opportunities (by createdAt desc)
@@ -206,23 +209,33 @@ export default function DashboardPage() {
           {topOpportunity && topNextAction && (
             <Card padding="md" className="border-l-4 border-l-indigo-600 bg-indigo-50/30 dark:bg-indigo-950/20">
               <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 space-y-1">
-                  <p className="text-xs font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-400">
-                    Next Recommended Action
-                  </p>
-                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{topNextAction.text}</p>
-                  <div className="flex items-center gap-2 mt-1.5">
-                    <PriorityBadge priority={topOpportunity.priority} />
-                    <span className="text-xs text-slate-500 dark:text-slate-400">
-                      {topOpportunity.title} — {topOpportunity.company}
-                    </span>
-                  </div>
-                  {topOpportunity.followUpDate && (
-                    <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 mt-1">
-                      <IconCalendar className="w-3 h-3" />
-                      <span>Follow-up: {formatShortDate(topOpportunity.followUpDate)}</span>
+                <div className="flex items-start gap-3 flex-1">
+                  <button
+                    type="button"
+                    onClick={() => toggleActionCompleted(topOpportunity.id, topNextAction.id)}
+                    aria-label={`Mark complete: ${topNextAction.text}`}
+                    className="w-5 h-5 mt-0.5 rounded-full border-2 border-indigo-600 dark:border-indigo-400 bg-white dark:bg-slate-800 shrink-0 flex items-center justify-center cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-950/50 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors"
+                  >
+                    <span className="sr-only">Complete action</span>
+                  </button>
+                  <div className="space-y-1">
+                    <p className="text-xs font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-400">
+                      Next Recommended Action
+                    </p>
+                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{topNextAction.text}</p>
+                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                      <PriorityBadge priority={topOpportunity.priority} />
+                      <span className="text-xs text-slate-500 dark:text-slate-400">
+                        {topOpportunity.title} — {topOpportunity.company}
+                      </span>
                     </div>
-                  )}
+                    {topOpportunity.followUpDate && (
+                      <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 mt-1">
+                        <IconCalendar className="w-3 h-3" />
+                        <span>Follow-up: {formatShortDate(topOpportunity.followUpDate)}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <Link
                   href={`/analysis/${topOpportunity.id}`}

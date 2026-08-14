@@ -47,6 +47,7 @@ export interface OpportunityAction {
   /** Canonical stage this action was generated for (stage-sourced actions only) */
   stage?: PipelineStage;
   completed: boolean;
+  completedAt?: string;
   createdAt?: string;
 }
 

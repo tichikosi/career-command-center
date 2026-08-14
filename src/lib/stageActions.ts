@@ -115,39 +115,91 @@ export function mergeActionsForStage(
   nextActions: string[],
   storedActions: OpportunityAction[]
 ): OpportunityAction[] {
-  // Build a lookup of completion state from persisted storage by action ID
-  const completionById = new Map<string, boolean>(
-    storedActions.map((a) => [a.id, a.completed])
-  );
+  // Build a lookup of completion state from persisted storage by action ID and matching text fallback
+  const completionMap = new Map<string, { completed: boolean; completedAt?: string }>();
 
-  // 1. Stage actions — always from current stage template, completion restored
-  const stageActions = buildStageActions(currentStage).map((a) => ({
-    ...a,
-    completed: completionById.get(a.id) ?? false,
-  }));
+  if (Array.isArray(storedActions)) {
+    for (const a of storedActions) {
+      if (!a) continue;
+      const state = { completed: Boolean(a.completed), completedAt: a.completedAt };
+      if (a.id) completionMap.set(a.id, state);
+      if (a.text) completionMap.set(a.text, state);
+    }
+  }
 
-  // 2. Role actions — stable across stage changes, completion restored
-  const roleActions = buildRoleActions(opportunityId, nextActions).map((a) => ({
-    ...a,
-    completed: completionById.get(a.id) ?? false,
-  }));
+  const allStages: PipelineStage[] = [
+    'Identified',
+    'Applied',
+    'Screening',
+    'Interviewing',
+    'Offer',
+    'Archived',
+  ];
 
-  // 3. Custom actions — taken entirely from stored state, never dropped
-  const customActions = storedActions.filter((a) => a.source === 'custom');
+  // Map existing stage actions from storedActions by ID
+  const existingStageActionsById = new Map<string, OpportunityAction>();
+  if (Array.isArray(storedActions)) {
+    for (const a of storedActions) {
+      if (a && a.source === 'stage') {
+        existingStageActionsById.set(a.id, a);
+      }
+    }
+  }
+
+  // 1. Stage actions — preserve stage actions across ALL stages so round-trips keep progress
+  const stageActions: OpportunityAction[] = [];
+  for (const stg of allStages) {
+    const templates = STAGE_ACTION_TEMPLATES[stg] || [];
+    templates.forEach((text, idx) => {
+      const id = stageActionId(stg, idx);
+      const existing = existingStageActionsById.get(id);
+      const savedState = completionMap.get(id) ?? completionMap.get(text);
+
+      stageActions.push({
+        id,
+        text: existing?.text ?? text,
+        source: 'stage',
+        stage: stg,
+        completed: savedState?.completed ?? existing?.completed ?? false,
+        completedAt: savedState?.completedAt ?? existing?.completedAt,
+      });
+    });
+  }
+
+  // 2. Role actions — stable across stage changes
+  const roleActions = buildRoleActions(opportunityId, nextActions).map((a) => {
+    const savedState = completionMap.get(a.id) ?? completionMap.get(a.text);
+    return {
+      ...a,
+      completed: savedState?.completed ?? false,
+      completedAt: savedState?.completedAt,
+    };
+  });
+
+  // 3. Custom actions — preserved entirely from stored state
+  const customActions = Array.isArray(storedActions)
+    ? storedActions.filter((a) => a && a.source === 'custom')
+    : [];
 
   return [...stageActions, ...roleActions, ...customActions];
 }
 
 /**
  * Return only the display actions relevant to the current stage view.
- * Archived opportunities show all actions but mark them as informational only.
+ * Filter stage actions to match current stage (or un-staged fallback).
  */
-export function getDisplayActions(actions: OpportunityAction[]): OpportunityAction[] {
-  return actions;
+export function getDisplayActions(
+  actions: OpportunityAction[],
+  stage: PipelineStage
+): OpportunityAction[] {
+  if (!Array.isArray(actions)) return [];
+  return actions.filter(
+    (a) => Boolean(a) && (a.source !== 'stage' || a.stage === stage || !a.stage)
+  );
 }
 
 /**
- * Count incomplete, non-archived actions.
+ * Count incomplete, non-archived actions relevant to the current stage.
  * Archived opportunities contribute 0 to the pending count.
  */
 export function countPendingActions(
@@ -155,5 +207,5 @@ export function countPendingActions(
   stage: PipelineStage
 ): number {
   if (stage === 'Archived') return 0;
-  return actions.filter((a) => !a.completed).length;
+  return getDisplayActions(actions, stage).filter((a) => !a.completed).length;
 }
