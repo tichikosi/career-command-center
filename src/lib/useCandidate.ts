@@ -1,5 +1,3 @@
-'use client';
-
 import { useSyncExternalStore, useCallback } from 'react';
 import { CandidateProfile } from '@/types/candidate';
 import {
@@ -12,10 +10,6 @@ import {
   subscribeToCandidateStorage,
 } from '@/lib/storage';
 
-const emptySubscribe = () => () => {};
-const getClientMounted = () => true;
-const getServerMounted = () => false;
-
 export interface UseCandidateProfileReturn {
   profile: CandidateProfile;
   mounted: boolean;
@@ -26,6 +20,10 @@ export interface UseCandidateProfileReturn {
   clearCandidateData: () => void;
   exportCandidateData: () => void;
 }
+
+const emptySubscribe = () => () => {};
+const getClientMounted = () => true;
+const getServerMounted = () => false;
 
 export function useCandidateProfile(): UseCandidateProfileReturn {
   const profile = useSyncExternalStore(

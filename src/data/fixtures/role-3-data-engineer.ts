@@ -72,7 +72,17 @@ export function buildRole3Analysis(ctx: CandidateAnalysisContext): FitAnalysisRe
   };
 }
 
-export const fixtureRole3DataEngineer: FitAnalysisReport = buildRole3Analysis({
-  candidateName: 'Alex Vance',
-  candidatePossessive: 'Alex Vance’s',
-});
+export const fixtureRole3DataEngineer: FitAnalysisReport = {
+  ...buildRole3Analysis({
+    candidateName: 'Alex Vance',
+    candidatePossessive: 'Alex Vance’s',
+  }),
+  candidateProvenance: {
+    candidateId: 'cand-synthetic-alex-vance',
+    candidateName: 'Alex Vance',
+    dataMode: 'synthetic',
+    profileUpdatedAt: '2026-01-01T00:00:00.000Z',
+    analyzedAt: '2026-07-15T09:00:00.000Z',
+    provenanceStatus: 'known',
+  },
+};

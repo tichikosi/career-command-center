@@ -106,6 +106,18 @@ export interface FitAnalysisReport {
   analysisNotice?: string;
   candidateProvenance?: CandidateProvenance;
   evidenceSnapshot?: EvidenceItem[];
+  analysisEngine?: 'gemini' | 'deterministic';
+  modelUsed?: string;
+  latencyMs?: number;
+
+  // V2.0 Resilience and Execution Metadata
+  requestedModel?: string;
+  actualModel?: string;
+  engineType?: 'gemini' | 'deterministic';
+  attemptCount?: number;
+  failoverOccurred?: boolean;
+  fallbackOccurred?: boolean;
+  sanitizedFailureReason?: string;
 }
 
 export interface JobOpportunity {
@@ -140,4 +152,5 @@ export interface OpportunityUISettings {
   followUpFilter: FollowUpStatus | 'All';
   searchTerm: string;
   themeMode: ThemeMode; // V1.1B
+  viewMode?: 'table' | 'board'; // V2.0 Kanban CRM
 }

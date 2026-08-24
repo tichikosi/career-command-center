@@ -9,7 +9,7 @@ import { IconAnalyze, IconAlertTriangle, IconRefresh } from '@/components/icons'
 import { useCandidateProfile } from '@/lib/useCandidate';
 import { toAnalysisCandidate } from '@/lib/candidateAdapter';
 import { initialOpportunities } from '@/data/opportunities';
-import { DeterministicSyntheticEngine } from '@/lib/engine';
+import { getAnalysisEngine } from '@/lib/engine';
 import { saveOpportunity, getOpportunityById } from '@/lib/storage';
 import { buildStageActions, buildRoleActions, mergeActionsForStage } from '@/lib/stageActions';
 import { JobOpportunity } from '@/types/opportunity';
@@ -44,12 +44,15 @@ export default function AnalyzePage() {
     setIsAnalyzing(true);
 
     try {
-      const engine = new DeterministicSyntheticEngine();
+      const engine = getAnalysisEngine('gemini');
       const report = await engine.analyzeRole(
         {
           jobTitle: sampleOpp.title,
           company: sampleOpp.company,
           jobDescription: sampleOpp.rawJobDescription,
+          location: sampleOpp.location,
+          compensation: sampleOpp.compensation,
+          sourceUrl: sampleOpp.sourceUrl,
           sampleRoleId: sampleOpp.id,
         },
         toAnalysisCandidate(profile)
@@ -111,9 +114,6 @@ export default function AnalyzePage() {
         };
       }
 
-      // Simulate engine processing delay
-      await new Promise((r) => setTimeout(r, 600));
-
       saveOpportunity(opportunityToSave);
       router.push(`/analysis/${opportunityToSave.id}`);
     } catch (err: unknown) {
@@ -145,7 +145,7 @@ export default function AnalyzePage() {
     setIsAnalyzing(true);
 
     try {
-      const engine = new DeterministicSyntheticEngine();
+      const engine = getAnalysisEngine('gemini');
       const report = await engine.analyzeRole(
         {
           jobTitle: jobTitle.trim(),
@@ -243,7 +243,7 @@ export default function AnalyzePage() {
               : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
           }`}
         >
-          Select Pre-Loaded Sample Role
+          Try a Sample Role
         </button>
         <button
           onClick={() => setActiveTab('custom')}
@@ -269,8 +269,8 @@ export default function AnalyzePage() {
       {activeTab === 'sample' && (
         <Card padding="lg" className="space-y-6">
           <CardHeader
-            title="Choose a Synthetic Benchmark Role"
-            subtitle="Pre-configured sample positions exercising all recommendation and match types"
+            title="Choose a Sample Opportunity"
+            subtitle="Use a pre-loaded role to test fit analysis against your active candidate profile."
           />
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -307,10 +307,10 @@ export default function AnalyzePage() {
                   </p>
                   <div className="mt-3 text-[11px] text-slate-500 dark:text-slate-400 font-medium flex items-center justify-between border-t border-slate-100 dark:border-slate-800/60 pt-2.5">
                     <span className="text-[10px] font-bold tracking-wider uppercase text-indigo-600 dark:text-indigo-400">
-                      Demo Benchmark
+                      SAMPLE ROLE
                     </span>
                     <span>
-                      Alex Vance Fit: <strong className="text-slate-800 dark:text-slate-200">{opp.analysis.overallFitScore}%</strong> ({opp.analysis.recommendation})
+                      {opp.location || 'Executive Track'} {opp.compensation ? `• ${opp.compensation}` : ''}
                     </span>
                   </div>
                 </div>

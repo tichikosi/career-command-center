@@ -104,7 +104,17 @@ export function buildRole2Analysis(ctx: CandidateAnalysisContext): FitAnalysisRe
   };
 }
 
-export const fixtureRole2SalesOps: FitAnalysisReport = buildRole2Analysis({
-  candidateName: 'Alex Vance',
-  candidatePossessive: 'Alex Vance’s',
-});
+export const fixtureRole2SalesOps: FitAnalysisReport = {
+  ...buildRole2Analysis({
+    candidateName: 'Alex Vance',
+    candidatePossessive: 'Alex Vance’s',
+  }),
+  candidateProvenance: {
+    candidateId: 'cand-synthetic-alex-vance',
+    candidateName: 'Alex Vance',
+    dataMode: 'synthetic',
+    profileUpdatedAt: '2026-01-01T00:00:00.000Z',
+    analyzedAt: '2026-07-18T14:30:00.000Z',
+    provenanceStatus: 'known',
+  },
+};

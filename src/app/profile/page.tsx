@@ -7,8 +7,10 @@ import { useCandidateProfile } from '@/lib/useCandidate';
 import { CandidateOverviewEditor } from '@/components/candidate/CandidateOverviewEditor';
 import { CareerHistorySection } from '@/components/candidate/CareerHistorySection';
 import { EvidenceLibrarySection } from '@/components/candidate/EvidenceLibrarySection';
+import { ResumeImportModal } from '@/components/candidate/ResumeImportModal';
 import { formatCompensationPreferences } from '@/lib/compensationHelpers';
 import { getWorkAuthorizationLabel } from '@/lib/workAuthHelpers';
+import { IconUpload } from '@/components/icons';
 
 function ProfileQueryHandler({
   children,
@@ -32,6 +34,7 @@ export default function ProfilePage() {
   } = useCandidateProfile();
 
   const [isEditing, setIsEditing] = useState(false);
+  const [isResumeModalOpen, setIsResumeModalOpen] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
 
   // Pre-hydration neutral skeleton placeholder
@@ -97,6 +100,13 @@ export default function ProfilePage() {
 
           {/* Action Toolbar */}
           <div className="flex items-center gap-2 flex-wrap shrink-0">
+            <button
+              onClick={() => setIsResumeModalOpen(true)}
+              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-xs font-semibold text-white rounded-lg shadow-xs transition-colors flex items-center gap-1.5"
+            >
+              <IconUpload className="w-3.5 h-3.5" />
+              <span>Import Résumé</span>
+            </button>
             <button
               onClick={() => setIsEditing(true)}
               className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-semibold text-slate-900 dark:text-slate-100 rounded-lg border border-slate-300 dark:border-slate-700 transition-colors"
@@ -321,6 +331,17 @@ export default function ProfilePage() {
           </Suspense>
         </>
       )}
+
+      {/* Résumé AI Import Modal */}
+      <ResumeImportModal
+        isOpen={isResumeModalOpen}
+        onClose={() => setIsResumeModalOpen(false)}
+        currentProfile={profile}
+        onSaveProfile={(updated) => {
+          updateProfile(updated);
+          setIsResumeModalOpen(false);
+        }}
+      />
     </div>
   );
 }

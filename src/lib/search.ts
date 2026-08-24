@@ -1,7 +1,8 @@
 import { JobOpportunity } from '@/types/opportunity';
 import { CandidateProfile } from '@/types/candidate';
+import { NetworkContact } from '@/types/network';
 
-export type SearchGroup = 'navigation' | 'opportunity' | 'analysis' | 'profile';
+export type SearchGroup = 'navigation' | 'opportunity' | 'analysis' | 'profile' | 'network';
 
 export interface SearchIndexItem {
   id: string;
@@ -36,9 +37,18 @@ const STATIC_NAV_ITEMS: SearchIndexItem[] = [
     id: 'nav:/opportunities',
     group: 'navigation',
     title: 'Opportunities Pipeline',
-    subtitle: 'Full pipeline table with sorting, stage filters, and dates',
-    searchableText: 'opportunities pipeline filter sort table search roles company stage priority follow-up',
+    subtitle: 'Full pipeline table and kanban board with sorting and stage filters',
+    searchableText: 'opportunities pipeline filter sort table kanban board search roles company stage priority follow-up',
     href: '/opportunities',
+    badge: 'Page',
+  },
+  {
+    id: 'nav:/network',
+    group: 'navigation',
+    title: 'Network Intelligence',
+    subtitle: 'Professional contacts, LinkedIn connections, and company matching',
+    searchableText: 'network linkedin connections contacts outreach company colleagues intelligence directory',
+    href: '/network',
     badge: 'Page',
   },
   {
@@ -46,7 +56,7 @@ const STATIC_NAV_ITEMS: SearchIndexItem[] = [
     group: 'navigation',
     title: 'Candidate Profile',
     subtitle: 'Executive profile, evidence matrix, and background',
-    searchableText: 'candidate profile director ai strategy gtm operations competencies career history evidence matrix',
+    searchableText: 'candidate profile director ai strategy gtm operations competencies career history evidence matrix resume',
     href: '/profile',
     badge: 'Page',
   },
@@ -62,12 +72,13 @@ const STATIC_NAV_ITEMS: SearchIndexItem[] = [
 ];
 
 /**
- * Build a clean, deterministic in-memory search index from current normalized opportunities
- * and structured candidate profile data. Pure and deterministic — zero storage reads.
+ * Build a clean, deterministic in-memory search index from current normalized opportunities,
+ * structured candidate profile data, and network contacts.
  */
 export function buildSearchIndex(
   opportunities: JobOpportunity[],
-  profile?: CandidateProfile
+  profile?: CandidateProfile,
+  networkContacts?: NetworkContact[]
 ): SearchIndexItem[] {
   const items: SearchIndexItem[] = [];
 
@@ -184,6 +195,21 @@ export function buildSearchIndex(
     });
   }
 
+  // 4. Professional Network Contacts
+  if (Array.isArray(networkContacts)) {
+    networkContacts.forEach((contact) => {
+      items.push({
+        id: `contact:${contact.id}`,
+        group: 'network',
+        title: contact.fullName,
+        subtitle: `${contact.position ? `${contact.position} at ` : ''}${contact.company || 'Enterprise Contact'}`,
+        searchableText: `${contact.fullName} ${contact.firstName || ''} ${contact.lastName || ''} ${contact.company || ''} ${contact.position || ''} ${contact.email || ''} ${contact.notes || ''} network linkedin contact`,
+        href: `/network?contactId=${contact.id}`,
+        badge: contact.company || 'Network',
+      });
+    });
+  }
+
   return items;
 }
 
@@ -222,9 +248,10 @@ export function searchGlobalIndex(
   // Sort matched items: Exact title matches first, then group priority
   const groupPriority: Record<SearchGroup, number> = {
     opportunity: 0,
-    analysis: 1,
-    profile: 2,
-    navigation: 3,
+    network: 1,
+    analysis: 2,
+    profile: 3,
+    navigation: 4,
   };
 
   deduplicatedMatched.sort((a, b) => {

@@ -76,3 +76,55 @@ export function validateUrl(value: string): string | null {
     return null;
   }
 }
+
+/**
+ * Formats a date token (YYYY-MM, YYYY-MM-DD, or YYYY) into consistent human-readable format (e.g. "Jun 2019", "2020").
+ */
+export function formatMonthYear(dateStr: string | undefined): string {
+  if (!dateStr) return '';
+  const trimmed = dateStr.trim();
+  if (!trimmed) return '';
+
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  // Handle YYYY-MM (e.g. "2019-06")
+  if (/^\d{4}-\d{2}$/.test(trimmed)) {
+    const [y, m] = trimmed.split('-');
+    const monthNum = parseInt(m, 10);
+    if (monthNum >= 1 && monthNum <= 12) {
+      return `${months[monthNum - 1]} ${y}`;
+    }
+  }
+
+  // Handle YYYY-MM-DD (e.g. "2019-06-15")
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    const [y, m] = trimmed.split('-');
+    const monthNum = parseInt(m, 10);
+    if (monthNum >= 1 && monthNum <= 12) {
+      return `${months[monthNum - 1]} ${y}`;
+    }
+  }
+
+  return trimmed;
+}
+
+/**
+ * Formats a career role start and end date range into a consistent human-readable string.
+ * Example: "2019-06", "2019-08" -> "Jun 2019 — Aug 2019"
+ * Example: "2022", "Present" -> "2022 — Present"
+ */
+export function formatRoleDateRange(
+  startDate?: string,
+  endDate?: string,
+  isCurrent?: boolean
+): string {
+  const startFormatted = formatMonthYear(startDate);
+  const endFormatted = isCurrent || /present|current/i.test(endDate || '')
+    ? 'Present'
+    : formatMonthYear(endDate);
+
+  if (!startFormatted && !endFormatted) return '';
+  if (!startFormatted) return endFormatted;
+  if (!endFormatted) return `${startFormatted} — Present`;
+  return `${startFormatted} — ${endFormatted}`;
+}

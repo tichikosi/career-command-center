@@ -1,9 +1,13 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
+import Link from 'next/link';
 import { JobOpportunity, PipelineStage, OpportunityPriority, OpportunityAction } from '@/types/opportunity';
+import { NetworkContact } from '@/types/network';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { PriorityBadge } from '@/components/ui/Badge';
+import { useNetwork } from '@/lib/networkStorage';
+import { findMatchingContacts, rankMatchedContacts, generateSuggestedOutreachAction } from '@/lib/networkMatcher';
 import {
   IconEdit,
   IconSave,
@@ -11,6 +15,8 @@ import {
   IconExternalLink,
   IconCalendar,
   IconClock,
+  IconNetwork,
+  IconArrowRight,
 } from '@/components/icons';
 import {
   saveOpportunity,
@@ -62,6 +68,16 @@ function SafeExternalLink({
 }
 
 export function OpportunityDetailsForm({ opportunity, onSave }: Props) {
+  const { contacts: networkContacts } = useNetwork();
+  const matchedContacts = useMemo(
+    () => findMatchingContacts(opportunity.company, networkContacts),
+    [opportunity.company, networkContacts]
+  );
+  const rankedMatches = useMemo(
+    () => rankMatchedContacts(matchedContacts, opportunity.title, opportunity.company),
+    [matchedContacts, opportunity.title, opportunity.company]
+  );
+
   const [isEditing, setIsEditing] = useState(false);
   const [newActionText, setNewActionText] = useState('');
 
@@ -76,6 +92,15 @@ export function OpportunityDetailsForm({ opportunity, onSave }: Props) {
   // URL validation states
   const [companyUrlError, setCompanyUrlError] = useState('');
   const [applicationUrlError, setApplicationUrlError] = useState('');
+
+  const handleAddOutreachAction = (contact: NetworkContact) => {
+    const outreachAction = generateSuggestedOutreachAction(contact, opportunity.id);
+    const existingTexts = new Set(opportunity.actions.map((a) => a.text));
+    if (!existingTexts.has(outreachAction.text)) {
+      const updated = addCustomAction(opportunity.id, outreachAction.text, outreachAction.id);
+      if (updated) onSave(updated);
+    }
+  };
 
   // Synchronize form fields when external opportunity updates, UNLESS user is actively editing
   const [prevOpp, setPrevOpp] = useState(opportunity);
@@ -365,6 +390,110 @@ export function OpportunityDetailsForm({ opportunity, onSave }: Props) {
                 <p className="text-sm text-slate-600 dark:text-slate-400 italic">{opportunity.archivedReason}</p>
               </div>
             )}
+          </div>
+        )}
+      </Card>
+
+      {/* Network Intelligence Panel */}
+      <Card padding="lg" className="space-y-4 border-indigo-100 dark:border-indigo-900/60 bg-indigo-50/20 dark:bg-indigo-950/20">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-indigo-100 dark:border-indigo-900/40 pb-3">
+          <div className="flex items-center gap-2">
+            <IconNetwork className="w-5 h-5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                Network Intelligence {matchedContacts.length > 0 ? `(${matchedContacts.length} Matched Contact${matchedContacts.length !== 1 ? 's' : ''})` : ''}
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {matchedContacts.length > 0
+                  ? `Ranked connections at ${opportunity.company} matched from your local directory.`
+                  : `Automated matching against your professional network directory.`}
+              </p>
+            </div>
+          </div>
+
+          {matchedContacts.length > 0 && (
+            <Link
+              href={`/network?opportunityId=${opportunity.id}`}
+              className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 inline-flex items-center gap-1 shrink-0"
+            >
+              <span>View all {matchedContacts.length} matches</span>
+              <IconArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          )}
+        </div>
+
+        {matchedContacts.length === 0 ? (
+          <div className="p-4 bg-white/60 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 rounded-xl flex items-center justify-between gap-4 text-xs">
+            <div className="text-slate-500 dark:text-slate-400">
+              <p className="font-medium text-slate-700 dark:text-slate-300">No current connections found at {opportunity.company}.</p>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                Import additional LinkedIn connections or add 2nd-degree referrals in the Network directory.
+              </p>
+            </div>
+            <Link
+              href="/network"
+              className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-slate-100 font-semibold rounded-lg shrink-0 transition-colors"
+            >
+              Open Network
+            </Link>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {rankedMatches.slice(0, 6).map(({ contact, matchReasons }) => {
+              const alreadyAdded = opportunity.actions.some(
+                (a) => a.text.includes(contact.fullName) || a.id === `action-outreach-${contact.id}-${opportunity.id}`
+              );
+
+              return (
+                <div
+                  key={contact.id}
+                  className="p-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl flex items-start justify-between gap-3 shadow-2xs"
+                >
+                  <div className="space-y-1 min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">{contact.fullName}</h4>
+                      {matchReasons[0] && (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                          {matchReasons[0]}
+                        </span>
+                      )}
+                    </div>
+                    {contact.position && (
+                      <p className="text-[11px] text-slate-600 dark:text-slate-400 font-medium truncate">{contact.position}</p>
+                    )}
+                    {contact.company && (
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400">{contact.company}</p>
+                    )}
+                  </div>
+
+                  <div className="shrink-0 flex flex-col items-end gap-1.5">
+                    {contact.linkedInUrl && (
+                      <a
+                        href={contact.linkedInUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
+                      >
+                        <span>LinkedIn</span>
+                        <IconExternalLink className="w-2.5 h-2.5" />
+                      </a>
+                    )}
+                    <button
+                      type="button"
+                      disabled={alreadyAdded}
+                      onClick={() => handleAddOutreachAction(contact)}
+                      className={`px-2.5 py-1 text-[10px] font-bold rounded-lg transition-colors ${
+                        alreadyAdded
+                          ? 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-default border border-slate-200 dark:border-slate-700'
+                          : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-2xs'
+                      }`}
+                    >
+                      {alreadyAdded ? 'Added to Plan' : '+ Add Outreach Action'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </Card>

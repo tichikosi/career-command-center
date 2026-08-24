@@ -1,6 +1,7 @@
 import React from 'react';
 import { Card } from '@/components/ui/Card';
 import { CareerRole, EvidenceItem } from '@/types/candidate';
+import { formatRoleDateRange } from '@/lib/dateUtils';
 
 interface Props {
   role: CareerRole;
@@ -29,6 +30,8 @@ export function CareerRoleCard({
         .filter((ev): ev is EvidenceItem => Boolean(ev))
     : [];
 
+  const dateRangeStr = formatRoleDateRange(role.startDate, role.endDate, role.isCurrent);
+
   return (
     <Card padding="lg" className="space-y-4 transition-all border-slate-200 dark:border-slate-800">
       {/* Header Bar */}
@@ -52,7 +55,7 @@ export function CareerRoleCard({
         {/* Date Badge & Toolbar */}
         <div className="flex items-center gap-2 flex-wrap shrink-0">
           <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full mr-1">
-            {role.startDate} &mdash; {role.endDate} {role.location ? `| ${role.location}` : ''}
+            {dateRangeStr} {role.location ? `| ${role.location}` : ''}
           </div>
 
           {/* Action Toolbar */}

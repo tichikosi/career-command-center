@@ -16,12 +16,13 @@ import {
 } from '@/types/opportunity';
 import { defaultSyntheticCandidateProfile } from '@/data/candidate';
 import { initialOpportunities } from '@/data/opportunities';
-import { mergeActionsForStage, buildStageActions, buildRoleActions } from '@/lib/stageActions';
-import { collectReferencedEvidence } from '@/lib/candidateAdapter';
-import { parseLegacyCompensationString, DEFAULT_COMPENSATION_PREFERENCES } from '@/lib/compensationHelpers';
-import { parseLegacyWorkAuthString, DEFAULT_WORK_AUTHORIZATION_DETAILS } from '@/lib/workAuthHelpers';
+import { mergeActionsForStage, buildStageActions, buildRoleActions, generateCustomActionId } from '@/lib/stageActions';
+import { collectReferencedEvidence, remediateContaminatedImport } from '@/lib/candidateAdapter';
+import { parseLegacyCompensationString } from '@/lib/compensationHelpers';
+import { parseLegacyWorkAuthString } from '@/lib/workAuthHelpers';
 
 export const CCC_CANDIDATE_KEY = 'ccc_candidate_v1';
+export const CCC_REMEDIATION_MIGRATION_KEY = 'ccc_migration_remediate_bad_import_v1';
 const LEGACY_PROFILE_KEY = 'ccc_candidate_profile_v1';
 const OPPORTUNITIES_KEY = 'ccc_opportunities_v1';
 const SETTINGS_KEY = 'ccc_settings_v1';
@@ -38,35 +39,16 @@ const SERVER_OPPORTUNITIES_SNAPSHOT: JobOpportunity[] = Object.freeze(
   normalizeAll([...initialOpportunities])
 ) as unknown as JobOpportunity[];
 
-const NEUTRAL_SERVER_CANDIDATE_SNAPSHOT: CandidateProfile = Object.freeze({
-  id: 'cand-neutral-server',
-  name: '',
-  headline: '',
-  location: '',
-  summary: '',
-  targetRoles: [],
-  targetIndustries: [],
-  preferredLocations: [],
-  compensationPreferences: DEFAULT_COMPENSATION_PREFERENCES,
-  workAuthorizationDetails: DEFAULT_WORK_AUTHORIZATION_DETAILS,
-  compensationTarget: '',
-  workAuthorization: '',
-  coreCompetencies: [],
-  careerHistory: [],
-  education: [],
-  certifications: [],
-  evidenceItems: [],
-  sources: [],
-  updatedAt: '2026-01-01T00:00:00.000Z',
-  dataMode: 'user',
-});
+const SERVER_CANDIDATE_SNAPSHOT: CandidateProfile = Object.freeze(
+  normalizeCandidateProfile(defaultSyntheticCandidateProfile)
+);
 
 export function getInitialOpportunitiesServerSnapshot(): JobOpportunity[] {
   return SERVER_OPPORTUNITIES_SNAPSHOT;
 }
 
 export function getInitialCandidateServerSnapshot(): CandidateProfile {
-  return NEUTRAL_SERVER_CANDIDATE_SNAPSHOT;
+  return SERVER_CANDIDATE_SNAPSHOT;
 }
 
 // Module-level cached client snapshot references
@@ -449,7 +431,29 @@ export function getCandidateProfile(): CandidateProfile {
     const raw = window.localStorage.getItem(CCC_CANDIDATE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      const normalized = normalizeCandidateProfile(parsed);
+      let normalized = normalizeCandidateProfile(parsed);
+
+      // Auditable one-time remediation migration for prior bad import contamination
+      const remediationDone = window.localStorage.getItem(CCC_REMEDIATION_MIGRATION_KEY);
+      if (remediationDone !== 'true') {
+        const remediation = remediateContaminatedImport(normalized);
+        if (remediation.contaminatedRecordsFound > 0) {
+          normalized = normalizeCandidateProfile(remediation.profile);
+          try {
+            window.localStorage.setItem(CCC_CANDIDATE_KEY, JSON.stringify(normalized));
+            console.log(
+              `[StorageMigration] Repaired ${remediation.contaminatedRecordsFound} contaminated records from previous bad import.`
+            );
+          } catch {
+            // Ignore write failure
+          }
+        }
+        try {
+          window.localStorage.setItem(CCC_REMEDIATION_MIGRATION_KEY, 'true');
+        } catch {
+          // Ignore
+        }
+      }
 
       // Detect if legacy migration occurred (e.g. parsed lacked root evidenceItems or had fewer evidenceItems than normalized)
       const needsMigrationSave =
@@ -816,7 +820,19 @@ export function getOpportunities(): JobOpportunity[] {
       return cachedOpportunities;
     }
     const parsed = JSON.parse(raw);
-    cachedOpportunities = normalizeAll(parsed);
+    const parsedList = Array.isArray(parsed) ? parsed : [];
+    const hasQaOpp = parsedList.some((o: JobOpportunity) => o.id === 'opp-qa-test-google-ai-strategy');
+    const isQaDeleted = typeof window !== 'undefined' && window.localStorage.getItem('ccc_qa_opp_google_deleted') === 'true';
+
+    let merged = parsedList;
+    if (!hasQaOpp && !isQaDeleted) {
+      const qaOpp = initialOpportunities.find((o) => o.id === 'opp-qa-test-google-ai-strategy');
+      if (qaOpp) {
+        merged = [qaOpp, ...merged];
+      }
+    }
+
+    cachedOpportunities = normalizeAll(merged);
     return cachedOpportunities;
   } catch {
     cachedOpportunities = inMemoryOpportunities;
@@ -844,6 +860,24 @@ export function saveOpportunity(opportunity: JobOpportunity): JobOpportunity {
 
   persistOpportunities(updated);
   return withTimestamp;
+}
+
+export function createOpportunity(payload: Partial<JobOpportunity>): JobOpportunity {
+  const newId = payload.id || `opp-custom-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const now = new Date().toISOString();
+
+  const opp: JobOpportunity = normalizeOpportunity({
+    ...payload,
+    id: newId,
+    createdAt: payload.createdAt || now,
+    updatedAt: now,
+    stage: payload.stage || 'Identified',
+    priority: payload.priority || 'Medium',
+    rawJobDescription: payload.rawJobDescription || '',
+    actions: payload.actions || [],
+  });
+
+  return saveOpportunity(opp);
 }
 
 export function updateOpportunityStage(
@@ -882,6 +916,13 @@ export function archiveOpportunity(id: string): JobOpportunity {
 }
 
 export function deleteOpportunity(id: string): void {
+  if (id === 'opp-qa-test-google-ai-strategy' && typeof window !== 'undefined') {
+    try {
+      window.localStorage.setItem('ccc_qa_opp_google_deleted', 'true');
+    } catch {
+      // Ignore write error
+    }
+  }
   const opps = getOpportunities();
   const updated = opps.filter((o) => o.id !== id);
   persistOpportunities(updated);
@@ -972,15 +1013,16 @@ export function updateOpportunityNotes(
 export function addCustomAction(
   opportunityId: string,
   text: string,
-  id: string
+  id?: string
 ): JobOpportunity | undefined {
+  const actionId = id || generateCustomActionId();
   const opps = getOpportunities();
   let updatedTargetOpp: JobOpportunity | undefined = undefined;
 
   const updatedList = opps.map((o) => {
     if (o.id !== opportunityId) return o;
     const newAction: JobOpportunity['actions'][0] = {
-      id,
+      id: actionId,
       text,
       source: 'custom',
       completed: false,
@@ -1012,6 +1054,7 @@ export function resetDemoData(): void {
   if (isLocalStorageAvailable()) {
     try {
       const currentSettings = getUISettings();
+      window.localStorage.removeItem('ccc_qa_opp_google_deleted');
       window.localStorage.setItem(OPPORTUNITIES_KEY, JSON.stringify(freshOpps));
       window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(currentSettings));
     } catch {
@@ -1058,6 +1101,7 @@ const DEFAULT_SETTINGS: OpportunityUISettings = {
   followUpFilter: 'All',
   searchTerm: '',
   themeMode: 'system',
+  viewMode: 'table',
 };
 
 export function getUISettings(): OpportunityUISettings {
@@ -1073,8 +1117,9 @@ export function getUISettings(): OpportunityUISettings {
       parsed.themeMode === 'system'
         ? parsed.themeMode
         : 'system';
+    const viewMode = parsed.viewMode === 'board' ? 'board' : 'table';
 
-    return { ...DEFAULT_SETTINGS, ...parsed, themeMode };
+    return { ...DEFAULT_SETTINGS, ...parsed, themeMode, viewMode };
   } catch {
     return { ...DEFAULT_SETTINGS };
   }

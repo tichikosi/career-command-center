@@ -16,6 +16,7 @@ import { buildRole4Analysis } from '@/data/fixtures/role-4-chief-of-staff';
 import { buildRole5Analysis } from '@/data/fixtures/role-5-strategy-lead';
 
 import { collectReferencedEvidence, getCandidatePossessiveName } from './candidateAdapter';
+import { extractJobRequirements } from './requirementExtractor';
 
 export class DeterministicSyntheticEngine implements IFitAnalysisEngine {
   async analyzeRole(
@@ -23,195 +24,335 @@ export class DeterministicSyntheticEngine implements IFitAnalysisEngine {
     _candidateProfile: CandidateProfile
   ): Promise<FitAnalysisReport> {
     const candidateProfile = _candidateProfile;
-    const sanitized = sanitizeInput(input.jobDescription);
-    const textToAnalyze = sanitized.sanitizedText.toLowerCase();
-
-    const candidateName = (candidateProfile?.name || '').trim() || 'the candidate';
+    const candidateName = (candidateProfile?.name || '').trim() || 'Candidate';
     const candidatePossessive = getCandidatePossessiveName(candidateName);
     const ctx: CandidateAnalysisContext = { candidateName, candidatePossessive };
 
-    let rawReport: FitAnalysisReport;
+    // Strict Persona Isolation: Tier 1 pre-authored fixture benchmarks apply ONLY
+    // when the active candidate is explicitly a synthetic demo persona.
+    const isSyntheticPersona = candidateProfile?.dataMode === 'synthetic';
 
-    // 2. Check Tier 1: Pre-Authored Sample Fixture Builders
-    if (input.sampleRoleId) {
+    if (isSyntheticPersona && input.sampleRoleId) {
+      let benchmarkReport: FitAnalysisReport;
       switch (input.sampleRoleId) {
         case 'opp-role-1-ai-strategy':
         case 'role-1':
-          rawReport = buildRole1Analysis(ctx);
+          benchmarkReport = buildRole1Analysis(ctx);
           break;
         case 'opp-role-2-sales-ops':
         case 'role-2':
-          rawReport = buildRole2Analysis(ctx);
+          benchmarkReport = buildRole2Analysis(ctx);
           break;
         case 'opp-role-3-data-engineer':
         case 'role-3':
-          rawReport = buildRole3Analysis(ctx);
+          benchmarkReport = buildRole3Analysis(ctx);
           break;
         case 'opp-role-4-chief-of-staff':
         case 'role-4':
-          rawReport = buildRole4Analysis(ctx);
+          benchmarkReport = buildRole4Analysis(ctx);
           break;
         case 'opp-role-5-strategy-lead':
         case 'role-5':
-          rawReport = buildRole5Analysis(ctx);
+          benchmarkReport = buildRole5Analysis(ctx);
           break;
         default:
-          rawReport = this.generateCustomFallbackReport(input, textToAnalyze, ctx);
+          return this.generateCandidateGroundedReport(input, candidateProfile, ctx);
       }
-    } else {
-      // Secondary title-based fixture lookup check
-      const titleLower = (input.jobTitle || '').toLowerCase();
-      if (titleLower.includes('ai strategy')) rawReport = buildRole1Analysis(ctx);
-      else if (titleLower.includes('sales ops') || titleLower.includes('sales operations')) rawReport = buildRole2Analysis(ctx);
-      else if (titleLower.includes('data engineer') || titleLower.includes('pyspark')) rawReport = buildRole3Analysis(ctx);
-      else if (titleLower.includes('chief of staff')) rawReport = buildRole4Analysis(ctx);
-      else rawReport = this.generateCustomFallbackReport(input, textToAnalyze, ctx);
+
+      const provenance: CandidateProvenance = {
+        candidateId: candidateProfile.id || 'cand-synthetic-alex-vance',
+        candidateName: 'Alex Vance',
+        dataMode: 'synthetic',
+        profileUpdatedAt: candidateProfile.updatedAt || '2026-01-01T00:00:00.000Z',
+        analyzedAt: new Date().toISOString(),
+        provenanceStatus: 'known',
+      };
+
+      const evidenceSnapshot = collectReferencedEvidence(candidateProfile, benchmarkReport);
+
+      return {
+        ...benchmarkReport,
+        candidateProvenance: provenance,
+        evidenceSnapshot: evidenceSnapshot.length > 0 ? evidenceSnapshot : benchmarkReport.evidenceSnapshot,
+      };
     }
 
+    // For ALL real user candidates (e.g. Tanaka Ian Chikosi) and custom roles,
+    // dynamically evaluate the active candidate's actual career roles and verified evidence.
+    return this.generateCandidateGroundedReport(input, candidateProfile, ctx);
+  }
+
+  /**
+   * Generates a fully candidate-grounded qualification evaluation against the active candidate's
+   * actual career history, core competencies, and evidence library.
+   */
+  private generateCandidateGroundedReport(
+    input: AnalysisInput,
+    profile: CandidateProfile,
+    ctx: CandidateAnalysisContext
+  ): FitAnalysisReport {
+    const { candidateName, candidatePossessive } = ctx;
+    const sanitized = sanitizeInput(input.jobDescription);
+
+    const roles = profile.careerHistory || [];
+    const evidenceItems = profile.evidenceItems || [];
+    const competencies = profile.coreCompetencies || [];
+
+    const companies = Array.from(
+      new Set(
+        roles
+          .map((r) => r.company)
+          .concat(evidenceItems.map((e) => e.organization).filter(Boolean) as string[])
+          .filter((c) => c && c.trim().length > 0)
+      )
+    );
+
+    const companySummary = companies.length > 0 ? companies.slice(0, 3).join(', ') : 'leading enterprises';
+
+    // 1. Independent Requirement Extraction: Extract and freeze requirements from Job Description alone
+    const extractedReqs = extractJobRequirements(sanitized.sanitizedText, input.jobTitle || 'Role');
+    const rawRequirements = [
+      ...extractedReqs.requiredQualifications.map((q) => ({ text: q.text, category: 'Required' as const, keywords: q.keywords })),
+      ...extractedReqs.preferredQualifications.map((q) => ({ text: q.text, category: 'Preferred' as const, keywords: q.keywords })),
+    ];
+
+    // 2. Evaluate candidate evidence and career history against each requirement
+    const qualifications: QualificationMatch[] = rawRequirements.map((req, idx) => {
+      // Find matching evidence items strictly by keyword / skill alignment (never by company name in JD)
+      const matchingEvidence = evidenceItems.filter((ev) => {
+        const evText = `${ev.title} ${ev.description} ${(ev.skills || []).join(' ')}`.toLowerCase();
+        const matchedKeywords = req.keywords.filter((kw) => evText.includes(kw));
+        const hasSkillTag = (ev.skills || []).some((s) => req.keywords.includes(s.toLowerCase()));
+        return hasSkillTag || matchedKeywords.length >= 2 || (matchedKeywords.length === 1 && ev.title.toLowerCase().includes(matchedKeywords[0]));
+      });
+
+      // Find matching career roles
+      const matchingRoles = roles.filter((role) => {
+        const roleText = `${role.title} ${role.summary} ${(role.skills || []).join(' ')}`.toLowerCase();
+        const matched = req.keywords.filter((kw) => roleText.includes(kw));
+        return matched.length >= 2 || (role.skills || []).some((s) => req.keywords.includes(s.toLowerCase()));
+      });
+
+      // Find matching competencies
+      const matchingCompetencies = competencies.filter((comp) =>
+        req.keywords.some((kw) => comp.toLowerCase() === kw || comp.toLowerCase().includes(kw))
+      );
+
+      // Require multi-keyword overlap with metric or skill match for Strong Match
+      const bestEvidenceWithMetric = matchingEvidence.find((e) => {
+        const evText = `${e.title} ${e.description} ${(e.skills || []).join(' ')}`.toLowerCase();
+        const overlap = req.keywords.filter((kw) => evText.includes(kw)).length;
+        const hasSkill = (e.skills || []).some((s) => req.keywords.includes(s.toLowerCase()));
+        return (overlap >= 2 || hasSkill) && Boolean(e.metric && e.metric.trim().length > 0);
+      });
+
+      const bestEvidence = bestEvidenceWithMetric || matchingEvidence[0];
+      const bestRole = matchingRoles[0];
+
+      if (bestEvidenceWithMetric || matchingEvidence.length >= 2) {
+        // Strong Match with verified citations
+        const citationIds = matchingEvidence.slice(0, 2).map((e) => e.id);
+        const org = bestEvidence?.organization || bestRole?.company || 'career history';
+        const metricSnippet = bestEvidence?.metric ? ` (${bestEvidence.metric})` : '';
+
+        return {
+          id: `qual-grounded-${idx + 1}`,
+          category: req.category,
+          qualification: req.text,
+          matchType: 'Strong Match',
+          explanation: `${candidateName} possesses direct, verified operational execution from ${org}${metricSnippet} aligning with this requirement.`,
+          supportingEvidenceCitationIds: citationIds,
+        };
+      } else if (matchingEvidence.length === 1 || matchingRoles.length > 0 || matchingCompetencies.length > 0) {
+        // Partial Match with optional citation
+        const citationIds = bestEvidence ? [bestEvidence.id] : [];
+        const roleContext = bestRole ? `${bestRole.title} at ${bestRole.company}` : (matchingCompetencies[0] || 'relevant background');
+
+        return {
+          id: `qual-grounded-${idx + 1}`,
+          category: req.category,
+          qualification: req.text,
+          matchType: 'Partial Match',
+          explanation: `${candidateName} offers transferable capabilities demonstrated through ${roleContext}, though active profile evidence does not feature a dedicated quantified metric.`,
+          supportingEvidenceCitationIds: citationIds,
+        };
+      } else if (req.category === 'Required') {
+        return {
+          id: `qual-grounded-${idx + 1}`,
+          category: 'Required',
+          qualification: req.text,
+          matchType: 'Material Gap',
+          explanation: `${candidatePossessive} active candidate profile contains no verified evidence records or career history satisfying this specific requirement.`,
+          supportingEvidenceCitationIds: [],
+        };
+      } else {
+        return {
+          id: `qual-grounded-${idx + 1}`,
+          category: 'Preferred',
+          qualification: req.text,
+          matchType: 'Unverified',
+          explanation: `Evidence for this preferred qualification cannot be conclusively verified from ${candidatePossessive} current profile records.`,
+          supportingEvidenceCitationIds: [],
+        };
+      }
+    });
+
+    // 3. Compute candidate-specific fit score
+    const { fitScore, recommendation, explanation } = this.calculateFitScore(qualifications);
+
+    // 4. Construct grounded STAR stories from candidate's actual top evidence
+    const topEvidence = evidenceItems.slice(0, 2);
+    const starStories = topEvidence.map((ev, sIdx) => ({
+      id: `star-grounded-${sIdx + 1}`,
+      title: `${ev.organization || 'Strategic Role'} — ${ev.title || 'Key Achievement'}`,
+      situation: `At ${ev.organization || 'previous organization'}, addressed complex operational challenges in a high-stakes environment.`,
+      task: `Lead strategic execution and deliver measurable outcomes for ${ev.title || 'core initiatives'}.`,
+      action: ev.description || `Executed cross-functional alignment and established structured operational governance.`,
+      result: ev.metric ? `Achieved verified result: ${ev.metric}.` : 'Successfully met all project milestones and performance targets.',
+      citationIds: [ev.id],
+    }));
+
+    // 5. Construct candidate-specific objections
+    const gaps = qualifications.filter((q) => q.matchType === 'Material Gap' || q.matchType === 'Unverified');
+    const objections = gaps.length > 0
+      ? gaps.slice(0, 2).map((g, gIdx) => ({
+          id: `obj-grounded-${gIdx + 1}`,
+          objection: `Profile lacks dedicated evidence for: "${g.qualification}".`,
+          counterPositioning: `Position adjacent track record from ${companySummary} and proactively emphasize rapid onboarding in initial conversations.`,
+          supportingCitationId: topEvidence[0]?.id,
+        }))
+      : [
+          {
+            id: 'obj-grounded-1',
+            objection: 'High qualification alignment may raise questions regarding role scope and career progression trajectory.',
+            counterPositioning: `Emphasize enthusiasm for ${input.company || 'the organization'}'s specific stage and strategic mission.`,
+            supportingCitationId: topEvidence[0]?.id,
+          },
+        ];
+
+    // 6. Build Next Actions
+    const nextActions = [
+      `Review unverified qualifications and prepare talking points for ${input.company || 'target enterprise'} recruiter screen`,
+      `Highlight quantified achievements from ${companySummary} in the preliminary interview`,
+      'Confirm reporting structure and key 90-day deliverables with hiring team',
+    ];
+
     const provenance: CandidateProvenance = {
-      candidateId: candidateProfile.id || 'cand-user-empty',
-      candidateName: (candidateProfile.name || '').trim() || (candidateProfile.dataMode === 'synthetic' ? 'Alex Vance' : 'Unconfigured Candidate'),
-      dataMode: candidateProfile.dataMode || 'user',
-      profileUpdatedAt: candidateProfile.updatedAt || '2026-01-01T00:00:00.000Z',
+      candidateId: profile.id || 'cand-user-active',
+      candidateName: (profile.name || '').trim() || 'Candidate',
+      dataMode: profile.dataMode || 'user',
+      profileUpdatedAt: profile.updatedAt || new Date().toISOString(),
       analyzedAt: new Date().toISOString(),
       provenanceStatus: 'known',
     };
 
-    const evidenceSnapshot = collectReferencedEvidence(candidateProfile, rawReport);
-
     return {
-      ...rawReport,
-      candidateProvenance: provenance,
-      evidenceSnapshot: evidenceSnapshot.length > 0 ? evidenceSnapshot : rawReport.evidenceSnapshot,
-    };
-  }
-
-  private generateCustomFallbackReport(
-    input: AnalysisInput,
-    text: string,
-    ctx: CandidateAnalysisContext
-  ): FitAnalysisReport {
-    const { candidatePossessive } = ctx;
-    const qualifications: QualificationMatch[] = [];
-
-    // Helper: Check signal presence in input text
-    const hasWord = (word: string) => text.includes(word);
-
-    // Extraction 1: Strategy & Operations Leadership
-    if (hasWord('strategy') || hasWord('strategic') || hasWord('operations') || hasWord('bizops')) {
-      qualifications.push({
-        id: 'cust-q1',
-        category: 'Required',
-        qualification: 'Strategic execution and business operations experience',
-        matchType: 'Strong Match',
-        explanation: 'Extensive strategy and operations background across software enterprises.',
-        supportingEvidenceCitationIds: ['EVID-2024-01', 'EVID-2023-01'],
-      });
-    }
-
-    // Extraction 2: RevOps / GTM
-    if (hasWord('revops') || hasWord('gtm') || hasWord('sales') || hasWord('funnel') || hasWord('pipeline')) {
-      qualifications.push({
-        id: 'cust-q2',
-        category: 'Required',
-        qualification: 'GTM operations and RevOps pipeline alignment',
-        matchType: 'Strong Match',
-        explanation: 'Demonstrated GTM automation and pipeline conversion expansion.',
-        supportingEvidenceCitationIds: ['EVID-2024-01', 'EVID-2023-03'],
-      });
-    }
-
-    // Extraction 3: AI & Technology Enablement
-    if (hasWord('ai') || hasWord('automation') || hasWord('enablement') || hasWord('transformation')) {
-      qualifications.push({
-        id: 'cust-q3',
-        category: 'Required',
-        qualification: 'AI enablement and enterprise technology adoption',
-        matchType: 'Strong Match',
-        explanation: 'Led enterprise AI Enablement taskforce training 450+ leaders.',
-        supportingEvidenceCitationIds: ['EVID-2024-05'],
-      });
-    }
-
-    // Extraction 4: Software Engineering / Coding
-    if (hasWord('pyspark') || hasWord('scala') || hasWord('c++') || hasWord('software engineer') || hasWord('coding') || hasWord('developer')) {
-      qualifications.push({
-        id: 'cust-q4',
-        category: 'Required',
-        qualification: 'Hands-on software development and engineering programming',
-        matchType: 'Material Gap',
-        explanation: 'The candidate profile reflects strategy and operations leadership without hands-on software development experience.',
-        supportingEvidenceCitationIds: [],
-      });
-    }
-
-    // Extraction 5: Unverified / Domain specific signals
-    if (hasWord('compliance') || hasWord('legal') || hasWord('regulatory')) {
-      qualifications.push({
-        id: 'cust-q5',
-        category: 'Preferred',
-        qualification: 'Domain-specific regulatory and compliance framework management',
-        matchType: 'Unverified',
-        explanation: 'Candidate evidence details operational governance but omits explicit regulatory compliance credentials.',
-        supportingEvidenceCitationIds: [],
-      });
-    }
-
-    // Additional default unverified item to represent conservative fallback analysis
-    qualifications.push({
-      id: 'cust-q6',
-      category: 'Preferred',
-      qualification: 'Custom proprietary tooling & industry-specific software credentials',
-      matchType: 'Unverified',
-      explanation: 'Evidence cannot be conclusively verified from candidate profile for custom-pasted requirements.',
-      supportingEvidenceCitationIds: [],
-    });
-
-    // Calculate Fit Score
-    const { fitScore, recommendation, explanation } = this.calculateFitScore(qualifications);
-
-    return {
-      executiveSummary: `Simplified heuristic analysis for ${input.jobTitle || 'Custom Role'} at ${input.company || 'Target Enterprise'}. This analysis uses lightweight deterministic keyword matching against ${candidatePossessive} candidate profile.`,
-      likelyMandate: `Execute ${input.jobTitle || 'strategic'} priorities and lead cross-functional initiatives for ${input.company || 'the target organization'}.`,
-      keyRequirements: qualifications.map((q) => q.qualification),
+      executiveSummary: `Candidate-specific qualification evaluation for ${input.jobTitle || 'Target Role'} at ${input.company || 'Target Company'}. ${candidatePossessive} active profile includes ${roles.length} career roles (spanning ${companySummary}) and ${evidenceItems.length} verified evidence records. This report reflects candidate-grounded qualification matching.`,
+      likelyMandate: `Drive operational leadership and strategic execution for ${input.company || 'the organization'}, aligning matrixed stakeholders and scaling performance outcomes.`,
+      keyRequirements: rawRequirements.map((r) => r.text),
       overallFitScore: fitScore,
       scoreExplanation: explanation,
       recommendation,
-      positioningNarrative: `I offer 12+ years of strategic execution and RevOps leadership. Based on keyword signal analysis, my background aligns with your operational priorities. Note: Detailed semantic evaluation will be available in Version 2.`,
+      positioningNarrative: `With proven leadership across ${companySummary}, I offer a track record of translating complex strategy into measurable operational execution. My verified experience directly aligns with ${input.company || 'the target team'}'s strategic mandate.`,
       qualifications,
-      objections: [
-        {
-          id: 'cust-obj-1',
-          objection: 'Custom JD analysis relies on keyword signal matching without dynamic semantic reasoning.',
-          counterPositioning: 'Advise candidate to review unverified qualifications and confirm specific team expectations during initial recruiter screen.',
-        },
-      ],
+      objections,
       recruiterQuestions: [
-        `What are the core 90-day deliverables expected for the ${input.jobTitle || 'role'}?`,
-        'What specific tools or software systems does the team rely on daily?',
+        `What are the critical 90-day milestones for the ${input.jobTitle || 'role'}?`,
+        `How does this role interface with executive leadership and cross-functional teams?`,
+        `What is the primary operational challenge facing ${input.company || 'the team'} this quarter?`,
       ],
       hiringManagerQuestions: [
-        'How does this position interface between strategy leadership and execution teams?',
+        `What specific strategic initiatives will this position own in the first six months?`,
+        `How are team performance metrics and operational OKRs evaluated at ${input.company || 'the company'}?`,
       ],
-      recommendedStarStories: [
-        {
-          id: 'cust-star-1',
-          title: 'Cross-Functional Strategy Execution',
-          situation: 'High-growth enterprise required strategic operational alignment across divisions.',
-          task: 'Lead cross-functional initiative to drive operational efficiency.',
-          action: 'Implemented executive review rhythms and alignment frameworks.',
-          result: 'Achieved 35% operational efficiency gain and accelerated strategic execution.',
-          citationIds: ['EVID-2024-02'],
-        },
-      ],
-      nextActions: [
-        'Review Unverified qualifications and prepare clarifying questions for recruiter call',
-        'Verify specific role mandate during initial screening',
-      ],
+      recommendedStarStories: starStories,
+      nextActions,
+      candidateProvenance: provenance,
+      evidenceSnapshot: evidenceItems,
       isFallbackAnalysis: true,
-      analysisNotice:
-        'Simplified heuristic analysis — Version 1 uses keyword signal extraction. Live semantic AI evaluation is planned for Version 2.',
+      analysisNotice: 'Candidate-grounded deterministic analysis evaluated against active profile evidence.',
     };
+  }
+
+  /**
+   * Helper to extract 4-6 discrete requirement items and relevant keyword sets from job description.
+   */
+  private extractRequirementsFromJd(
+    jobTitle: string,
+    jdText: string
+  ): Array<{ text: string; category: 'Required' | 'Preferred'; keywords: string[] }> {
+    const lower = jdText.toLowerCase();
+    const requirements: Array<{ text: string; category: 'Required' | 'Preferred'; keywords: string[] }> = [];
+
+    // Domain 1: Strategy & Operations / Leadership
+    if (lower.includes('strategy') || lower.includes('operations') || lower.includes('lead') || lower.includes('director') || lower.includes('vp')) {
+      requirements.push({
+        text: 'Executive strategy execution, business operations, and organizational leadership',
+        category: 'Required',
+        keywords: ['strategy', 'operations', 'bizops', 'executive', 'leadership', 'director', 'vp', 'scale', 'management'],
+      });
+    }
+
+    // Domain 2: GTM / RevOps / Revenue Pipeline
+    if (lower.includes('gtm') || lower.includes('revops') || lower.includes('sales') || lower.includes('revenue') || lower.includes('funnel') || lower.includes('pipeline')) {
+      requirements.push({
+        text: 'GTM strategy, RevOps pipeline optimization, and revenue enablement',
+        category: 'Required',
+        keywords: ['gtm', 'revops', 'sales', 'revenue', 'pipeline', 'funnel', 'conversion', 'enablement', 'quota'],
+      });
+    }
+
+    // Domain 3: AI / Technology / Digital Transformation
+    if (lower.includes('ai') || lower.includes('machine learning') || lower.includes('automation') || lower.includes('technology') || lower.includes('transformation')) {
+      requirements.push({
+        text: 'Enterprise AI enablement, workflow automation, and technology adoption',
+        category: 'Required',
+        keywords: ['ai', 'generative', 'automation', 'toolset', 'enablement', 'transformation', 'workflow', 'technology'],
+      });
+    }
+
+    // Domain 4: Cross-functional Stakeholder Governance
+    if (lower.includes('cross-functional') || lower.includes('stakeholder') || lower.includes('matrix') || lower.includes('board') || lower.includes('executive')) {
+      requirements.push({
+        text: 'Cross-functional leadership across matrixed executive stakeholders and review rhythms',
+        category: 'Required',
+        keywords: ['cross-functional', 'stakeholder', 'matrix', 'governance', 'board', 'rhythms', 'c-suite', 'executive'],
+      });
+    }
+
+    // Domain 5: Hands-on Technical Systems / Engineering
+    if (lower.includes('engineer') || lower.includes('pyspark') || lower.includes('scala') || lower.includes('python') || lower.includes('sql') || lower.includes('coding') || lower.includes('developer')) {
+      requirements.push({
+        text: 'Hands-on software development, data pipeline engineering, or technical infrastructure',
+        category: 'Required',
+        keywords: ['engineer', 'pyspark', 'scala', 'python', 'sql', 'coding', 'developer', 'architecture', 'infrastructure'],
+      });
+    }
+
+    // Domain 6: Preferred Regulatory / Industry Domain Tooling
+    if (lower.includes('compliance') || lower.includes('regulatory') || lower.includes('healthcare') || lower.includes('fintech') || lower.includes('security')) {
+      requirements.push({
+        text: 'Domain-specific regulatory frameworks, compliance governance, or industry standards',
+        category: 'Preferred',
+        keywords: ['compliance', 'regulatory', 'governance', 'security', 'framework', 'audit'],
+      });
+    }
+
+    // Default fallback if JD was very sparse
+    if (requirements.length < 3) {
+      requirements.push({
+        text: `Proven track record of operational impact relevant to ${jobTitle}`,
+        category: 'Required',
+        keywords: ['lead', 'manage', 'execute', 'deliver', 'growth', 'impact'],
+      });
+      requirements.push({
+        text: 'Cross-functional project delivery and stakeholder communication',
+        category: 'Preferred',
+        keywords: ['communication', 'project', 'delivery', 'team', 'collaboration'],
+      });
+    }
+
+    return requirements;
   }
 
   private calculateFitScore(qualifications: QualificationMatch[]): {
@@ -243,7 +384,7 @@ export class DeterministicSyntheticEngine implements IFitAnalysisEngine {
           weightedSum += baseWeight * 0.5;
           break;
         case 'Material Gap':
-          weightedSum -= baseWeight * 1.0;
+          weightedSum += 0;
           break;
         case 'Unverified':
           weightedSum += 0;
@@ -275,8 +416,93 @@ export class DeterministicSyntheticEngine implements IFitAnalysisEngine {
       recommendation = 'Deprioritize';
     }
 
-    const explanation = `Overall Fit Score of ${score}% (${recommendation}). Calculated using 2× weight for required qualifications and 1× for preferred qualifications. Weighted sum: ${weightedSum} / Max possible: ${maxPossibleWeight}.`;
+    const reqMatches = qualifications.filter((q) => q.category === 'Required');
+    const prefMatches = qualifications.filter((q) => q.category === 'Preferred');
+
+    const reqStrong = reqMatches.filter((q) => q.matchType === 'Strong Match').length;
+    const reqPartial = reqMatches.filter((q) => q.matchType === 'Partial Match').length;
+    const reqGap = reqMatches.filter((q) => q.matchType === 'Material Gap').length;
+
+    const prefStrong = prefMatches.filter((q) => q.matchType === 'Strong Match').length;
+    const prefPartial = prefMatches.filter((q) => q.matchType === 'Partial Match').length;
+    const prefUnverified = prefMatches.filter((q) => q.matchType === 'Unverified').length;
+
+    const explanation = `Overall Fit Score of ${score}% (${recommendation}). Required: ${reqStrong} Strong, ${reqPartial} Partial, ${reqGap} Gap | Preferred: ${prefStrong} Strong, ${prefPartial} Partial, ${prefUnverified} Unverified. Weighted sum: ${weightedSum} / Max possible: ${maxPossibleWeight}.`;
 
     return { fitScore: score, recommendation, explanation };
   }
+}
+
+/**
+ * Client-side Remote Gemini Engine that invokes the secure server route POST /api/analyze.
+ * Automatically falls back to DeterministicSyntheticEngine if the API is offline or unconfigured.
+ */
+export class RemoteGeminiEngine implements IFitAnalysisEngine {
+  private fallbackEngine = new DeterministicSyntheticEngine();
+
+  async analyzeRole(
+    input: AnalysisInput,
+    candidateProfile: CandidateProfile
+  ): Promise<FitAnalysisReport> {
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timeoutId = controller ? setTimeout(() => controller.abort(), 10000) : null;
+
+    try {
+      const response = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller ? controller.signal : undefined,
+        body: JSON.stringify({
+          jobTitle: input.jobTitle,
+          company: input.company,
+          jobDescription: input.jobDescription,
+          location: input.location,
+          compensation: input.compensation,
+          sourceUrl: input.sourceUrl,
+          sampleRoleId: input.sampleRoleId,
+          candidateSnapshot: {
+            id: candidateProfile.id,
+            name: candidateProfile.name,
+            headline: candidateProfile.headline,
+            location: candidateProfile.location,
+            summary: candidateProfile.summary,
+            targetRoles: candidateProfile.targetRoles || [],
+            targetIndustries: candidateProfile.targetIndustries || [],
+            preferredLocations: candidateProfile.preferredLocations || [],
+            coreCompetencies: candidateProfile.coreCompetencies || [],
+            careerHistory: candidateProfile.careerHistory || [],
+            evidenceItems: candidateProfile.evidenceItems || [],
+            dataMode: candidateProfile.dataMode || 'user',
+            updatedAt: candidateProfile.updatedAt,
+          },
+        }),
+      });
+
+      if (timeoutId) clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.warn('[RemoteGeminiEngine] Server API error, falling back:', errorData);
+        return this.fallbackEngine.analyzeRole(input, candidateProfile);
+      }
+
+      const data = await response.json();
+      if (data.success && data.report) {
+        return data.report as FitAnalysisReport;
+      }
+
+      return this.fallbackEngine.analyzeRole(input, candidateProfile);
+    } catch (err) {
+      if (timeoutId) clearTimeout(timeoutId);
+      console.warn('[RemoteGeminiEngine] Remote call failed/aborted, using deterministic fallback:', err);
+      return this.fallbackEngine.analyzeRole(input, candidateProfile);
+    }
+  }
+}
+
+export function getAnalysisEngine(preferredEngine: 'gemini' | 'deterministic' = 'gemini'): IFitAnalysisEngine {
+  if (preferredEngine === 'gemini') {
+    return new RemoteGeminiEngine();
+  }
+  return new DeterministicSyntheticEngine();
 }

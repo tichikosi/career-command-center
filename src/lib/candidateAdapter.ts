@@ -9,8 +9,35 @@ export interface ResolvedEvidenceCitation extends EvidenceItem {
 
 export function getCandidatePossessiveName(name: string): string {
   const trimmed = (name || '').trim();
-  if (!trimmed || trimmed === 'the candidate') return 'the candidate’s';
-  return `${trimmed}’s`;
+  if (!trimmed || trimmed.toLowerCase() === 'the candidate' || trimmed.toLowerCase() === 'candidate') {
+    return "candidate's";
+  }
+  return `${trimmed}'s`;
+}
+
+/**
+ * Resolves the user-facing candidate evidence subtitle for an analysis report UI.
+ * Prioritizes candidate identity stored in the analysis snapshot / provenance.
+ * Falls back to active profile name if current, or neutral fallback if unavailable.
+ *
+ * Example when candidate is Tanaka Ian Chikosi:
+ * "Line-item breakdown matching Tanaka Ian Chikosi's evidence against role specifications"
+ *
+ * Example when candidate is unspecified / neutral:
+ * "Line-item breakdown matching candidate evidence against role specifications"
+ */
+export function getAnalysisCandidateSubtitle(
+  analysis?: FitAnalysisReport | null,
+  activeProfile?: CandidateProfile | null
+): string {
+  const provName = analysis?.candidateProvenance?.candidateName?.trim();
+  const profileName = activeProfile?.name?.trim();
+
+  const candidateName = provName || profileName;
+  if (candidateName) {
+    return `Line-item breakdown matching ${candidateName}'s evidence against role specifications`;
+  }
+  return 'Line-item breakdown matching candidate evidence against role specifications';
 }
 
 export interface CareerRoleDraft {
@@ -645,5 +672,554 @@ export function deleteCareerRoleFromProfile(
     evidenceItems: updatedEvidenceItems,
     dataMode: 'user',
     updatedAt,
+  };
+}
+
+export interface ResumeExtractionInput {
+  name?: string;
+  headline?: string;
+  location?: string;
+  summary?: string;
+  targetRoles?: string[];
+  targetIndustries?: string[];
+  preferredLocations?: string[];
+  coreCompetencies?: string[];
+  careerHistory?: Array<{
+    company?: string;
+    title?: string;
+    location?: string;
+    startDate?: string;
+    endDate?: string;
+    isCurrent?: boolean;
+    summary?: string;
+    skills?: string[];
+    accomplishments?: Array<{
+      title?: string;
+      description?: string;
+      metric?: string;
+      skills?: string[];
+    }>;
+  }>;
+}
+
+/**
+ * Converts a structured AI résumé extraction into first-class CareerRole and EvidenceItem entities.
+ * Applies "candidate-provided" verification status and provenance metadata.
+ */
+export function convertResumeExtractionToCandidateEntities(
+  extraction: ResumeExtractionInput,
+  timestamp = new Date().toISOString()
+): {
+  roles: CareerRole[];
+  evidence: EvidenceItem[];
+} {
+  const roles: CareerRole[] = [];
+  const evidence: EvidenceItem[] = [];
+
+  const rawHistory = Array.isArray(extraction.careerHistory) ? extraction.careerHistory : [];
+
+  rawHistory.forEach((rawRole, roleIdx) => {
+    const roleId = `role-imp-${roleIdx + 1}-${Date.now().toString(36)}`;
+    const roleEvidenceIds: string[] = [];
+
+    const accomplishments = Array.isArray(rawRole.accomplishments) ? rawRole.accomplishments : [];
+    accomplishments.forEach((acc, accIdx) => {
+      const evId = `EVID-IMP-${roleIdx + 1}-${accIdx + 1}`;
+      roleEvidenceIds.push(evId);
+
+      evidence.push({
+        id: evId,
+        type: acc.metric ? 'metric' : 'achievement',
+        title: acc.title || `${rawRole.title || 'Role'} Achievement`,
+        description: acc.description || '',
+        metric: acc.metric,
+        organization: rawRole.company || '',
+        roleId,
+        skills: Array.isArray(acc.skills) ? acc.skills : Array.isArray(rawRole.skills) ? rawRole.skills : [],
+        tags: ['resume-import', (rawRole.company || 'experience').toLowerCase().replace(/\s+/g, '-')],
+        verificationStatus: 'candidate-provided',
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      });
+    });
+
+    roles.push({
+      id: roleId,
+      company: rawRole.company || '',
+      title: rawRole.title || '',
+      location: rawRole.location || '',
+      startDate: rawRole.startDate || '',
+      endDate: rawRole.isCurrent ? 'Present' : (rawRole.endDate || 'Present'),
+      isCurrent: Boolean(rawRole.isCurrent),
+      summary: rawRole.summary || '',
+      skills: Array.isArray(rawRole.skills) ? rawRole.skills : [],
+      evidenceItemIds: roleEvidenceIds,
+      sourceIds: ['source-resume-import'],
+      displayOrder: roleIdx + 1,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    });
+  });
+
+  return { roles, evidence };
+}
+
+export type ResumeIdentityClassification =
+  | 'demo-candidate'
+  | 'same-person'
+  | 'different-person'
+  | 'ambiguous';
+
+export interface ResumeReconciliationSummary {
+  classification: ResumeIdentityClassification;
+  confidenceScore: number;
+  nameMatch: boolean;
+  employerOverlapCount: number;
+  matchingEmployerNames: string[];
+  reconciledRolesCount: number;
+  newRolesCount: number;
+  reconciledEvidenceCount: number;
+  newEvidenceCount: number;
+  preservedHistoricalEvidenceCount: number;
+  activeCandidateName: string;
+  importedCandidateName: string;
+}
+
+function normalizeTokens(str: string): string[] {
+  return str
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, '')
+    .split(/\s+/)
+    .filter((t) => t.length > 1);
+}
+
+function normalizeCompany(str: string): string {
+  return str
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
+    .replace(/(inc|corp|corporation|llc|ltd|limited|co|company)$/, '');
+}
+
+/**
+ * Classifies the identity relationship between the active profile and an imported résumé.
+ */
+export function classifyResumeIdentity(
+  activeProfile: CandidateProfile,
+  extraction: ResumeExtractionInput
+): ResumeReconciliationSummary {
+  const activeName = (activeProfile.name || '').trim();
+  const importedName = (extraction.name || '').trim();
+
+  const isDemo =
+    activeProfile.dataMode === 'synthetic' ||
+    activeName === 'Alex Vance' ||
+    activeProfile.id === 'cand-synthetic-alex-vance';
+
+  const activeTokens = normalizeTokens(activeName);
+  const importedTokens = normalizeTokens(importedName);
+
+  const tokenMatches = activeTokens.filter((t) => importedTokens.includes(t));
+  const exactMatch = activeName.toLowerCase() === importedName.toLowerCase() && activeName.length > 0;
+  const nameMatch = exactMatch || tokenMatches.length >= 2 || (activeTokens.length === 1 && tokenMatches.length === 1);
+
+  const existingRoles = Array.isArray(activeProfile.careerHistory) ? activeProfile.careerHistory : [];
+  const importedRoles = Array.isArray(extraction.careerHistory) ? extraction.careerHistory : [];
+
+  const existingCompanyMap = new Set(existingRoles.map((r) => normalizeCompany(r.company)).filter(Boolean));
+  const matchingEmployerNames: string[] = [];
+
+  importedRoles.forEach((r) => {
+    const norm = normalizeCompany(r.company || '');
+    if (norm && existingCompanyMap.has(norm) && !matchingEmployerNames.includes(r.company || '')) {
+      matchingEmployerNames.push(r.company || '');
+    }
+  });
+
+  const employerOverlapCount = matchingEmployerNames.length;
+
+  let classification: ResumeIdentityClassification = 'same-person';
+  let confidenceScore = 0.85;
+
+  if (isDemo) {
+    classification = 'demo-candidate';
+    confidenceScore = 1.0;
+  } else if (nameMatch && (employerOverlapCount >= 1 || existingRoles.length === 0)) {
+    classification = 'same-person';
+    confidenceScore = 0.95;
+  } else if (!nameMatch && employerOverlapCount === 0 && existingRoles.length > 0) {
+    classification = 'different-person';
+    confidenceScore = 0.90;
+  } else if (nameMatch && employerOverlapCount === 0 && existingRoles.length >= 2) {
+    classification = 'ambiguous';
+    confidenceScore = 0.50;
+  } else if (!nameMatch && employerOverlapCount >= 2) {
+    classification = 'ambiguous';
+    confidenceScore = 0.50;
+  } else if (existingRoles.length === 0) {
+    classification = 'same-person';
+    confidenceScore = 0.85;
+  }
+
+  return {
+    classification,
+    confidenceScore,
+    nameMatch,
+    employerOverlapCount,
+    matchingEmployerNames,
+    reconciledRolesCount: 0,
+    newRolesCount: 0,
+    reconciledEvidenceCount: 0,
+    newEvidenceCount: 0,
+    preservedHistoricalEvidenceCount: (activeProfile.evidenceItems || []).length,
+    activeCandidateName: activeName,
+    importedCandidateName: importedName,
+  };
+}
+
+/**
+ * Reconciles an imported résumé update into an existing candidate profile.
+ * - Matches existing career roles by company/title to avoid duplicates.
+ * - Updates existing roles while preserving persistent IDs.
+ * - Appends new roles and achievements.
+ * - Strictly PRESERVES all historical evidence (absence does NOT delete CCC data).
+ * - Strictly PRESERVES user strategy fields (work authorization, compensation, target roles).
+ */
+export function reconcileResumeUpdateIntoProfile(
+  profile: CandidateProfile,
+  extraction: ResumeExtractionInput,
+  timestamp = new Date().toISOString()
+): {
+  profile: CandidateProfile;
+  summary: ResumeReconciliationSummary;
+} {
+  const baseSummary = classifyResumeIdentity(profile, extraction);
+  const existingRoles = Array.isArray(profile.careerHistory) ? [...profile.careerHistory] : [];
+  const existingEvidence = Array.isArray(profile.evidenceItems) ? [...profile.evidenceItems] : [];
+
+  const rawHistory = Array.isArray(extraction.careerHistory) ? extraction.careerHistory : [];
+
+  let reconciledRolesCount = 0;
+  let newRolesCount = 0;
+  let reconciledEvidenceCount = 0;
+  let newEvidenceCount = 0;
+
+  const finalRoles: CareerRole[] = [];
+  const finalEvidenceMap = new Map<string, EvidenceItem>();
+
+  // 1. Initialize with all existing evidence — guarantees zero deletion of historical facts
+  existingEvidence.forEach((ev) => finalEvidenceMap.set(ev.id, { ...ev }));
+
+  // 2. Reconcile roles & evidence from new resume
+  rawHistory.forEach((rawRole, roleIdx) => {
+    const rawCompany = (rawRole.company || '').trim();
+    const rawTitle = (rawRole.title || '').trim();
+    const normRawCompany = normalizeCompany(rawCompany);
+    const normRawTitle = normalizeCompany(rawTitle);
+
+    const matchedExistingRoleIndex = existingRoles.findIndex((r) => {
+      const normC = normalizeCompany(r.company);
+      const normT = normalizeCompany(r.title);
+      const companyMatch =
+        normC === normRawCompany ||
+        (normC.length > 2 && normRawCompany.length > 2 && (normC.includes(normRawCompany) || normRawCompany.includes(normC)));
+      const titleOrDateMatch = normT === normRawTitle || r.startDate === rawRole.startDate || r.isCurrent === rawRole.isCurrent;
+      return companyMatch && titleOrDateMatch;
+    });
+
+    if (matchedExistingRoleIndex >= 0) {
+      reconciledRolesCount++;
+      const existingRole = existingRoles[matchedExistingRoleIndex];
+      existingRoles.splice(matchedExistingRoleIndex, 1);
+
+      const existingEvIds = new Set(existingRole.evidenceItemIds || []);
+      const roleEvidenceIds = [...(existingRole.evidenceItemIds || [])];
+
+      const rawAccomplishments = Array.isArray(rawRole.accomplishments) ? rawRole.accomplishments : [];
+      rawAccomplishments.forEach((acc, accIdx) => {
+        const accDesc = (acc.description || '').trim();
+        const accTitle = acc.title || `${rawTitle || 'Role'} Achievement`;
+        const accMetric = acc.metric;
+
+        let foundEvId: string | null = null;
+        for (const evId of existingEvIds) {
+          const ev = finalEvidenceMap.get(evId);
+          if (ev) {
+            const sameOrg = normalizeCompany(ev.organization || '') === normRawCompany;
+            const sameMetric = accMetric && ev.metric === accMetric;
+            const sameTitle = ev.title.toLowerCase() === accTitle.toLowerCase();
+            if (sameOrg && (sameMetric || sameTitle)) {
+              foundEvId = evId;
+              break;
+            }
+          }
+        }
+
+        if (foundEvId) {
+          reconciledEvidenceCount++;
+          const existingEv = finalEvidenceMap.get(foundEvId)!;
+          finalEvidenceMap.set(foundEvId, {
+            ...existingEv,
+            description: accDesc || existingEv.description,
+            metric: accMetric || existingEv.metric,
+            updatedAt: timestamp,
+          });
+        } else if (accDesc || accMetric) {
+          newEvidenceCount++;
+          const newEvId = `EVID-IMP-${roleIdx + 1}-${accIdx + 1}-${Date.now().toString(36)}`;
+          roleEvidenceIds.push(newEvId);
+          finalEvidenceMap.set(newEvId, {
+            id: newEvId,
+            type: accMetric ? 'metric' : 'achievement',
+            title: accTitle,
+            description: accDesc,
+            metric: accMetric,
+            organization: rawCompany,
+            roleId: existingRole.id,
+            skills: Array.isArray(acc.skills) ? acc.skills : [],
+            tags: ['resume-import', rawCompany.toLowerCase().replace(/\s+/g, '-')],
+            verificationStatus: 'candidate-provided',
+            createdAt: timestamp,
+            updatedAt: timestamp,
+          });
+        }
+      });
+
+      finalRoles.push({
+        ...existingRole,
+        title: rawTitle || existingRole.title,
+        endDate: rawRole.isCurrent ? 'Present' : (rawRole.endDate || existingRole.endDate),
+        isCurrent: Boolean(rawRole.isCurrent),
+        summary: rawRole.summary || existingRole.summary,
+        evidenceItemIds: roleEvidenceIds,
+        updatedAt: timestamp,
+      });
+    } else {
+      newRolesCount++;
+      const roleId = `role-imp-${roleIdx + 1}-${Date.now().toString(36)}`;
+      const roleEvidenceIds: string[] = [];
+
+      const rawAccomplishments = Array.isArray(rawRole.accomplishments) ? rawRole.accomplishments : [];
+      rawAccomplishments.forEach((acc, accIdx) => {
+        const accDesc = (acc.description || '').trim();
+        const accMetric = acc.metric;
+        const newEvId = `EVID-IMP-${roleIdx + 1}-${accIdx + 1}-${Date.now().toString(36)}`;
+        roleEvidenceIds.push(newEvId);
+        newEvidenceCount++;
+
+        finalEvidenceMap.set(newEvId, {
+          id: newEvId,
+          type: accMetric ? 'metric' : 'achievement',
+          title: acc.title || `${rawTitle || 'Role'} Achievement`,
+          description: accDesc,
+          metric: accMetric,
+          organization: rawCompany,
+          roleId,
+          skills: Array.isArray(acc.skills) ? acc.skills : [],
+          tags: ['resume-import', rawCompany.toLowerCase().replace(/\s+/g, '-')],
+          verificationStatus: 'candidate-provided',
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        });
+      });
+
+      finalRoles.push({
+        id: roleId,
+        company: rawCompany,
+        title: rawTitle,
+        location: rawRole.location || '',
+        startDate: rawRole.startDate || '',
+        endDate: rawRole.isCurrent ? 'Present' : (rawRole.endDate || 'Present'),
+        isCurrent: Boolean(rawRole.isCurrent),
+        summary: rawRole.summary || '',
+        skills: Array.isArray(rawRole.skills) ? rawRole.skills : [],
+        evidenceItemIds: roleEvidenceIds,
+        sourceIds: ['source-resume-import'],
+        displayOrder: finalRoles.length + 1,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      });
+    }
+  });
+
+  // 3. Preserve any remaining existing roles that were omitted from newer resume
+  existingRoles.forEach((unmatchedRole) => {
+    finalRoles.push(unmatchedRole);
+  });
+
+  // 4. Merge competencies
+  const combinedCompetencies = Array.from(
+    new Set([...(profile.coreCompetencies || []), ...(extraction.coreCompetencies || [])])
+  );
+
+  // 5. Preserve user-controlled strategy fields
+  const preservedTargetRoles =
+    profile.targetRoles && profile.targetRoles.length > 0
+      ? profile.targetRoles
+      : extraction.targetRoles || [];
+
+  const preservedTargetIndustries =
+    profile.targetIndustries && profile.targetIndustries.length > 0
+      ? profile.targetIndustries
+      : extraction.targetIndustries || [];
+
+  const preservedPreferredLocations =
+    profile.preferredLocations && profile.preferredLocations.length > 0
+      ? profile.preferredLocations
+      : extraction.preferredLocations || [];
+
+  const updatedProfile: CandidateProfile = {
+    ...profile,
+    name: (profile.name || '').trim() || extraction.name || profile.name,
+    headline: extraction.headline || profile.headline,
+    location: (profile.location || '').trim() || extraction.location || profile.location,
+    summary: extraction.summary || profile.summary,
+    coreCompetencies: combinedCompetencies,
+    targetRoles: preservedTargetRoles,
+    targetIndustries: preservedTargetIndustries,
+    preferredLocations: preservedPreferredLocations,
+    // Work authorization strictly preserved:
+    workAuthorization: profile.workAuthorization,
+    workAuthorizationDetails: profile.workAuthorizationDetails,
+    // Compensation preferences strictly preserved:
+    compensationPreferences: profile.compensationPreferences,
+    compensationTarget: profile.compensationTarget,
+    careerHistory: finalRoles,
+    evidenceItems: Array.from(finalEvidenceMap.values()),
+    dataMode: 'user',
+    updatedAt: timestamp,
+  };
+
+  const summary: ResumeReconciliationSummary = {
+    ...baseSummary,
+    reconciledRolesCount,
+    newRolesCount,
+    reconciledEvidenceCount,
+    newEvidenceCount,
+    preservedHistoricalEvidenceCount: existingEvidence.length,
+  };
+
+  return {
+    profile: updatedProfile,
+    summary,
+  };
+}
+
+export function mergeResumeExtractionIntoProfile(
+  profile: CandidateProfile,
+  extraction: ResumeExtractionInput,
+  timestamp = new Date().toISOString()
+): CandidateProfile {
+  const { profile: reconciled } = reconcileResumeUpdateIntoProfile(profile, extraction, timestamp);
+  return reconciled;
+}
+
+export function replaceProfileWithResumeExtraction(
+  profile: CandidateProfile,
+  extraction: ResumeExtractionInput,
+  timestamp = new Date().toISOString()
+): CandidateProfile {
+  const { roles, evidence } = convertResumeExtractionToCandidateEntities(extraction, timestamp);
+
+  return {
+    ...profile,
+    id: profile.id || 'cand-user-profile',
+    name: extraction.name || profile.name || '',
+    headline: extraction.headline || profile.headline || '',
+    location: extraction.location || profile.location || '',
+    summary: extraction.summary || profile.summary || '',
+    coreCompetencies: Array.isArray(extraction.coreCompetencies) ? extraction.coreCompetencies : [],
+    targetRoles: Array.isArray(extraction.targetRoles) ? extraction.targetRoles : profile.targetRoles || [],
+    targetIndustries: Array.isArray(extraction.targetIndustries) ? extraction.targetIndustries : profile.targetIndustries || [],
+    preferredLocations: Array.isArray(extraction.preferredLocations) ? extraction.preferredLocations : profile.preferredLocations || [],
+    // Work authorization strictly preserved:
+    workAuthorization: profile.workAuthorization,
+    workAuthorizationDetails: profile.workAuthorizationDetails,
+    // Compensation preferences strictly preserved:
+    compensationPreferences: profile.compensationPreferences,
+    compensationTarget: profile.compensationTarget,
+    careerHistory: roles,
+    evidenceItems: evidence,
+    dataMode: 'user',
+    updatedAt: timestamp,
+  };
+}
+
+/**
+ * Targeted remediation utility for the specific known bad import bug.
+ * Identifies and removes only contaminated records generated with placeholder fingerprints.
+ * Preserves all genuine user edits, demo candidate fixtures, and opportunity state.
+ */
+export function remediateContaminatedImport(profile: CandidateProfile): {
+  profile: CandidateProfile;
+  contaminatedRecordsFound: number;
+} {
+  let contaminatedCount = 0;
+
+  // 1. Identify contaminated roles with exact placeholder fingerprints
+  const cleanedRoles = (profile.careerHistory || []).filter((role) => {
+    const isContaminated =
+      (role.company === 'Primary Enterprise Experience' && role.title === 'Executive Professional') ||
+      (role.id.startsWith('role-imp-') && role.company === 'Primary Enterprise Experience');
+
+    if (isContaminated) {
+      contaminatedCount++;
+      return false;
+    }
+    return true;
+  });
+
+  // 2. Identify contaminated evidence items with exact placeholder fingerprints
+  const cleanedEvidence = (profile.evidenceItems || []).filter((ev) => {
+    const isContaminated =
+      (ev.organization === 'Primary Enterprise Experience' && ev.title === 'Strategic Operations Delivery') ||
+      (ev.tags?.includes('primary-enterprise-experience') && ev.id.startsWith('EVID-IMP-'));
+
+    if (isContaminated) {
+      contaminatedCount++;
+      return false;
+    }
+    return true;
+  });
+
+  // 3. Clean target roles if contaminated
+  const cleanedTargetRoles = (profile.targetRoles || []).filter((tr) => {
+    if (tr === 'Executive Professional' && contaminatedCount > 0) {
+      return false;
+    }
+    return true;
+  });
+
+  // 4. Restore candidate name/headline if contaminated placeholder
+  let restoredName = profile.name;
+  let restoredHeadline = profile.headline;
+  let restoredDataMode = profile.dataMode;
+
+  const hasSyntheticRoles = cleanedRoles.some((r) => r.id === 'role-apex' || r.id === 'role-nexus');
+
+  if (profile.name === 'Candidate Name') {
+    if (hasSyntheticRoles) {
+      restoredName = 'Alex Vance';
+      restoredHeadline = 'VP, AI Strategy & Operations';
+      restoredDataMode = 'synthetic';
+    } else {
+      restoredName = '';
+    }
+    contaminatedCount++;
+  }
+
+  const remediated: CandidateProfile = {
+    ...profile,
+    name: restoredName,
+    headline: restoredHeadline,
+    targetRoles: cleanedTargetRoles,
+    careerHistory: cleanedRoles,
+    evidenceItems: cleanedEvidence,
+    dataMode: restoredDataMode,
+    updatedAt: contaminatedCount > 0 ? new Date().toISOString() : profile.updatedAt,
+  };
+
+  return {
+    profile: remediated,
+    contaminatedRecordsFound: contaminatedCount,
   };
 }

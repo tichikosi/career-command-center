@@ -6,7 +6,9 @@ import { usePathname } from 'next/navigation';
 import {
   IconDashboard,
   IconAnalyze,
+  IconCompass,
   IconPipeline,
+  IconNetwork,
   IconProfile,
   IconAbout,
 } from '@/components/icons';
@@ -14,7 +16,9 @@ import {
 const NAV_ITEMS = [
   { label: 'Dashboard', href: '/', icon: IconDashboard },
   { label: 'Analyze a Role', href: '/analyze', icon: IconAnalyze },
+  { label: 'Discover Roles', href: '/discover', icon: IconCompass },
   { label: 'Opportunities', href: '/opportunities', icon: IconPipeline },
+  { label: 'Network', href: '/network', icon: IconNetwork },
   { label: 'Candidate Profile', href: '/profile', icon: IconProfile },
   { label: 'About the Project', href: '/about', icon: IconAbout },
 ];
@@ -54,7 +58,7 @@ export function Sidebar() {
 
       <div className="mt-auto pt-6 border-t border-slate-200/80 dark:border-slate-800 px-3 text-xs text-slate-500 dark:text-slate-400">
         <p className="font-medium text-slate-700 dark:text-slate-300">Career Command Center</p>
-        <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">Version 1.1B (Public Demo)</p>
+        <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">Version 2.0.0 (AI-Native)</p>
       </div>
     </aside>
   );
