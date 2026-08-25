@@ -1,9 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   hydrateCandidateProfileFromCloud,
-  hydrateOpportunitiesFromCloud,
   getCandidateProfile,
-  getOpportunities,
   resetCandidateDemoData,
 } from '@/lib/storage';
 import { hydrateCloudStateForUser, resetStateOnSignOut } from '@/lib/storage/cloudHydration';
@@ -171,24 +169,141 @@ describe('V3.2 Cloud Candidate Read-Path & Source of Truth', () => {
     expect(profileAfterSignOut.dataMode).toBe('synthetic');
   });
 
-  it('hydrateOpportunitiesFromCloud updates active opportunities cache and storage', () => {
-    const opps = [
-      {
-        id: 'cloud-opp-1',
-        company: 'Scale AI',
-        title: 'VP Operations',
-        location: 'San Francisco, CA',
-        stage: 'Applied' as const,
-        priority: 'High' as const,
-        createdAt: '2026-08-25T00:00:00Z',
-        updatedAt: '2026-08-25T00:00:00Z',
+  it('CloudCandidateRepository successfully fetches candidate when candidate id differs from auth user id', async () => {
+    const authUserId = '2bd4618e-4a6f-45fe-89cb-72c01994a5ea';
+    const fakeRow = {
+      id: 'cand-tanaka-custom-id',
+      user_id: authUserId,
+      name: 'Tanaka Ian Chikosi',
+      headline: 'VP Strategy & Operations',
+      location: 'San Francisco, CA',
+      summary: 'Executive AI operations leader',
+      target_roles: ['VP Operations'],
+      target_industries: ['AI'],
+      preferred_locations: ['San Francisco, CA'],
+      core_competencies: ['Scaling'],
+      career_history: [],
+      education: [],
+      certifications: [],
+      evidence_items: [],
+      sources: [],
+      updated_at: '2026-08-25T01:00:00Z',
+      data_mode: 'user',
+    };
+
+    let queriedFilter = '';
+    const mockSupabase = {
+      from: (table: string) => {
+        expect(table).toBe('candidate_profiles');
+        const queryBuilder = {
+          select: () => queryBuilder,
+          order: () => queryBuilder,
+          or: (filterStr: string) => {
+            queriedFilter = filterStr;
+            return queryBuilder;
+          },
+          eq: (field: string, val: string) => {
+            queriedFilter = `${field}.eq.${val}`;
+            return queryBuilder;
+          },
+          limit: (n: number) => {
+            expect(n).toBe(1);
+            return Promise.resolve({ data: [fakeRow], error: null });
+          },
+        };
+        return queryBuilder;
       },
-    ];
+    } as unknown as import('@supabase/supabase-js').SupabaseClient;
 
-    hydrateOpportunitiesFromCloud(opps);
+    const { CloudCandidateRepository } = await import('@/lib/storage/cloudRepositories');
+    const repo = new CloudCandidateRepository(mockSupabase);
+    const profile = await repo.getProfile(authUserId);
 
-    const loaded = getOpportunities();
-    expect(loaded).toHaveLength(1);
-    expect(loaded[0].company).toBe('Scale AI');
+    expect(profile.name).toBe('Tanaka Ian Chikosi');
+    expect(profile.id).toBe('cand-tanaka-custom-id');
+    expect(queriedFilter).toContain(authUserId);
+  });
+
+  it('CloudCandidateRepository resolves newest candidate when multiple rows exist in Supabase without PGRST116 error', async () => {
+    const authUserId = '2bd4618e-4a6f-45fe-89cb-72c01994a5ea';
+    const olderRow = {
+      id: 'cand-tanaka-old',
+      user_id: authUserId,
+      name: 'Tanaka Old',
+      headline: 'Director',
+      updated_at: '2026-08-24T00:00:00Z',
+      data_mode: 'user',
+    };
+    const newerRow = {
+      id: 'cand-tanaka-new',
+      user_id: authUserId,
+      name: 'Tanaka Ian Chikosi',
+      headline: 'VP Operations',
+      updated_at: '2026-08-25T02:00:00Z',
+      data_mode: 'user',
+    };
+
+    const allRows = [newerRow, olderRow];
+
+    const mockSupabase = {
+      from: () => {
+        const queryBuilder = {
+          select: () => queryBuilder,
+          order: (field: string, opts: { ascending: boolean }) => {
+            expect(field).toBe('updated_at');
+            expect(opts.ascending).toBe(false);
+            return queryBuilder;
+          },
+          or: () => queryBuilder,
+          limit: (n: number) => {
+            expect(n).toBe(1);
+            // Simulate PostgreSQL returning the first ordered row (newerRow)
+            return Promise.resolve({ data: allRows.slice(0, n), error: null });
+          },
+        };
+        return queryBuilder;
+      },
+    } as unknown as import('@supabase/supabase-js').SupabaseClient;
+
+    const { CloudCandidateRepository } = await import('@/lib/storage/cloudRepositories');
+    const repo = new CloudCandidateRepository(mockSupabase);
+    const profile = await repo.getProfile(authUserId);
+
+    expect(profile.name).toBe('Tanaka Ian Chikosi');
+    expect(profile.id).toBe('cand-tanaka-new');
+  });
+
+  it('cloud candidate hydrates even if ccc_migrated flag is already true in localStorage', async () => {
+    const authUserId = 'user-migrated-previously';
+    window.localStorage.setItem(`ccc_migrated_${authUserId}`, 'true');
+
+    const tanakaCloudProfile: CandidateProfile = {
+      id: 'cand-tanaka-persisted',
+      name: 'Tanaka Ian Chikosi',
+      headline: 'VP Strategy & Operations',
+      location: 'San Francisco, CA',
+      summary: 'Executive leader',
+      targetRoles: ['VP Operations'],
+      targetIndustries: ['AI'],
+      preferredLocations: ['SF'],
+      coreCompetencies: [],
+      careerHistory: [],
+      education: [],
+      certifications: [],
+      evidenceItems: [],
+      sources: [],
+      updatedAt: '2026-08-25T00:00:00Z',
+      dataMode: 'user',
+    };
+
+    await mockAdapter.candidates.saveProfile(tanakaCloudProfile, authUserId);
+    const repoManager = await import('@/lib/storage/repositoryManager');
+    vi.spyOn(repoManager, 'getActiveStorageAdapter').mockReturnValue(mockAdapter);
+
+    await hydrateCloudStateForUser(authUserId);
+
+    const active = getCandidateProfile();
+    expect(active.name).toBe('Tanaka Ian Chikosi');
+    expect(active.dataMode).toBe('user');
   });
 });

@@ -22,17 +22,29 @@ export class CloudCandidateRepository implements ICandidateRepository {
   constructor(private supabase: SupabaseClient) {}
 
   async getProfile(userId?: string): Promise<CandidateProfile> {
-    let query = this.supabase.from('candidate_profiles').select('*');
+    let query = this.supabase
+      .from('candidate_profiles')
+      .select('*')
+      .order('updated_at', { ascending: false });
+
     if (userId) {
-      query = query.eq('user_id', userId);
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
+      if (isUuid) {
+        query = query.or(`user_id.eq.${userId},id.eq.${userId}`);
+      } else {
+        query = query.eq('id', userId);
+      }
     }
-    const { data, error } = await query.maybeSingle();
+
+    const { data, error } = await query.limit(1);
 
     if (error) {
       console.warn(`[CloudCandidateRepository] getProfile notice for user ${userId}:`, error.message);
     }
 
-    if (!data) {
+    const row = data && data.length > 0 ? data[0] : null;
+
+    if (!row) {
       return {
         id: `cand-${userId || 'default'}`,
         name: '',
@@ -54,22 +66,22 @@ export class CloudCandidateRepository implements ICandidateRepository {
     }
 
     const mapped = {
-      id: data.id,
-      name: data.name || '',
-      headline: data.headline || '',
-      location: data.location || '',
-      summary: data.summary || '',
-      targetRoles: Array.isArray(data.target_roles) ? data.target_roles : [],
-      targetIndustries: Array.isArray(data.target_industries) ? data.target_industries : [],
-      preferredLocations: Array.isArray(data.preferred_locations) ? data.preferred_locations : [],
-      coreCompetencies: Array.isArray(data.core_competencies) ? data.core_competencies : [],
-      careerHistory: Array.isArray(data.career_history) ? data.career_history : [],
-      education: Array.isArray(data.education) ? data.education : [],
-      certifications: Array.isArray(data.certifications) ? data.certifications : [],
-      evidenceItems: Array.isArray(data.evidence_items) ? data.evidence_items : [],
-      sources: Array.isArray(data.sources) ? data.sources : [],
-      updatedAt: data.updated_at || new Date().toISOString(),
-      dataMode: (data.data_mode as 'synthetic' | 'user') || 'user',
+      id: row.id,
+      name: row.name || '',
+      headline: row.headline || '',
+      location: row.location || '',
+      summary: row.summary || '',
+      targetRoles: Array.isArray(row.target_roles) ? row.target_roles : [],
+      targetIndustries: Array.isArray(row.target_industries) ? row.target_industries : [],
+      preferredLocations: Array.isArray(row.preferred_locations) ? row.preferred_locations : [],
+      coreCompetencies: Array.isArray(row.core_competencies) ? row.core_competencies : [],
+      careerHistory: Array.isArray(row.career_history) ? row.career_history : [],
+      education: Array.isArray(row.education) ? row.education : [],
+      certifications: Array.isArray(row.certifications) ? row.certifications : [],
+      evidenceItems: Array.isArray(row.evidence_items) ? row.evidence_items : [],
+      sources: Array.isArray(row.sources) ? row.sources : [],
+      updatedAt: row.updated_at || new Date().toISOString(),
+      dataMode: (row.data_mode as 'synthetic' | 'user') || 'user',
     };
 
     return normalizeCandidateProfile(mapped);

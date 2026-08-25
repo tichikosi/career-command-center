@@ -34,7 +34,15 @@ export class MockCloudStorageAdapter implements IStorageAdapter {
   constructor() {
     this.candidates = {
       getProfile: async (userId = 'default-user'): Promise<CandidateProfile> => {
-        const p = this.candidateProfiles.get(userId);
+        let p = this.candidateProfiles.get(userId);
+        if (!p) {
+          for (const cand of this.candidateProfiles.values()) {
+            if (cand.id === userId) {
+              p = cand;
+              break;
+            }
+          }
+        }
         if (p) return JSON.parse(JSON.stringify(p));
         return {
           id: `cand-${userId}`,
