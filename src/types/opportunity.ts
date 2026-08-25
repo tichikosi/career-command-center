@@ -141,6 +141,11 @@ export interface JobOpportunity {
   applicationUrl?: string;
   actions: OpportunityAction[];  // Unified structured action list
   archivedReason?: string;
+
+  // V3.1 / V3.2 Provenance and Trust metadata
+  verificationStatus?: 'verified-live' | 'grounded-unverified' | 'needs-verification' | 'curated' | 'unverified-legacy' | 'expired' | 'unreachable' | 'unsupported';
+  verifiedAt?: string;
+  sourceDomain?: string;
 }
 
 export interface OpportunityUISettings {

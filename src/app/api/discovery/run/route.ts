@@ -6,8 +6,8 @@ import { defaultSyntheticCandidateProfile } from '@/data/candidate';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
-    const candidate: CandidateProfile = body?.candidateSnapshot || defaultSyntheticCandidateProfile;
-    const providerPreference = body?.providerPreference as 'gemini' | 'curated' | undefined;
+    const candidate: CandidateProfile = body?.candidateSnapshot || body?.candidateProfile || defaultSyntheticCandidateProfile;
+    const providerPreference = (body?.providerPreference || body?.provider) as 'gemini' | 'curated' | undefined;
 
     const result = await runDiscoveryForCandidate(candidate, { providerPreference });
 

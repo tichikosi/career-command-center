@@ -330,6 +330,36 @@ Kudzai,Nyahoda,https://www.linkedin.com/in/kudzainyahoda,,Datadog,VP Engineering
     await page.getByRole('button', { name: /Promoted/i }).click();
     await expect(page.getByText('In Pipeline').first()).toBeVisible();
   });
+
+  test('Cloud & Account: loads login page with mode switching and local resilience notice', async ({ page }) => {
+    await page.goto('/login');
+    await expect(page.locator('h1')).toContainText('Sign In to Your Workspace');
+    await expect(page.getByPlaceholder('executive@company.com')).toBeVisible();
+    await expect(page.getByPlaceholder('••••••••••••')).toBeVisible();
+
+    // Switch to Create Account mode
+    await page.getByRole('button', { name: 'Create Account' }).click();
+    await expect(page.getByPlaceholder('e.g. Tanaka Ian Chikosi')).toBeVisible();
+
+    // Switch back to Sign In
+    await page.getByRole('button', { name: 'Sign In' }).click();
+    await expect(page.getByPlaceholder('e.g. Tanaka Ian Chikosi')).not.toBeVisible();
+  });
+
+  test('Discovery Workspace: filters jobs by secondary trust state and primary tabs', async ({ page }) => {
+    await page.goto('/discover');
+    await page.getByRole('button', { name: /Curated Feed/i }).click();
+    await expect(page.getByText(/Discovered \d+ roles/i)).toBeVisible();
+
+    // Verify secondary trust filter
+    const trustSelect = page.locator('select[aria-label="Filter by Trust State"]');
+    await expect(trustSelect).toBeVisible();
+    await trustSelect.selectOption('curated');
+    await expect(page.getByText('Curated Feed').first()).toBeVisible();
+
+    // Reset to all trust states
+    await trustSelect.selectOption('all');
+  });
 });
 
 

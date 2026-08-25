@@ -86,7 +86,7 @@ export function generateJobFingerprint(company: string, title: string, location?
 export function deduplicateDiscoveredJobs(
   incomingJobs: DiscoveredJob[],
   existingJobs: DiscoveredJob[],
-  activeOpportunities: JobOpportunity[]
+  activeOpportunities: Array<{ company: string; title: string; location?: string; applicationUrl?: string; sourceUrl?: string }>
 ): { uniqueJobs: DiscoveredJob[]; duplicatesCount: number } {
   const existingFingerprints = new Set<string>();
   const existingUrls = new Set<string>();

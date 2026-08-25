@@ -86,7 +86,7 @@ export default function AboutPage() {
         <CardHeader title="5. Technical Architecture Summary" />
         <ul className="text-sm text-slate-700 dark:text-slate-300 space-y-2 leading-relaxed">
           <li><strong>Framework:</strong> Next.js 16 (App Router with Turbopack) using React 19 Server Components for static views and Client Components for local state.</li>
-          <li><strong>AI Engine:</strong> Official Google Gen AI SDK (<code className="text-xs bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">@google/genai</code>) powering <code className="text-xs bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">gemini-3.6-flash</code> with strict Zod structured outputs.</li>
+          <li><strong>AI Engine:</strong> Official Google Gen AI SDK (<code className="text-xs bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">@google/genai</code>) powering primary <code className="text-xs bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">gemini-3.7-flash</code> with resilient failover to <code className="text-xs bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">gemini-3.6-flash</code> and strict Zod structured outputs.</li>
           <li><strong>Type Safety & Validation:</strong> TypeScript Strict Mode and Zod 4 schemas across all API endpoints and data models.</li>
           <li><strong>Kanban CRM:</strong> Drag-and-drop state management powered by <code className="text-xs bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">@dnd-kit</code> with full keyboard accessibility.</li>
           <li><strong>Quality Gate:</strong> 145 Vitest unit tests, 17 Playwright end-to-end tests, and automated AI evaluation harness.</li>

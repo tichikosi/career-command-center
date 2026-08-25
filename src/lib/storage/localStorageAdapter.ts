@@ -97,11 +97,11 @@ export class LocalNetworkRepository implements INetworkRepository {
     const filtered = contacts.filter((c) => c.id !== id);
     saveNetworkContacts(filtered);
   }
-  resetDemoData() {
-    return resetNetworkDemoData();
+  resetDemoData(): void {
+    resetNetworkDemoData();
   }
-  clearAll() {
-    return clearNetworkContacts();
+  clearAll(): void {
+    clearNetworkContacts();
   }
 }
 

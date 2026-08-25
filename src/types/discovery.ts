@@ -3,6 +3,7 @@ export type DiscoveredJobStatus = 'new' | 'saved' | 'dismissed' | 'promoted';
 export type VerificationStatus =
   | 'verified-live'
   | 'grounded-unverified'
+  | 'needs-verification'
   | 'curated'
   | 'unverified-legacy'
   | 'expired'
@@ -46,6 +47,7 @@ export interface DiscoveredJob {
   groundingUsed: boolean;
   verificationStatus: VerificationStatus;
   verificationReason?: string;
+  failureReason?: string;
   verifiedAt?: string;
   sourceConfidence?: number;
   httpStatus?: number;
@@ -83,6 +85,7 @@ export interface DiscoveryHistoryItem {
   status: 'success' | 'failed' | 'partial';
   message?: string;
   sanitizedFailureReason?: string;
+  errorDetails?: string;
 }
 
 export interface JobDiscoveryProvider {

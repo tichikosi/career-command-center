@@ -481,6 +481,26 @@ function OpportunitiesContent() {
                         <div className="font-semibold text-slate-900 dark:text-slate-100 text-sm">{opp.title}</div>
                         <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
                           <span>{opp.company}</span>
+                          {opp.verificationStatus === 'verified-live' && (
+                            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900">
+                              ⚡ Live
+                            </span>
+                          )}
+                          {opp.verificationStatus === 'curated' && (
+                            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-900">
+                              📁 Demo
+                            </span>
+                          )}
+                          {opp.verificationStatus === 'unverified-legacy' && (
+                            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                              ⚠️ Unverified
+                            </span>
+                          )}
+                          {opp.verificationStatus === 'expired' && (
+                            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-900">
+                              ✕ Expired
+                            </span>
+                          )}
                           {matchedNetwork.length > 0 && (
                             <Link
                               href={`/network?opportunityId=${opp.id}`}
