@@ -1,5 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { getSupabaseUrl, getSupabaseAnonKey, isSupabaseConfigured } from './config';
+import { getSupabaseUrl, getSupabasePublicKey, isSupabaseConfigured } from './config';
 
 let clientInstance: SupabaseClient | null = null;
 
@@ -14,8 +14,8 @@ export function getSupabaseClient(): SupabaseClient | null {
 
   if (!clientInstance) {
     const url = getSupabaseUrl()!;
-    const anonKey = getSupabaseAnonKey()!;
-    clientInstance = createClient(url, anonKey, {
+    const publicKey = getSupabasePublicKey()!;
+    clientInstance = createClient(url, publicKey, {
       auth: {
         persistSession: true,
         autoRefreshToken: true,

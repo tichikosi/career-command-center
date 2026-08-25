@@ -198,46 +198,63 @@ ALTER TABLE public.discovery_jobs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.discovery_history ENABLE ROW LEVEL SECURITY;
 
 -- 1. user_profiles
+DROP POLICY IF EXISTS "Users can view own profile" ON public.user_profiles;
 CREATE POLICY "Users can view own profile" ON public.user_profiles
-  FOR SELECT USING (auth.uid() = id);
+  FOR SELECT TO authenticated USING (auth.uid() = id);
+
+DROP POLICY IF EXISTS "Users can update own profile" ON public.user_profiles;
 CREATE POLICY "Users can update own profile" ON public.user_profiles
-  FOR UPDATE USING (auth.uid() = id);
+  FOR UPDATE TO authenticated USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
+
+DROP POLICY IF EXISTS "Users can insert own profile" ON public.user_profiles;
 CREATE POLICY "Users can insert own profile" ON public.user_profiles
-  FOR INSERT WITH CHECK (auth.uid() = id);
+  FOR INSERT TO authenticated WITH CHECK (auth.uid() = id);
 
 -- 2. user_preferences
+DROP POLICY IF EXISTS "Users can view own preferences" ON public.user_preferences;
 CREATE POLICY "Users can view own preferences" ON public.user_preferences
-  FOR SELECT USING (auth.uid() = user_id);
+  FOR SELECT TO authenticated USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can update own preferences" ON public.user_preferences;
 CREATE POLICY "Users can update own preferences" ON public.user_preferences
-  FOR UPDATE USING (auth.uid() = user_id);
+  FOR UPDATE TO authenticated USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can insert own preferences" ON public.user_preferences;
 CREATE POLICY "Users can insert own preferences" ON public.user_preferences
-  FOR INSERT WITH CHECK (auth.uid() = user_id);
+  FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id);
 
 -- 3. candidate_profiles
+DROP POLICY IF EXISTS "Users can manage own candidate profile" ON public.candidate_profiles;
 CREATE POLICY "Users can manage own candidate profile" ON public.candidate_profiles
-  FOR ALL USING (auth.uid() = user_id);
+  FOR ALL TO authenticated USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
 -- 4. opportunities & actions
+DROP POLICY IF EXISTS "Users can manage own opportunities" ON public.opportunities;
 CREATE POLICY "Users can manage own opportunities" ON public.opportunities
-  FOR ALL USING (auth.uid() = user_id);
+  FOR ALL TO authenticated USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can manage own opportunity actions" ON public.opportunity_actions;
 CREATE POLICY "Users can manage own opportunity actions" ON public.opportunity_actions
-  FOR ALL USING (auth.uid() = user_id);
+  FOR ALL TO authenticated USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
 -- 5. analysis_reports
+DROP POLICY IF EXISTS "Users can manage own analysis reports" ON public.analysis_reports;
 CREATE POLICY "Users can manage own analysis reports" ON public.analysis_reports
-  FOR ALL USING (auth.uid() = user_id);
+  FOR ALL TO authenticated USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
 -- 6. network_contacts
+DROP POLICY IF EXISTS "Users can manage own network contacts" ON public.network_contacts;
 CREATE POLICY "Users can manage own network contacts" ON public.network_contacts
-  FOR ALL USING (auth.uid() = user_id);
+  FOR ALL TO authenticated USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
 -- 7. discovery_jobs & history
+DROP POLICY IF EXISTS "Users can manage own discovery jobs" ON public.discovery_jobs;
 CREATE POLICY "Users can manage own discovery jobs" ON public.discovery_jobs
-  FOR ALL USING (auth.uid() = user_id);
+  FOR ALL TO authenticated USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can manage own discovery history" ON public.discovery_history;
 CREATE POLICY "Users can manage own discovery history" ON public.discovery_history
-  FOR ALL USING (auth.uid() = user_id);
+  FOR ALL TO authenticated USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
 -- Trigger to auto-create user_profiles and user_preferences upon auth.users signup
 CREATE OR REPLACE FUNCTION public.handle_new_user()
@@ -263,3 +280,22 @@ DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- ==============================================================================
+-- GRANTS & ROLE PRIVILEGES (FOR AUTHENTICATED USERS)
+-- ==============================================================================
+
+-- Grant schema usage
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+
+-- Grant table privileges for authenticated users (strictly constrained by RLS)
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO authenticated;
+GRANT ALL ON ALL TABLES IN SCHEMA public TO service_role;
+
+-- Grant sequence privileges
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated, service_role;
+
+-- Ensure default privileges apply to future tables/sequences
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO authenticated;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO authenticated, service_role;

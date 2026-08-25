@@ -60,4 +60,18 @@ describe('V3.2 Scheduled Discovery Cron Route', () => {
     const data = await res.json();
     expect(data.success).toBe(true);
   });
+
+  it('rejects in production when CRON_SECRET is not configured', async () => {
+    delete process.env.CRON_SECRET;
+    (process.env as { NODE_ENV?: string }).NODE_ENV = 'production';
+
+    const req = new NextRequest('http://localhost:3000/api/discovery/cron', {
+      method: 'GET',
+    });
+
+    const res = await GET(req);
+    expect(res.status).toBe(401);
+    const data = await res.json();
+    expect(data.error).toContain('CRON_SECRET must be configured in production');
+  });
 });

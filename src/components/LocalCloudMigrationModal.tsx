@@ -6,7 +6,7 @@ import { inspectLocalData } from '@/lib/storage/migrationService';
 import { MigrationSummary } from '@/types/auth';
 
 export function LocalCloudMigrationModal() {
-  const { migrationPending, runMigration, dismissMigration } = useAuth();
+  const { migrationPending, migrationProgress, runMigration, dismissMigration, resetMigrationProgress } = useAuth();
   const [isMigrating, setIsMigrating] = useState(false);
   const [summary, setSummary] = useState<MigrationSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -18,14 +18,26 @@ export function LocalCloudMigrationModal() {
   const handleMigrate = async () => {
     setIsMigrating(true);
     setError(null);
+    setSummary(null);
     try {
       const res = await runMigration();
       setSummary(res);
+      if (res.status !== 'success') {
+        const firstError = res.errors?.[0] || 'Cloud sync incomplete. Some records could not be verified.';
+        setError(firstError);
+      }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Migration failed.');
+      setError(err instanceof Error ? err.message : 'Cloud migration failed.');
     } finally {
       setIsMigrating(false);
     }
+  };
+
+  const handleRetry = () => {
+    setError(null);
+    setSummary(null);
+    resetMigrationProgress();
+    handleMigrate();
   };
 
   return (
@@ -36,18 +48,37 @@ export function LocalCloudMigrationModal() {
             <span className="text-base">☁️</span>
           </div>
           <div>
-            <div className="text-xs font-bold text-indigo-200 uppercase tracking-wider">
-              Local Executive Data Detected
+            <div className="text-xs font-bold text-indigo-200 uppercase tracking-wider flex items-center gap-2">
+              <span>Local Executive Data Detected</span>
+              {isMigrating && (
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                  Live Syncing
+                </span>
+              )}
             </div>
             <div className="text-xs text-slate-300">
-              Found {local.opportunitiesCount} opportunities, {local.networkContactsCount} contacts, and {local.discoveryJobsCount} discovered roles stored locally. Sync to your secure cloud account?
+              {isMigrating ? (
+                <span className="font-mono text-indigo-200">
+                  {migrationProgress?.stepDescription || 'Syncing data to cloud...'}
+                </span>
+              ) : summary && summary.status !== 'success' ? (
+                <span className="text-amber-200 font-medium">
+                  Partial sync state: Candidate: {summary.candidateProfileMigrated ? '✓' : '—'} | Opps: {summary.opportunitiesCount} | Network: {summary.networkContactsCount} | Discovery: {summary.discoveryJobsCount}
+                </span>
+              ) : (
+                <span>
+                  Found {local.opportunitiesCount} opportunities, {local.networkContactsCount} contacts, and {local.discoveryJobsCount} discovered roles stored locally. Sync to your secure cloud account?
+                </span>
+              )}
             </div>
           </div>
         </div>
 
-        {summary ? (
+        {summary && summary.status === 'success' ? (
           <div className="flex items-center gap-2 text-xs text-emerald-300">
-            <span>✓ Cloud Sync Complete ({summary.opportunitiesCount} opps, {summary.networkContactsCount} contacts)</span>
+            <span>
+              ✓ Cloud Sync Verified ({summary.opportunitiesCount} opps, {summary.networkContactsCount} contacts, {summary.discoveryJobsCount} roles)
+            </span>
             <button
               onClick={dismissMigration}
               className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-white rounded text-xs transition-colors"
@@ -56,11 +87,15 @@ export function LocalCloudMigrationModal() {
             </button>
           </div>
         ) : (
-          <div className="flex items-center gap-2 shrink-0">
-            {error && <span className="text-xs text-rose-400">{error}</span>}
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            {error && (
+              <span className="text-xs text-rose-400 max-w-md truncate" title={error}>
+                ⚠️ {error}
+              </span>
+            )}
             <button
               disabled={isMigrating}
-              onClick={handleMigrate}
+              onClick={summary && summary.status !== 'success' ? handleRetry : handleMigrate}
               className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold shadow transition-colors flex items-center gap-1.5"
             >
               {isMigrating ? (
@@ -68,6 +103,8 @@ export function LocalCloudMigrationModal() {
                   <span className="animate-spin text-xs">🌀</span>
                   <span>Syncing...</span>
                 </>
+              ) : summary && summary.status !== 'success' ? (
+                <span>Retry Cloud Sync</span>
               ) : (
                 <span>Sync to Cloud Account</span>
               )}

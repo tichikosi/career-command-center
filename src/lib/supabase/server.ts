@@ -1,7 +1,7 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import {
   getSupabaseUrl,
-  getSupabaseAnonKey,
+  getSupabasePublicKey,
   getSupabaseServiceRoleKey,
   isSupabaseConfigured,
   isSupabaseServiceConfigured,
@@ -35,8 +35,8 @@ export function getSupabaseServerClient(): SupabaseClient | null {
   }
 
   const url = getSupabaseUrl()!;
-  const anonKey = getSupabaseAnonKey()!;
-  return createClient(url, anonKey, {
+  const publicKey = getSupabasePublicKey()!;
+  return createClient(url, publicKey, {
     auth: {
       persistSession: false,
     },

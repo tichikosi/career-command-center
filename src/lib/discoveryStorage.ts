@@ -348,3 +348,7 @@ export function promoteDiscoveredJobToOpportunity(job: DiscoveredJob): JobOpport
   updateDiscoveredJobStatus(job.id, 'promoted');
   return opp;
 }
+
+export function resetDiscoveryDemoData(): void {
+  saveDiscoveredJobs([]);
+}

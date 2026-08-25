@@ -28,6 +28,11 @@ async function handleCron(req: NextRequest) {
     if (!isBearerValid && !isHeaderValid) {
       return NextResponse.json({ error: 'Unauthorized cron request.' }, { status: 401 });
     }
+  } else if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json(
+      { error: 'CRON_SECRET must be configured in production to authorize scheduled jobs.' },
+      { status: 401 }
+    );
   }
 
   const startTime = Date.now();

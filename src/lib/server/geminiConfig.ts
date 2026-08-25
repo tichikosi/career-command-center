@@ -16,7 +16,7 @@ export function getGeminiModel(): string {
 }
 
 export function getGeminiFallbackModel(): string {
-  return process.env.GEMINI_FALLBACK_MODEL || DEFAULT_GEMINI_FALLBACK_MODEL;
+  return process.env.GEMINI_FAILOVER_MODEL || process.env.GEMINI_FALLBACK_MODEL || DEFAULT_GEMINI_FALLBACK_MODEL;
 }
 
 export function isGeminiConfigured(): boolean {

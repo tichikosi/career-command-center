@@ -13,6 +13,8 @@ import { NetworkContact } from '@/types/network';
 import { DiscoveredJob, DiscoveredJobStatus, DiscoveryHistoryItem } from '@/types/discovery';
 import { UserPreferences } from '@/types/auth';
 
+import { normalizeCandidateProfile } from '@/lib/storage';
+
 /**
  * Cloud Candidate Repository using Supabase PostgreSQL.
  */
@@ -26,7 +28,11 @@ export class CloudCandidateRepository implements ICandidateRepository {
     }
     const { data, error } = await query.maybeSingle();
 
-    if (error || !data) {
+    if (error) {
+      console.warn(`[CloudCandidateRepository] getProfile notice for user ${userId}:`, error.message);
+    }
+
+    if (!data) {
       return {
         id: `cand-${userId || 'default'}`,
         name: '',
@@ -47,43 +53,50 @@ export class CloudCandidateRepository implements ICandidateRepository {
       };
     }
 
-    return {
+    const mapped = {
       id: data.id,
-      name: data.name,
+      name: data.name || '',
       headline: data.headline || '',
       location: data.location || '',
       summary: data.summary || '',
-      targetRoles: data.target_roles || [],
-      targetIndustries: data.target_industries || [],
-      preferredLocations: data.preferred_locations || [],
-      coreCompetencies: data.core_competencies || [],
-      careerHistory: data.career_history || [],
-      education: data.education || [],
-      certifications: data.certifications || [],
-      evidenceItems: data.evidence_items || [],
-      sources: data.sources || [],
-      updatedAt: data.updated_at,
+      targetRoles: Array.isArray(data.target_roles) ? data.target_roles : [],
+      targetIndustries: Array.isArray(data.target_industries) ? data.target_industries : [],
+      preferredLocations: Array.isArray(data.preferred_locations) ? data.preferred_locations : [],
+      coreCompetencies: Array.isArray(data.core_competencies) ? data.core_competencies : [],
+      careerHistory: Array.isArray(data.career_history) ? data.career_history : [],
+      education: Array.isArray(data.education) ? data.education : [],
+      certifications: Array.isArray(data.certifications) ? data.certifications : [],
+      evidenceItems: Array.isArray(data.evidence_items) ? data.evidence_items : [],
+      sources: Array.isArray(data.sources) ? data.sources : [],
+      updatedAt: data.updated_at || new Date().toISOString(),
       dataMode: (data.data_mode as 'synthetic' | 'user') || 'user',
     };
+
+    return normalizeCandidateProfile(mapped);
   }
 
   async saveProfile(profile: CandidateProfile, userId?: string): Promise<CandidateProfile> {
+    const candidateId =
+      !profile.id || profile.id === 'cand-alex-vance-v1' || profile.id === 'alex-vance-synthetic'
+        ? `cand-${userId || Date.now()}`
+        : profile.id;
+
     const payload: Record<string, unknown> = {
-      id: profile.id,
-      name: profile.name,
-      headline: profile.headline,
-      location: profile.location,
-      summary: profile.summary,
-      target_roles: profile.targetRoles,
-      target_industries: profile.targetIndustries,
-      preferred_locations: profile.preferredLocations,
-      core_competencies: profile.coreCompetencies,
-      career_history: profile.careerHistory,
-      education: profile.education,
-      certifications: profile.certifications,
-      evidence_items: profile.evidenceItems,
-      sources: profile.sources,
-      data_mode: profile.dataMode,
+      id: candidateId,
+      name: (profile.name && profile.name.trim()) || 'Executive Candidate',
+      headline: profile.headline || null,
+      location: profile.location || null,
+      summary: profile.summary || null,
+      target_roles: Array.isArray(profile.targetRoles) ? profile.targetRoles : [],
+      target_industries: Array.isArray(profile.targetIndustries) ? profile.targetIndustries : [],
+      preferred_locations: Array.isArray(profile.preferredLocations) ? profile.preferredLocations : [],
+      core_competencies: Array.isArray(profile.coreCompetencies) ? profile.coreCompetencies : [],
+      career_history: Array.isArray(profile.careerHistory) ? profile.careerHistory : [],
+      education: Array.isArray(profile.education) ? profile.education : [],
+      certifications: Array.isArray(profile.certifications) ? profile.certifications : [],
+      evidence_items: Array.isArray(profile.evidenceItems) ? profile.evidenceItems : [],
+      sources: Array.isArray(profile.sources) ? profile.sources : [],
+      data_mode: profile.dataMode || 'user',
       updated_at: new Date().toISOString(),
     };
 
@@ -91,19 +104,40 @@ export class CloudCandidateRepository implements ICandidateRepository {
       payload.user_id = userId;
     }
 
-    await this.supabase.from('candidate_profiles').upsert(payload);
-    return profile;
+    const { error } = await this.supabase
+      .from('candidate_profiles')
+      .upsert(payload, { onConflict: 'id' });
+
+    if (error) {
+      console.error('[CloudCandidateRepository] saveProfile error:', {
+        table: 'candidate_profiles',
+        operation: 'upsert',
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+      });
+      throw new Error(`Failed to save candidate profile: ${error.message} (Code: ${error.code})`);
+    }
+
+    return { ...profile, id: candidateId };
   }
 
   async resetDemoData(userId?: string): Promise<void> {
     if (userId) {
-      await this.supabase.from('candidate_profiles').delete().eq('user_id', userId);
+      const { error } = await this.supabase.from('candidate_profiles').delete().eq('user_id', userId);
+      if (error) {
+        throw new Error(`Failed to reset candidate data: ${error.message}`);
+      }
     }
   }
 
   async clearData(userId?: string): Promise<void> {
     if (userId) {
-      await this.supabase.from('candidate_profiles').delete().eq('user_id', userId);
+      const { error } = await this.supabase.from('candidate_profiles').delete().eq('user_id', userId);
+      if (error) {
+        throw new Error(`Failed to clear candidate data: ${error.message}`);
+      }
     }
   }
 }
@@ -159,7 +193,11 @@ export class CloudOpportunityRepository implements IOpportunityRepository {
       query = query.eq('user_id', userId);
     }
     const { data, error } = await query;
-    if (error || !data) return [];
+    if (error) {
+      console.warn(`[CloudOpportunityRepository] getAll notice for user ${userId}:`, error.message);
+      return [];
+    }
+    if (!data) return [];
 
     return data.map((d: Record<string, unknown>) => this.mapRowToOpportunity(d));
   }
@@ -178,27 +216,50 @@ export class CloudOpportunityRepository implements IOpportunityRepository {
   async save(opp: JobOpportunity, userId?: string): Promise<JobOpportunity> {
     const payloadData: Record<string, unknown> = {
       id: opp.id,
-      company: opp.company,
-      title: opp.title,
-      location: opp.location,
-      compensation: opp.compensation,
-      source_url: opp.sourceUrl,
-      application_url: opp.applicationUrl,
-      raw_job_description: opp.rawJobDescription,
-      stage: opp.stage,
-      priority: opp.priority,
-      notes: opp.notes,
-      verification_status: opp.verificationStatus,
-      verified_at: opp.verifiedAt,
-      source_domain: opp.sourceDomain,
-      analysis_report: opp.analysis,
-      actions: opp.actions,
+      company: opp.company || 'Unknown Company',
+      title: opp.title || 'Untitled Opportunity',
+      location: opp.location || null,
+      compensation: opp.compensation || null,
+      source_url: opp.sourceUrl || null,
+      application_url: opp.applicationUrl || null,
+      raw_job_description: opp.rawJobDescription || null,
+      stage: opp.stage || 'Identified',
+      priority: opp.priority || 'Medium',
+      notes: opp.notes || null,
+      verification_status: opp.verificationStatus || null,
+      verified_at: (opp.verifiedAt && opp.verifiedAt.trim()) || null,
+      source_domain: opp.sourceDomain || null,
+      match_confidence: null,
+      discovery_relevance_score: opp.analysis?.overallFitScore || null,
+      analysis_report: opp.analysis || null,
       updated_at: new Date().toISOString(),
     };
     if (userId) {
       payloadData.user_id = userId;
     }
-    await this.supabase.from('opportunities').upsert(payloadData);
+
+    const { error } = await this.supabase
+      .from('opportunities')
+      .upsert(payloadData, { onConflict: 'id' });
+
+    if (error) {
+      console.error(`[CloudOpportunityRepository] save error on opp ${opp.id}:`, {
+        table: 'opportunities',
+        operation: 'upsert',
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+      });
+      throw new Error(`Failed to save opportunity ${opp.id} (${opp.company}): ${error.message} (Code: ${error.code})`);
+    }
+
+    if (opp.actions && opp.actions.length > 0) {
+      for (const act of opp.actions) {
+        await this.saveAction(opp.id, act, userId);
+      }
+    }
+
     return opp;
   }
 
@@ -256,22 +317,32 @@ export class CloudOpportunityRepository implements IOpportunityRepository {
     if (userId) {
       query = query.eq('user_id', userId);
     }
-    await query;
+    const { error } = await query;
+    if (error) {
+      throw new Error(`Failed to delete opportunity ${id}: ${error.message}`);
+    }
   }
 
   async saveAction(opportunityId: string, action: OpportunityAction, userId?: string): Promise<void> {
     const payload: Record<string, unknown> = {
-      id: action.id,
+      id: action.id || `act-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       opportunity_id: opportunityId,
-      text: action.text,
-      source: action.source,
-      stage: action.stage,
-      completed: action.completed,
-      completed_at: action.completedAt,
+      title: action.text || 'Action Item',
+      description: action.text || '',
+      stage: action.stage || null,
+      completed: Boolean(action.completed),
+      due_date: (action.completedAt && action.completedAt.trim()) || null,
       created_at: action.createdAt || new Date().toISOString(),
     };
     if (userId) payload.user_id = userId;
-    await this.supabase.from('opportunity_actions').upsert(payload);
+
+    const { error } = await this.supabase
+      .from('opportunity_actions')
+      .upsert(payload, { onConflict: 'id' });
+
+    if (error) {
+      console.warn(`[CloudOpportunityRepository] saveAction notice on ${action.id}:`, error.message);
+    }
   }
 }
 
@@ -287,20 +358,24 @@ export class CloudNetworkRepository implements INetworkRepository {
       query = query.eq('user_id', userId);
     }
     const { data, error } = await query;
-    if (error || !data) return [];
+    if (error) {
+      console.warn(`[CloudNetworkRepository] getContacts notice for user ${userId}:`, error.message);
+      return [];
+    }
+    if (!data) return [];
 
     return data.map((c) => ({
       id: c.id,
-      fullName: c.full_name || c.name || 'Unknown Contact',
+      fullName: c.name || c.full_name || 'Professional Contact',
       firstName: c.first_name,
       lastName: c.last_name,
       company: c.company || '',
       position: c.position || '',
       email: c.email || '',
       linkedInUrl: c.linkedin_url || '',
-      connectedOn: (c.connected_on as string) || (c.connection_date as string) || '',
-      source: ((c.source as string) as NetworkContact['source']) || 'manual',
-      importedAt: (c.imported_at as string) || (c.created_at as string) || new Date().toISOString(),
+      connectedOn: (c.connection_date as string) || (c.connected_on as string) || '',
+      source: ((c.source as string) as NetworkContact['source']) || 'generic_csv',
+      importedAt: (c.created_at as string) || new Date().toISOString(),
       notes: c.notes || '',
     }));
   }
@@ -313,25 +388,36 @@ export class CloudNetworkRepository implements INetworkRepository {
     for (let i = 0; i < contacts.length; i += chunkSize) {
       const chunk = contacts.slice(i, i + chunkSize).map((c) => {
         const row: Record<string, unknown> = {
-          id: c.id,
-          full_name: c.fullName,
-          first_name: c.firstName,
-          last_name: c.lastName,
-          company: c.company,
-          position: c.position,
-          email: c.email,
-          linkedin_url: c.linkedInUrl,
-          connected_on: c.connectedOn,
-          source: c.source,
-          imported_at: c.importedAt,
-          notes: c.notes,
+          id: (c.id && c.id.trim()) || `contact-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+          name: (c.fullName && c.fullName.trim()) || [c.firstName, c.lastName].filter(Boolean).join(' ') || 'Professional Contact',
+          company: (c.company && c.company.trim()) || 'Unknown Company',
+          position: c.position || null,
+          email: c.email || null,
+          linkedin_url: c.linkedInUrl || null,
+          connection_date: c.connectedOn || null,
+          notes: c.notes || null,
+          tags: [],
           updated_at: new Date().toISOString(),
         };
         if (userId) row.user_id = userId;
         return row;
       });
 
-      await this.supabase.from('network_contacts').upsert(chunk);
+      const { error } = await this.supabase
+        .from('network_contacts')
+        .upsert(chunk, { onConflict: 'id' });
+
+      if (error) {
+        console.error(`[CloudNetworkRepository] addContacts batch error (${i}-${i + chunk.length}):`, {
+          table: 'network_contacts',
+          operation: 'upsert',
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+        });
+        throw new Error(`Failed to batch insert network contacts (${i + 1}-${i + chunk.length}): ${error.message} (Code: ${error.code})`);
+      }
     }
 
     return contacts;
@@ -341,33 +427,34 @@ export class CloudNetworkRepository implements INetworkRepository {
     const payload: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
     };
-    if (updates.fullName !== undefined) payload.full_name = updates.fullName;
-    if (updates.firstName !== undefined) payload.first_name = updates.firstName;
-    if (updates.lastName !== undefined) payload.last_name = updates.lastName;
+    if (updates.fullName !== undefined) payload.name = updates.fullName;
     if (updates.company !== undefined) payload.company = updates.company;
     if (updates.position !== undefined) payload.position = updates.position;
     if (updates.email !== undefined) payload.email = updates.email;
     if (updates.linkedInUrl !== undefined) payload.linkedin_url = updates.linkedInUrl;
-    if (updates.connectedOn !== undefined) payload.connected_on = updates.connectedOn;
+    if (updates.connectedOn !== undefined) payload.connection_date = updates.connectedOn;
     if (updates.notes !== undefined) payload.notes = updates.notes;
 
     let query = this.supabase.from('network_contacts').update(payload).eq('id', id);
     if (userId) query = query.eq('user_id', userId);
-    const { data } = await query.select('*').maybeSingle();
+    const { data, error } = await query.select('*').maybeSingle();
+    if (error) {
+      throw new Error(`Failed to update network contact ${id}: ${error.message}`);
+    }
     if (!data) return null;
 
     return {
       id: data.id,
-      fullName: data.full_name || data.name || '',
+      fullName: data.name || data.full_name || '',
       firstName: data.first_name,
       lastName: data.last_name,
       company: data.company || '',
       position: data.position || '',
       email: data.email || '',
       linkedInUrl: data.linkedin_url || '',
-      connectedOn: data.connected_on || '',
-      source: ((data.source as string) as NetworkContact['source']) || 'manual',
-      importedAt: data.imported_at || data.created_at || new Date().toISOString(),
+      connectedOn: data.connection_date || data.connected_on || '',
+      source: ((data.source as string) as NetworkContact['source']) || 'generic_csv',
+      importedAt: data.created_at || new Date().toISOString(),
       notes: data.notes || '',
     };
   }
@@ -375,13 +462,19 @@ export class CloudNetworkRepository implements INetworkRepository {
   async deleteContact(id: string, userId?: string): Promise<void> {
     let query = this.supabase.from('network_contacts').delete().eq('id', id);
     if (userId) query = query.eq('user_id', userId);
-    await query;
+    const { error } = await query;
+    if (error) {
+      throw new Error(`Failed to delete network contact ${id}: ${error.message}`);
+    }
   }
 
   async clearAll(userId?: string): Promise<void> {
     let query = this.supabase.from('network_contacts').delete();
     if (userId) query = query.eq('user_id', userId);
-    await query;
+    const { error } = await query;
+    if (error) {
+      throw new Error(`Failed to clear network contacts: ${error.message}`);
+    }
   }
 }
 
@@ -395,7 +488,11 @@ export class CloudDiscoveryRepository implements IDiscoveryRepository {
     let query = this.supabase.from('discovery_jobs').select('*').order('discovered_at', { ascending: false });
     if (userId) query = query.eq('user_id', userId);
     const { data, error } = await query;
-    if (error || !data) return [];
+    if (error) {
+      console.warn(`[CloudDiscoveryRepository] getJobs notice for user ${userId}:`, error.message);
+      return [];
+    }
+    if (!data) return [];
 
     return data.map((d) => ({
       id: d.id,
@@ -427,45 +524,65 @@ export class CloudDiscoveryRepository implements IDiscoveryRepository {
 
   async saveJobs(jobs: DiscoveredJob[], userId?: string): Promise<void> {
     if (jobs.length === 0) return;
-    const rows = jobs.map((j) => {
-      const row: Record<string, unknown> = {
-        id: j.id,
-        title: j.title,
-        company: j.company,
-        location: j.location,
-        compensation: j.compensation,
-        job_url: j.jobUrl,
-        final_canonical_url: j.finalCanonicalUrl,
-        source: j.source,
-        discovered_at: j.discoveredAt,
-        status: j.status,
-        relevance_score: j.relevanceScore,
-        relevance_level: j.relevanceLevel,
-        relevance_reasons: j.relevanceReasons,
-        matched_preferences: j.matchedPreferences,
-        provider: j.provider,
-        grounding_used: j.groundingUsed,
-        verification_status: j.verificationStatus,
-        verified_at: j.verifiedAt,
-        source_confidence: j.sourceConfidence,
-        source_domain: j.sourceDomain,
-        failure_reason: j.failureReason,
-        snippet: j.snippet,
-        description: j.description,
-        raw_grounding_metadata: j.matchedGroundingChunks || null,
-        updated_at: new Date().toISOString(),
-      };
-      if (userId) row.user_id = userId;
-      return row;
-    });
+    const chunkSize = 100;
+    for (let i = 0; i < jobs.length; i += chunkSize) {
+      const chunk = jobs.slice(i, i + chunkSize).map((j) => {
+        const row: Record<string, unknown> = {
+          id: j.id || `job-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          title: j.title || 'Untitled Role',
+          company: j.company || 'Unknown Company',
+          location: j.location || null,
+          compensation: j.compensation || null,
+          job_url: j.jobUrl || null,
+          final_canonical_url: j.finalCanonicalUrl || null,
+          source: j.source || 'Google Search Grounding',
+          discovered_at: (j.discoveredAt && j.discoveredAt.trim()) || new Date().toISOString(),
+          status: j.status || 'new',
+          relevance_score: typeof j.relevanceScore === 'number' ? j.relevanceScore : 70,
+          relevance_level: j.relevanceLevel || 'High Potential',
+          relevance_reasons: Array.isArray(j.relevanceReasons) ? j.relevanceReasons : [],
+          matched_preferences: Array.isArray(j.matchedPreferences) ? j.matchedPreferences : [],
+          provider: j.provider || 'gemini-3.7-flash',
+          grounding_used: Boolean(j.groundingUsed),
+          verification_status: j.verificationStatus || 'grounded-unverified',
+          verified_at: (j.verifiedAt && j.verifiedAt.trim()) || null,
+          source_confidence: typeof j.sourceConfidence === 'number' ? j.sourceConfidence : null,
+          source_domain: j.sourceDomain || null,
+          failure_reason: j.failureReason || null,
+          snippet: j.snippet || null,
+          description: j.description || null,
+          raw_grounding_metadata: j.matchedGroundingChunks || null,
+          updated_at: new Date().toISOString(),
+        };
+        if (userId) row.user_id = userId;
+        return row;
+      });
 
-    await this.supabase.from('discovery_jobs').upsert(rows);
+      const { error } = await this.supabase
+        .from('discovery_jobs')
+        .upsert(chunk, { onConflict: 'id' });
+
+      if (error) {
+        console.error(`[CloudDiscoveryRepository] saveJobs batch error (${i}-${i + chunk.length}):`, {
+          table: 'discovery_jobs',
+          operation: 'upsert',
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+        });
+        throw new Error(`Failed to save discovery jobs (${i + 1}-${i + chunk.length}): ${error.message} (Code: ${error.code})`);
+      }
+    }
   }
 
   async updateStatus(id: string, status: DiscoveredJobStatus, userId?: string): Promise<void> {
     let query = this.supabase.from('discovery_jobs').update({ status, updated_at: new Date().toISOString() }).eq('id', id);
     if (userId) query = query.eq('user_id', userId);
-    await query;
+    const { error } = await query;
+    if (error) {
+      throw new Error(`Failed to update discovery job status ${id}: ${error.message}`);
+    }
   }
 
   async updateJob(id: string, updates: Partial<DiscoveredJob>, userId?: string): Promise<DiscoveredJob | null> {
@@ -482,7 +599,10 @@ export class CloudDiscoveryRepository implements IDiscoveryRepository {
 
     let query = this.supabase.from('discovery_jobs').update(payload).eq('id', id);
     if (userId) query = query.eq('user_id', userId);
-    const { data } = await query.select('*').maybeSingle();
+    const { data, error } = await query.select('*').maybeSingle();
+    if (error) {
+      throw new Error(`Failed to update discovery job ${id}: ${error.message}`);
+    }
     if (!data) return null;
 
     return {
@@ -523,8 +643,8 @@ export class CloudDiscoveryRepository implements IDiscoveryRepository {
       id: d.id,
       runAt: d.run_at,
       source: d.source,
-      provider: d.provider || 'Discovery Engine',
-      groundingEnabled: d.grounding_enabled ?? true,
+      provider: 'Google Search Grounding',
+      groundingEnabled: true,
       rolesDiscovered: d.roles_discovered,
       newRolesCount: d.new_roles_count,
       deduplicatedCount: d.deduplicated_count,
@@ -542,20 +662,32 @@ export class CloudDiscoveryRepository implements IDiscoveryRepository {
 
     const row: Record<string, unknown> = {
       id: item.id,
-      run_at: item.runAt,
-      source: item.source,
-      provider: item.provider,
-      grounding_enabled: item.groundingEnabled,
-      roles_discovered: item.rolesDiscovered,
-      new_roles_count: item.newRolesCount,
-      deduplicated_count: item.deduplicatedCount,
-      duration_ms: item.durationMs,
-      status: item.status,
-      error_details: item.errorDetails,
+      run_at: (item.runAt && item.runAt.trim()) || new Date().toISOString(),
+      source: item.source || 'Google Search Grounding',
+      roles_discovered: typeof item.rolesDiscovered === 'number' ? item.rolesDiscovered : 0,
+      new_roles_count: typeof item.newRolesCount === 'number' ? item.newRolesCount : 0,
+      deduplicated_count: typeof item.deduplicatedCount === 'number' ? item.deduplicatedCount : 0,
+      duration_ms: typeof item.durationMs === 'number' ? item.durationMs : 0,
+      status: item.status || 'success',
+      error_details: item.errorDetails || null,
     };
     if (userId) row.user_id = userId;
 
-    await this.supabase.from('discovery_history').insert(row);
+    const { error } = await this.supabase
+      .from('discovery_history')
+      .upsert(row, { onConflict: 'id' });
+
+    if (error) {
+      console.error('[CloudDiscoveryRepository] recordRun error:', {
+        table: 'discovery_history',
+        operation: 'upsert',
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+      });
+      throw new Error(`Failed to record discovery run: ${error.message} (Code: ${error.code})`);
+    }
     return item;
   }
 }
@@ -605,11 +737,25 @@ export class CloudPreferencesRepository implements IPreferencesRepository {
       discovery_cadence: prefs.discoveryCadence || current.discoveryCadence,
       email_notifications_enabled: prefs.emailNotificationsEnabled !== undefined ? prefs.emailNotificationsEnabled : current.emailNotificationsEnabled,
       migration_completed: prefs.migrationCompleted !== undefined ? prefs.migrationCompleted : current.migrationCompleted,
-      migration_completed_at: prefs.migrationCompletedAt || current.migrationCompletedAt,
+      migration_completed_at: (prefs.migrationCompletedAt && prefs.migrationCompletedAt.trim()) || (current.migrationCompletedAt && current.migrationCompletedAt.trim()) || null,
       updated_at: new Date().toISOString(),
     };
 
-    await this.supabase.from('user_preferences').upsert(payload);
+    const { error } = await this.supabase
+      .from('user_preferences')
+      .upsert(payload, { onConflict: 'user_id' });
+
+    if (error) {
+      console.error('[CloudPreferencesRepository] savePreferences error:', {
+        table: 'user_preferences',
+        operation: 'upsert',
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+      });
+      throw new Error(`Failed to save preferences: ${error.message} (Code: ${error.code})`);
+    }
 
     return {
       ...current,

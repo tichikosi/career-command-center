@@ -8,18 +8,26 @@ export const NETWORK_STORAGE_KEY = 'ccc_network_v1';
 export function normalizeNetworkContact(raw: unknown): NetworkContact {
   const item = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
 
+  const nameCandidate =
+    (typeof item.fullName === 'string' && item.fullName.trim()) ||
+    (typeof item.name === 'string' && item.name.trim()) ||
+    [typeof item.firstName === 'string' && item.firstName.trim(), typeof item.lastName === 'string' && item.lastName.trim()]
+      .filter(Boolean)
+      .join(' ') ||
+    'Professional Contact';
+
   return {
     id: typeof item.id === 'string' && item.id.trim() ? item.id.trim() : `contact-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
-    fullName: typeof item.fullName === 'string' ? item.fullName.trim() : 'Professional Contact',
+    fullName: nameCandidate,
     firstName: typeof item.firstName === 'string' ? item.firstName.trim() : undefined,
     lastName: typeof item.lastName === 'string' ? item.lastName.trim() : undefined,
     email: typeof item.email === 'string' ? item.email.trim() : undefined,
-    company: typeof item.company === 'string' ? item.company.trim() : undefined,
-    position: typeof item.position === 'string' ? item.position.trim() : undefined,
-    linkedInUrl: typeof item.linkedInUrl === 'string' ? item.linkedInUrl.trim() : undefined,
-    connectedOn: typeof item.connectedOn === 'string' ? item.connectedOn.trim() : undefined,
+    company: (typeof item.company === 'string' ? item.company.trim() : undefined) || '',
+    position: (typeof item.position === 'string' ? item.position.trim() : typeof item.title === 'string' ? item.title.trim() : undefined),
+    linkedInUrl: (typeof item.linkedInUrl === 'string' ? item.linkedInUrl.trim() : typeof item.linkedin_url === 'string' ? item.linkedin_url.trim() : undefined),
+    connectedOn: (typeof item.connectedOn === 'string' ? item.connectedOn.trim() : typeof item.connectionDate === 'string' ? item.connectionDate.trim() : typeof item.connection_date === 'string' ? item.connection_date.trim() : undefined),
     source: (item.source as NetworkContact['source']) || 'generic_csv',
-    importedAt: typeof item.importedAt === 'string' ? item.importedAt : new Date().toISOString(),
+    importedAt: typeof item.importedAt === 'string' ? item.importedAt : typeof item.created_at === 'string' ? item.created_at : new Date().toISOString(),
     notes: typeof item.notes === 'string' ? item.notes : undefined,
   };
 }
@@ -43,9 +51,9 @@ export function getNetworkContacts(): NetworkContact[] {
   }
 
   try {
-    const raw = localStorage.getItem(NETWORK_STORAGE_KEY);
+    const raw = window.localStorage.getItem(NETWORK_STORAGE_KEY);
     if (!raw) {
-      localStorage.setItem(NETWORK_STORAGE_KEY, JSON.stringify(FROZEN_INITIAL_CONTACTS));
+      window.localStorage.setItem(NETWORK_STORAGE_KEY, JSON.stringify(FROZEN_INITIAL_CONTACTS));
       cachedContacts = FROZEN_INITIAL_CONTACTS;
       inMemoryContacts = FROZEN_INITIAL_CONTACTS;
       return cachedContacts;
@@ -60,21 +68,19 @@ export function getNetworkContacts(): NetworkContact[] {
     cachedContacts = normalized;
     inMemoryContacts = normalized;
     return cachedContacts;
-  } catch (err) {
-    console.warn('[networkStorage] Failed to read contacts from storage:', err);
-    cachedContacts = inMemoryContacts;
-    return cachedContacts;
+  } catch {
+    return inMemoryContacts;
   }
 }
 
 export function saveNetworkContacts(contacts: NetworkContact[]): void {
-  const normalized = Object.freeze(contacts.map(normalizeNetworkContact)) as NetworkContact[];
-  cachedContacts = normalized;
-  inMemoryContacts = normalized;
+  const normalized = contacts.map(normalizeNetworkContact);
+  cachedContacts = Object.freeze(normalized) as NetworkContact[];
+  inMemoryContacts = cachedContacts;
 
   if (typeof window !== 'undefined') {
     try {
-      localStorage.setItem(NETWORK_STORAGE_KEY, JSON.stringify(normalized));
+      window.localStorage.setItem(NETWORK_STORAGE_KEY, JSON.stringify(normalized));
       window.dispatchEvent(new Event('ccc_network_updated'));
     } catch (err) {
       console.error('[networkStorage] Failed to save contacts:', err);

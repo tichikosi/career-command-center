@@ -4,8 +4,9 @@ import React, { createContext, useContext, useEffect, useState, ReactNode, useCa
 import { UserProfile, AuthSession, MigrationSummary } from '@/types/auth';
 import { getSupabaseClient } from '@/lib/supabase/client';
 import { isSupabaseConfigured } from '@/lib/supabase/config';
-import { inspectLocalData, migrateLocalDataToCloud } from '@/lib/storage/migrationService';
+import { inspectLocalData, migrateLocalDataToCloud, MigrationProgressUpdate } from '@/lib/storage/migrationService';
 import { getActiveStorageAdapter } from '@/lib/storage/repositoryManager';
+import { hydrateCloudStateForUser, resetStateOnSignOut } from '@/lib/storage/cloudHydration';
 
 interface AuthContextType {
   user: UserProfile | null;
@@ -13,11 +14,13 @@ interface AuthContextType {
   isLoading: boolean;
   isCloudConnected: boolean;
   migrationPending: boolean;
+  migrationProgress: MigrationProgressUpdate | null;
   signIn: (email: string, password: string) => Promise<{ error?: string }>;
   signUp: (email: string, password: string, fullName?: string) => Promise<{ error?: string }>;
   signOut: () => Promise<void>;
   runMigration: () => Promise<MigrationSummary>;
   dismissMigration: () => void;
+  resetMigrationProgress: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -39,15 +42,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<AuthSession | null>(null);
   const [isLoading, setIsLoading] = useState(() => Boolean(isSupabaseConfigured() && getSupabaseClient()));
   const [migrationPending, setMigrationPending] = useState(false);
+  const [migrationProgress, setMigrationProgress] = useState<MigrationProgressUpdate | null>(null);
 
-  const checkMigrationEligibility = useCallback((authenticatedUser: UserProfile) => {
+  const checkMigrationEligibility = useCallback(async (authenticatedUser: UserProfile) => {
     const local = inspectLocalData();
     if (local.hasLocalData) {
-      // Check if user already completed migration via localStorage flag
-      const completed = typeof window !== 'undefined' ? window.localStorage.getItem(`ccc_migrated_${authenticatedUser.id}`) : null;
+      const completed =
+        typeof window !== 'undefined'
+          ? window.localStorage.getItem(`ccc_migrated_${authenticatedUser.id}`)
+          : null;
       if (!completed) {
         setMigrationPending(true);
+      } else if (completed === 'true') {
+        // If flag was set previously but cloud has 0 records, clear stale flag so user can migrate
+        try {
+          const adapter = getActiveStorageAdapter();
+          const [opps, contacts] = await Promise.all([
+            adapter.opportunities.getAll(authenticatedUser.id),
+            adapter.network.getContacts(authenticatedUser.id),
+          ]);
+          if (opps.length === 0 && contacts.length === 0) {
+            window.localStorage.removeItem(`ccc_migrated_${authenticatedUser.id}`);
+            setMigrationPending(true);
+          }
+        } catch {
+          // Non-blocking check
+        }
       }
+    } else {
+      setMigrationPending(false);
     }
   }, []);
 
@@ -62,7 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     // Get current session
-    supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
+    supabase.auth.getSession().then(async ({ data: { session: currentSession } }) => {
       if (currentSession?.user) {
         const profile: UserProfile = {
           id: currentSession.user.id,
@@ -78,6 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           accessToken: currentSession.access_token,
           expiresAt: currentSession.expires_at,
         });
+        await hydrateCloudStateForUser(profile.id);
         checkMigrationEligibility(profile);
       } else {
         setUser(null);
@@ -89,7 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Listen to auth state changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    } = supabase.auth.onAuthStateChange(async (event, newSession) => {
       if (newSession?.user) {
         const profile: UserProfile = {
           id: newSession.user.id,
@@ -105,11 +129,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           accessToken: newSession.access_token,
           expiresAt: newSession.expires_at,
         });
+        await hydrateCloudStateForUser(profile.id);
         checkMigrationEligibility(profile);
       } else {
         setUser(null);
         setSession(null);
         setMigrationPending(false);
+        if (event === 'SIGNED_OUT') {
+          resetStateOnSignOut();
+        }
       }
       setIsLoading(false);
     });
@@ -168,6 +196,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setSession(null);
     setMigrationPending(false);
+    setMigrationProgress(null);
+    resetStateOnSignOut();
   };
 
   const runMigration = async (): Promise<MigrationSummary> => {
@@ -176,11 +206,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const adapter = getActiveStorageAdapter();
-    const summary = await migrateLocalDataToCloud(adapter, user.id);
+    const summary = await migrateLocalDataToCloud(adapter, user.id, (progress) => {
+      setMigrationProgress(progress);
+    });
 
-    if (summary.status === 'success' || summary.status === 'partial') {
+    if (summary.status === 'success') {
       window.localStorage.setItem(`ccc_migrated_${user.id}`, 'true');
       setMigrationPending(false);
+      await hydrateCloudStateForUser(user.id);
+    } else {
+      // Allow retry if failed or partial
+      setMigrationPending(true);
     }
 
     return summary;
@@ -193,6 +229,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setMigrationPending(false);
   };
 
+  const resetMigrationProgress = () => {
+    setMigrationProgress(null);
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -201,11 +241,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading,
         isCloudConnected,
         migrationPending,
+        migrationProgress,
         signIn,
         signUp,
         signOut,
         runMigration,
         dismissMigration,
+        resetMigrationProgress,
       }}
     >
       {children}

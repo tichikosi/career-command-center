@@ -38,7 +38,7 @@ export class MockCloudStorageAdapter implements IStorageAdapter {
         if (p) return JSON.parse(JSON.stringify(p));
         return {
           id: `cand-${userId}`,
-          name: 'Test Candidate',
+          name: '',
           headline: '',
           location: '',
           summary: '',
@@ -164,7 +164,10 @@ export class MockCloudStorageAdapter implements IStorageAdapter {
       addContacts: async (contacts: NetworkContact[], userId = 'default-user'): Promise<NetworkContact[]> => {
         const list = this.contactsMap.get(userId) || [];
         const clones: NetworkContact[] = JSON.parse(JSON.stringify(contacts));
-        const merged = [...list, ...clones];
+        const contactMap = new Map<string, NetworkContact>();
+        list.forEach((c) => contactMap.set(c.id, c));
+        clones.forEach((c) => contactMap.set(c.id, c));
+        const merged = Array.from(contactMap.values());
         this.contactsMap.set(userId, merged);
         return clones;
       },

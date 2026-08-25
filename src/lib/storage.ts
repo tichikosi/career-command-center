@@ -527,6 +527,26 @@ export function saveCandidateProfile(profile: CandidateProfile): CandidateProfil
 }
 
 /**
+ * Hydrates candidate profile from cloud storage into active memory cache and local storage.
+ * Ensures cloud candidate is authoritative and notifies subscribers immediately.
+ */
+export function hydrateCandidateProfileFromCloud(profile: CandidateProfile): void {
+  const normalized = normalizeCandidateProfile(profile);
+  cachedCandidateProfile = normalized;
+  inMemoryCandidateProfile = normalized;
+
+  if (isLocalStorageAvailable()) {
+    try {
+      window.localStorage.setItem(CCC_CANDIDATE_KEY, JSON.stringify(normalized));
+    } catch {
+      // Ignore
+    }
+  }
+
+  notifyCandidateStorageChange();
+}
+
+/**
  * Resets candidate data to original synthetic benchmark fixture.
  * Does NOT clear opportunities, theme, or settings.
  */
@@ -838,6 +858,26 @@ export function getOpportunities(): JobOpportunity[] {
     cachedOpportunities = inMemoryOpportunities;
     return cachedOpportunities;
   }
+}
+
+/**
+ * Hydrates opportunities from cloud storage into active memory cache and local storage.
+ * Ensures cloud opportunities are authoritative and notifies subscribers immediately.
+ */
+export function hydrateOpportunitiesFromCloud(opps: JobOpportunity[]): void {
+  const normalized = normalizeAll(opps);
+  cachedOpportunities = normalized;
+  inMemoryOpportunities = normalized;
+
+  if (isLocalStorageAvailable()) {
+    try {
+      window.localStorage.setItem(OPPORTUNITIES_KEY, JSON.stringify(normalized));
+    } catch {
+      // Ignore
+    }
+  }
+
+  notifyStorageChange();
 }
 
 export function getOpportunityById(id: string): JobOpportunity | undefined {
