@@ -5,6 +5,9 @@ import {
   INetworkRepository,
   IDiscoveryRepository,
   IPreferencesRepository,
+  IActivityRepository,
+  IInterviewPrepRepository,
+  IInterviewSessionRepository,
   IStorageAdapter,
 } from './interfaces';
 import { CandidateProfile } from '@/types/candidate';
@@ -12,8 +15,10 @@ import { JobOpportunity, PipelineStage, OpportunityAction, FitAnalysisReport } f
 import { NetworkContact } from '@/types/network';
 import { DiscoveredJob, DiscoveredJobStatus, DiscoveryHistoryItem } from '@/types/discovery';
 import { UserPreferences } from '@/types/auth';
+import { OpportunityActivity, InterviewPreparation, InterviewSession } from '@/types/interview';
 
 import { normalizeCandidateProfile } from '@/lib/storage';
+import { defaultLocalStorageAdapter } from './localStorageAdapter';
 
 /**
  * Cloud Candidate Repository using Supabase PostgreSQL.
@@ -872,6 +877,361 @@ export class CloudPreferencesRepository implements IPreferencesRepository {
 }
 
 /**
+ * Cloud Activity Repository using Supabase PostgreSQL.
+ */
+export class CloudActivityRepository implements IActivityRepository {
+  constructor(private supabase: SupabaseClient) {}
+
+  async getActivities(opportunityId: string, userId?: string): Promise<OpportunityActivity[]> {
+    try {
+      let query = this.supabase
+        .from('opportunity_activities')
+        .select('*')
+        .eq('opportunity_id', opportunityId)
+        .order('occurred_at', { ascending: false });
+
+      if (userId) query = query.eq('user_id', userId);
+
+      const { data, error } = await query;
+      if (error) {
+        return defaultLocalStorageAdapter.activities.getActivities(opportunityId, userId);
+      }
+      return (data || []).map(this.mapRow);
+    } catch {
+      return defaultLocalStorageAdapter.activities.getActivities(opportunityId, userId);
+    }
+  }
+
+  async getAllActivities(userId?: string): Promise<OpportunityActivity[]> {
+    try {
+      let query = this.supabase
+        .from('opportunity_activities')
+        .select('*')
+        .order('occurred_at', { ascending: false });
+
+      if (userId) query = query.eq('user_id', userId);
+
+      const { data, error } = await query;
+      if (error) {
+        return defaultLocalStorageAdapter.activities.getAllActivities(userId);
+      }
+      return (data || []).map(this.mapRow);
+    } catch {
+      return defaultLocalStorageAdapter.activities.getAllActivities(userId);
+    }
+  }
+
+  async recordActivity(activity: Omit<OpportunityActivity, 'id' | 'createdAt' | 'updatedAt'>, userId?: string): Promise<OpportunityActivity> {
+    const id = `act-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const now = new Date().toISOString();
+    const payload = {
+      id,
+      user_id: userId || 'default-user',
+      opportunity_id: activity.opportunityId,
+      activity_type: activity.activityType,
+      title: activity.title,
+      notes: activity.notes || null,
+      occurred_at: activity.occurredAt,
+      scheduled_for: activity.scheduledFor || null,
+      contact_id: activity.contactId || null,
+      contact_name: activity.contactName || null,
+      source: activity.source,
+      metadata: activity.metadata || null,
+      created_at: now,
+      updated_at: now,
+    };
+
+    try {
+      const { error } = await this.supabase.from('opportunity_activities').insert(payload);
+      if (error) {
+        return defaultLocalStorageAdapter.activities.recordActivity(activity, userId);
+      }
+      return this.mapRow({ ...payload });
+    } catch {
+      return defaultLocalStorageAdapter.activities.recordActivity(activity, userId);
+    }
+  }
+
+  async updateActivity(id: string, updates: Partial<OpportunityActivity>, userId?: string): Promise<OpportunityActivity | null> {
+    const mapped: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (updates.title !== undefined) mapped.title = updates.title;
+    if (updates.notes !== undefined) mapped.notes = updates.notes;
+    if (updates.activityType !== undefined) mapped.activity_type = updates.activityType;
+    if (updates.occurredAt !== undefined) mapped.occurred_at = updates.occurredAt;
+    if (updates.scheduledFor !== undefined) mapped.scheduled_for = updates.scheduledFor;
+    if (updates.contactId !== undefined) mapped.contact_id = updates.contactId;
+    if (updates.contactName !== undefined) mapped.contact_name = updates.contactName;
+    if (updates.metadata !== undefined) mapped.metadata = updates.metadata;
+
+    try {
+      let query = this.supabase.from('opportunity_activities').update(mapped).eq('id', id);
+      if (userId) query = query.eq('user_id', userId);
+      const { data, error } = await query.select('*').single();
+      if (error || !data) {
+        return defaultLocalStorageAdapter.activities.updateActivity(id, updates, userId);
+      }
+      return this.mapRow(data);
+    } catch {
+      return defaultLocalStorageAdapter.activities.updateActivity(id, updates, userId);
+    }
+  }
+
+  async deleteActivity(id: string, userId?: string): Promise<void> {
+    try {
+      let query = this.supabase.from('opportunity_activities').delete().eq('id', id);
+      if (userId) query = query.eq('user_id', userId);
+      const { error } = await query;
+      if (error) {
+        await defaultLocalStorageAdapter.activities.deleteActivity(id, userId);
+      }
+    } catch {
+      await defaultLocalStorageAdapter.activities.deleteActivity(id, userId);
+    }
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private mapRow(row: any): OpportunityActivity {
+    return {
+      id: row.id,
+      opportunityId: row.opportunity_id,
+      activityType: row.activity_type,
+      title: row.title,
+      notes: row.notes || undefined,
+      occurredAt: row.occurred_at,
+      scheduledFor: row.scheduled_for || undefined,
+      contactId: row.contact_id || undefined,
+      contactName: row.contact_name || undefined,
+      source: row.source || 'user',
+      metadata: row.metadata || undefined,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+}
+
+/**
+ * Cloud Interview Prep Repository using Supabase PostgreSQL.
+ */
+export class CloudInterviewPrepRepository implements IInterviewPrepRepository {
+  constructor(private supabase: SupabaseClient) {}
+
+  async getActivePrep(opportunityId: string, userId?: string): Promise<InterviewPreparation | null> {
+    try {
+      let query = this.supabase
+        .from('interview_preparations')
+        .select('*')
+        .eq('opportunity_id', opportunityId)
+        .eq('is_active', true)
+        .order('generated_at', { ascending: false })
+        .limit(1);
+
+      if (userId) query = query.eq('user_id', userId);
+      const { data, error } = await query;
+      if (error || !data || data.length === 0) {
+        return defaultLocalStorageAdapter.interviewPrep.getActivePrep(opportunityId, userId);
+      }
+      return this.mapRow(data[0]);
+    } catch {
+      return defaultLocalStorageAdapter.interviewPrep.getActivePrep(opportunityId, userId);
+    }
+  }
+
+  async savePrep(prep: InterviewPreparation, userId?: string): Promise<InterviewPreparation> {
+    const targetUserId = userId || 'default-user';
+    const payload = {
+      id: prep.id,
+      user_id: targetUserId,
+      opportunity_id: prep.opportunityId,
+      candidate_profile_id: prep.candidateProfileId || null,
+      prep_data: prep,
+      requested_model: prep.requestedModel,
+      actual_model: prep.actualModel,
+      execution_mode: prep.executionMode,
+      candidate_updated_at: prep.candidateUpdatedAt || null,
+      opportunity_updated_at: prep.opportunityUpdatedAt || null,
+      is_active: true,
+      is_potentially_stale: prep.isPotentiallyStale || false,
+      staleness_reason: prep.stalenessReason || null,
+      generated_at: prep.generatedAt,
+      created_at: new Date().toISOString(),
+    };
+
+    try {
+      // Deactivate previous active preps for this opportunity
+      await this.supabase
+        .from('interview_preparations')
+        .update({ is_active: false })
+        .eq('opportunity_id', prep.opportunityId)
+        .eq('user_id', targetUserId)
+        .eq('is_active', true);
+
+      const { error } = await this.supabase.from('interview_preparations').upsert(payload, { onConflict: 'id' });
+      if (error) {
+        return defaultLocalStorageAdapter.interviewPrep.savePrep(prep, userId);
+      }
+      return prep;
+    } catch {
+      return defaultLocalStorageAdapter.interviewPrep.savePrep(prep, userId);
+    }
+  }
+
+  async getHistory(opportunityId: string, userId?: string): Promise<InterviewPreparation[]> {
+    try {
+      let query = this.supabase
+        .from('interview_preparations')
+        .select('*')
+        .eq('opportunity_id', opportunityId)
+        .order('generated_at', { ascending: false });
+
+      if (userId) query = query.eq('user_id', userId);
+      const { data, error } = await query;
+      if (error || !data) {
+        return defaultLocalStorageAdapter.interviewPrep.getHistory(opportunityId, userId);
+      }
+      return data.map(this.mapRow);
+    } catch {
+      return defaultLocalStorageAdapter.interviewPrep.getHistory(opportunityId, userId);
+    }
+  }
+
+  async deletePrep(id: string, userId?: string): Promise<void> {
+    try {
+      let query = this.supabase.from('interview_preparations').delete().eq('id', id);
+      if (userId) query = query.eq('user_id', userId);
+      const { error } = await query;
+      if (error) {
+        await defaultLocalStorageAdapter.interviewPrep.deletePrep(id, userId);
+      }
+    } catch {
+      await defaultLocalStorageAdapter.interviewPrep.deletePrep(id, userId);
+    }
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private mapRow(row: any): InterviewPreparation {
+    if (row.prep_data && typeof row.prep_data === 'object') {
+      return {
+        ...row.prep_data,
+        id: row.id,
+        isActive: row.is_active,
+        isPotentiallyStale: row.is_potentially_stale,
+        stalenessReason: row.staleness_reason || undefined,
+      };
+    }
+    return {
+      id: row.id,
+      opportunityId: row.opportunity_id,
+      candidateProfileId: row.candidate_profile_id || '',
+      executiveRoleBrief: '', candidatePositioning: '', strongestFitThemes: [],
+      materialGaps: [], whyThisCompany: '', whyThisRole: '', whyYou: '',
+      questionsToAsk: [], first90DaysPoints: [], riskFlags: [],
+      questions: [], storyBank: [],
+      companyIntelligence: { available: false },
+      compensationResearch: { available: false },
+      readinessScore: { overall: 0, dimensions: { roleUnderstanding: 0, candidatePositioning: 0, storyPreparation: 0, gapMitigation: 0, companyKnowledge: 0, questionReadiness: 0 } },
+      generatedAt: row.generated_at, requestedModel: row.requested_model,
+      actualModel: row.actual_model, executionMode: row.execution_mode,
+      candidateUpdatedAt: row.candidate_updated_at || '',
+      opportunityUpdatedAt: row.opportunity_updated_at || '',
+      isActive: row.is_active,
+    };
+  }
+}
+
+/**
+ * Cloud Interview Session Repository using Supabase PostgreSQL.
+ */
+export class CloudInterviewSessionRepository implements IInterviewSessionRepository {
+  constructor(private supabase: SupabaseClient) {}
+
+  async getSessions(opportunityId: string, userId?: string): Promise<InterviewSession[]> {
+    try {
+      let query = this.supabase
+        .from('interview_sessions')
+        .select('*')
+        .eq('opportunity_id', opportunityId)
+        .order('created_at', { ascending: false });
+
+      if (userId) query = query.eq('user_id', userId);
+      const { data, error } = await query;
+      if (error || !data) {
+        return defaultLocalStorageAdapter.interviewSessions.getSessions(opportunityId, userId);
+      }
+      return data.map(this.mapRow);
+    } catch {
+      return defaultLocalStorageAdapter.interviewSessions.getSessions(opportunityId, userId);
+    }
+  }
+
+  async saveSession(session: InterviewSession, userId?: string): Promise<InterviewSession> {
+    const payload = {
+      id: session.id,
+      user_id: userId || 'default-user',
+      opportunity_id: session.opportunityId,
+      prep_id: session.prepId || null,
+      mode: session.mode,
+      difficulty: session.difficulty,
+      transcript: session.exchanges,
+      overall_score: session.overallScore,
+      summary: session.summary || null,
+      strengths: session.strengths,
+      improvement_areas: session.improvementAreas,
+      requested_model: session.requestedModel,
+      actual_model: session.actualModel,
+      execution_mode: session.executionMode,
+      started_at: session.startedAt,
+      completed_at: session.completedAt || null,
+      created_at: session.createdAt,
+    };
+
+    try {
+      const { error } = await this.supabase.from('interview_sessions').upsert(payload, { onConflict: 'id' });
+      if (error) {
+        return defaultLocalStorageAdapter.interviewSessions.saveSession(session, userId);
+      }
+      return session;
+    } catch {
+      return defaultLocalStorageAdapter.interviewSessions.saveSession(session, userId);
+    }
+  }
+
+  async deleteSession(id: string, userId?: string): Promise<void> {
+    try {
+      let query = this.supabase.from('interview_sessions').delete().eq('id', id);
+      if (userId) query = query.eq('user_id', userId);
+      const { error } = await query;
+      if (error) {
+        await defaultLocalStorageAdapter.interviewSessions.deleteSession(id, userId);
+      }
+    } catch {
+      await defaultLocalStorageAdapter.interviewSessions.deleteSession(id, userId);
+    }
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private mapRow(row: any): InterviewSession {
+    return {
+      id: row.id,
+      opportunityId: row.opportunity_id,
+      prepId: row.prep_id || undefined,
+      mode: row.mode || 'practice',
+      difficulty: row.difficulty || 'standard',
+      exchanges: Array.isArray(row.transcript) ? row.transcript : [],
+      overallScore: row.overall_score || 0,
+      summary: row.summary || '',
+      strengths: Array.isArray(row.strengths) ? row.strengths : [],
+      improvementAreas: Array.isArray(row.improvement_areas) ? row.improvement_areas : [],
+      requestedModel: row.requested_model || '',
+      actualModel: row.actual_model || '',
+      executionMode: row.execution_mode || 'gemini',
+      startedAt: row.started_at,
+      completedAt: row.completed_at || undefined,
+      createdAt: row.created_at,
+    };
+  }
+}
+
+/**
  * Factory creating complete Cloud Storage Adapter given Supabase client.
  */
 export function createCloudStorageAdapter(supabase: SupabaseClient): IStorageAdapter {
@@ -880,6 +1240,9 @@ export function createCloudStorageAdapter(supabase: SupabaseClient): IStorageAda
   const networkRepo = new CloudNetworkRepository(supabase);
   const discRepo = new CloudDiscoveryRepository(supabase);
   const prefsRepo = new CloudPreferencesRepository(supabase);
+  const activityRepo = new CloudActivityRepository(supabase);
+  const prepRepo = new CloudInterviewPrepRepository(supabase);
+  const sessionRepo = new CloudInterviewSessionRepository(supabase);
 
   return {
     candidates: candidateRepo,
@@ -887,5 +1250,8 @@ export function createCloudStorageAdapter(supabase: SupabaseClient): IStorageAda
     network: networkRepo,
     discovery: discRepo,
     preferences: prefsRepo,
+    activities: activityRepo,
+    interviewPrep: prepRepo,
+    interviewSessions: sessionRepo,
   };
 }

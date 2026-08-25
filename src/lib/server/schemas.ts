@@ -187,3 +187,75 @@ export const ResumeExtractionSchema = z.object({
 });
 
 export type ResumeExtractionResult = z.infer<typeof ResumeExtractionSchema>;
+
+// ---------------------------------------------------------------------------
+// V3.3 Interview War Room & Application Intelligence Schemas
+// ---------------------------------------------------------------------------
+
+export const InterviewPrepRequestSchema = z.object({
+  opportunity: z.object({
+    id: z.string(),
+    title: z.string(),
+    company: z.string(),
+    location: z.string().optional(),
+    compensation: z.string().optional(),
+    rawJobDescription: z.string().default(''),
+    stage: z.string().default('Identified'),
+    updatedAt: z.string().optional(),
+  }),
+  candidateSnapshot: CandidateProfileSnapshotSchema,
+  analysisReport: FitAnalysisReportSchema.optional(),
+});
+
+export type InterviewPrepRequestBody = z.input<typeof InterviewPrepRequestSchema>;
+
+export const MockQuestionsRequestSchema = z.object({
+  opportunity: z.object({
+    id: z.string(),
+    title: z.string(),
+    company: z.string(),
+    rawJobDescription: z.string().default(''),
+  }),
+  candidateSnapshot: CandidateProfileSnapshotSchema,
+  difficulty: z.enum(['standard', 'challenging', 'executive']).default('standard'),
+  mode: z.enum(['practice', 'timed', 'full']).default('practice'),
+});
+
+export const MockEvaluationRequestSchema = z.object({
+  question: z.string().min(1),
+  questionCategory: z.string().default('behavioral'),
+  candidateAnswer: z.string().min(1, 'Candidate answer is required'),
+  opportunity: z.object({
+    id: z.string(),
+    title: z.string(),
+    company: z.string(),
+    rawJobDescription: z.string().default(''),
+  }),
+  candidateSnapshot: CandidateProfileSnapshotSchema,
+  difficulty: z.enum(['standard', 'challenging', 'executive']).default('standard'),
+});
+
+export const FollowUpComposeRequestSchema = z.object({
+  opportunity: z.object({
+    id: z.string(),
+    title: z.string(),
+    company: z.string(),
+    stage: z.string().default('Identified'),
+  }),
+  candidateSnapshot: CandidateProfileSnapshotSchema,
+  actionType: z.enum([
+    'thank_you',
+    'recruiter_follow_up',
+    'post_interview_follow_up',
+    'referral_nudge',
+    'application_check_in',
+    'networking_outreach',
+    'negotiation_response',
+    'general_follow_up',
+  ]),
+  tone: z.enum(['professional', 'warm', 'assertive']).default('professional'),
+  recipientRole: z.string().optional(),
+  recipientName: z.string().optional(),
+  keyPoints: z.array(z.string()).optional(),
+  customContext: z.string().optional(),
+});

@@ -3,6 +3,7 @@ import { JobOpportunity, PipelineStage, OpportunityAction, FitAnalysisReport } f
 import { NetworkContact } from '@/types/network';
 import { DiscoveredJob, DiscoveredJobStatus, DiscoveryHistoryItem } from '@/types/discovery';
 import { UserPreferences } from '@/types/auth';
+import { OpportunityActivity, InterviewPreparation, InterviewSession } from '@/types/interview';
 
 export interface ICandidateRepository {
   getProfile(userId?: string): Promise<CandidateProfile> | CandidateProfile;
@@ -51,6 +52,27 @@ export interface IPreferencesRepository {
   savePreferences(prefs: Partial<UserPreferences>, userId?: string): Promise<UserPreferences> | UserPreferences;
 }
 
+export interface IActivityRepository {
+  getActivities(opportunityId: string, userId?: string): Promise<OpportunityActivity[]>;
+  getAllActivities(userId?: string): Promise<OpportunityActivity[]>;
+  recordActivity(activity: Omit<OpportunityActivity, 'id' | 'createdAt' | 'updatedAt'>, userId?: string): Promise<OpportunityActivity>;
+  updateActivity(id: string, updates: Partial<OpportunityActivity>, userId?: string): Promise<OpportunityActivity | null>;
+  deleteActivity(id: string, userId?: string): Promise<void>;
+}
+
+export interface IInterviewPrepRepository {
+  getActivePrep(opportunityId: string, userId?: string): Promise<InterviewPreparation | null>;
+  savePrep(prep: InterviewPreparation, userId?: string): Promise<InterviewPreparation>;
+  getHistory(opportunityId: string, userId?: string): Promise<InterviewPreparation[]>;
+  deletePrep(id: string, userId?: string): Promise<void>;
+}
+
+export interface IInterviewSessionRepository {
+  getSessions(opportunityId: string, userId?: string): Promise<InterviewSession[]>;
+  saveSession(session: InterviewSession, userId?: string): Promise<InterviewSession>;
+  deleteSession(id: string, userId?: string): Promise<void>;
+}
+
 export interface IStorageAdapter {
   candidates: ICandidateRepository;
   opportunities: IOpportunityRepository;
@@ -58,4 +80,7 @@ export interface IStorageAdapter {
   discovery: IDiscoveryRepository;
   analysis?: IAnalysisRepository;
   preferences?: IPreferencesRepository;
+  activities?: IActivityRepository;
+  interviewPrep?: IInterviewPrepRepository;
+  interviewSessions?: IInterviewSessionRepository;
 }

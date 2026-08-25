@@ -29,9 +29,17 @@ import {
   saveOpportunity,
 } from '@/lib/storage';
 import { useOpportunity } from '@/lib/useOpportunities';
+import { useActivities } from '@/lib/useActivities';
+import { useInterviewData } from '@/lib/useInterviewData';
+import { useNetwork } from '@/lib/networkStorage';
+import { findMatchingContacts } from '@/lib/networkMatcher';
 import { countPendingActions, mergeActionsForStage } from '@/lib/stageActions';
 import { validateUrl } from '@/lib/dateUtils';
 import { getAnalysisEngine } from '@/lib/engine';
+import { ActivityTimeline } from '@/components/interview/ActivityTimeline';
+import { InterviewWarRoom } from '@/components/interview/InterviewWarRoom';
+import { MockInterviewPanel } from '@/components/interview/MockInterviewPanel';
+import { FollowUpEngineView } from '@/components/interview/FollowUpEngineView';
 
 export default function AnalysisResultsPage() {
   const router = useRouter();
@@ -45,12 +53,34 @@ export default function AnalysisResultsPage() {
       : null;
 
   const opportunity = useOpportunity(idFromPath);
+  const { contacts } = useNetwork();
+  const matchingContacts = opportunity ? findMatchingContacts(opportunity.company, contacts) : [];
+
+  const {
+    activities,
+    isLoading: activitiesLoading,
+    addActivity,
+    editActivity,
+    removeActivity,
+  } = useActivities(opportunity?.id);
+
+  const {
+    activePrep,
+    prepHistory,
+    sessions,
+    isLoading: prepLoading,
+    savePrep,
+    deletePrep,
+    saveSession,
+    deleteSession,
+  } = useInterviewData(opportunity?.id || '');
 
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'qualifications' | 'evidence' | 'prep' | 'action-plan'
+    'overview' | 'qualifications' | 'evidence' | 'prep' | 'action-plan' | 'timeline' | 'war-room' | 'mock' | 'follow-up'
   >('overview');
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isReanalyzing, setIsReanalyzing] = useState(false);
+  const [isGeneratingPrep, setIsGeneratingPrep] = useState(false);
 
   if (!opportunity) {
     return (
@@ -87,8 +117,63 @@ export default function AnalysisResultsPage() {
   );
   const resolvedAchievements = mounted ? resolveEvidenceForReportCitations(analysis, profile, uniqueCitationIds) : [];
 
-  const handleStageChange = (newStage: PipelineStage) => {
+  const handleStageChange = async (newStage: PipelineStage) => {
+    const oldStage = opportunity.stage;
     updateOpportunityStage(opportunity.id, newStage);
+
+    if (oldStage !== newStage) {
+      await addActivity({
+        opportunityId: opportunity.id,
+        activityType: 'stage_change',
+        title: `Pipeline Stage Changed to ${newStage}`,
+        notes: `Advanced opportunity status from ${oldStage} to ${newStage}.`,
+        occurredAt: new Date().toISOString(),
+        source: 'user',
+        metadata: { oldStage, newStage },
+      });
+    }
+  };
+
+  const handleGeneratePrep = async () => {
+    if (!opportunity || isGeneratingPrep) return;
+    setIsGeneratingPrep(true);
+    try {
+      const res = await fetch('/api/interview/prep', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          opportunity: {
+            id: opportunity.id,
+            title: opportunity.title,
+            company: opportunity.company,
+            location: opportunity.location,
+            compensation: opportunity.compensation,
+            rawJobDescription: opportunity.rawJobDescription,
+            stage: opportunity.stage,
+            updatedAt: opportunity.updatedAt,
+          },
+          candidateSnapshot: profile,
+          analysisReport: opportunity.analysis,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success && data.prep) {
+        await savePrep(data.prep);
+        await addActivity({
+          opportunityId: opportunity.id,
+          activityType: 'prep_generated',
+          title: 'Interview War Room Briefing Generated',
+          notes: `Synthesized executive positioning, ${data.prep.questions?.length || 0} questions, and ${data.prep.storyBank?.length || 0} grounded STAR stories. Readiness: ${data.prep.readinessScore?.overall || 0}%.`,
+          occurredAt: new Date().toISOString(),
+          source: 'user',
+        });
+      }
+    } catch (err) {
+      console.error('[AnalysisResultsPage] Generate prep error:', err);
+    } finally {
+      setIsGeneratingPrep(false);
+    }
   };
 
   const handleDelete = () => {
@@ -308,6 +393,10 @@ export default function AnalysisResultsPage() {
             { key: 'evidence', label: `Evidence & Objections (${resolvedAchievements.length})` },
             { key: 'prep', label: 'Interview Preparation' },
             { key: 'action-plan', label: `Action Plan${pendingVisibleActionCount > 0 ? ` (${pendingVisibleActionCount})` : ''}` },
+            { key: 'timeline', label: `Activity & Timeline${activities.length > 0 ? ` (${activities.length})` : ''}` },
+            { key: 'war-room', label: `Interview War Room${activePrep ? ' (Ready)' : ''}` },
+            { key: 'mock', label: `Mock Interview${sessions.length > 0 ? ` (${sessions.length})` : ''}` },
+            { key: 'follow-up', label: 'Smart Follow-Up' },
           ] as const
         ).map(({ key, label }) => (
           <button
@@ -666,6 +755,57 @@ export default function AnalysisResultsPage() {
         <OpportunityDetailsForm
           opportunity={opportunity}
           onSave={() => {}}
+        />
+      )}
+
+      {/* Tab 6: Activity & Timeline */}
+      {activeTab === 'timeline' && (
+        <ActivityTimeline
+          opportunityId={opportunity.id}
+          opportunityCompany={opportunity.company}
+          activities={activities}
+          matchingContacts={matchingContacts}
+          onAddActivity={addActivity}
+          onEditActivity={editActivity}
+          onDeleteActivity={removeActivity}
+          isLoading={activitiesLoading}
+        />
+      )}
+
+      {/* Tab 7: Interview War Room */}
+      {activeTab === 'war-room' && (
+        <InterviewWarRoom
+          opportunity={opportunity}
+          candidate={profile}
+          analysisReport={opportunity.analysis}
+          activePrep={activePrep}
+          prepHistory={prepHistory}
+          onGeneratePrep={handleGeneratePrep}
+          onSelectHistoricalPrep={(selected) => savePrep(selected)}
+          isGenerating={isGeneratingPrep}
+        />
+      )}
+
+      {/* Tab 8: Mock Interview */}
+      {activeTab === 'mock' && (
+        <MockInterviewPanel
+          opportunity={opportunity}
+          candidate={profile}
+          activePrep={activePrep}
+          sessions={sessions}
+          onSaveSession={saveSession}
+          onDeleteSession={deleteSession}
+          onRecordActivity={addActivity}
+        />
+      )}
+
+      {/* Tab 9: Smart Follow-Up */}
+      {activeTab === 'follow-up' && (
+        <FollowUpEngineView
+          opportunity={opportunity}
+          candidate={profile}
+          activities={activities}
+          onRecordActivity={addActivity}
         />
       )}
 

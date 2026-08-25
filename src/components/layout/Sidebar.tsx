@@ -60,7 +60,7 @@ export function Sidebar() {
 
       <div className="mt-auto pt-6 border-t border-slate-200/80 dark:border-slate-800 px-3 text-xs text-slate-500 dark:text-slate-400">
         <p className="font-medium text-slate-700 dark:text-slate-300">Career Command Center</p>
-        <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">Version 3.2 (Cloud & Automation)</p>
+        <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">Version 3.3 (Interview Intelligence)</p>
       </div>
     </aside>
   );
