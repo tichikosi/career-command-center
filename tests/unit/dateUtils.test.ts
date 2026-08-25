@@ -12,6 +12,8 @@ import {
   isValidDateString,
   formatShortDate,
   validateUrl,
+  formatMonthYear,
+  formatRoleDateRange,
 } from '@/lib/dateUtils';
 
 describe('isValidDateString', () => {
@@ -123,5 +125,44 @@ describe('validateUrl', () => {
 
   it('trims whitespace', () => {
     expect(validateUrl('  https://example.com  ')).toBe('https://example.com');
+  });
+});
+
+describe('formatMonthYear', () => {
+  it('formats YYYY-MM into human-readable Month Year', () => {
+    expect(formatMonthYear('2019-06')).toBe('Jun 2019');
+    expect(formatMonthYear('2022-12')).toBe('Dec 2022');
+    expect(formatMonthYear('2024-01')).toBe('Jan 2024');
+  });
+
+  it('formats YYYY-MM-DD into human-readable Month Year', () => {
+    expect(formatMonthYear('2020-03-15')).toBe('Mar 2020');
+  });
+
+  it('preserves plain year or text representation', () => {
+    expect(formatMonthYear('2020')).toBe('2020');
+    expect(formatMonthYear('Present')).toBe('Present');
+    expect(formatMonthYear('')).toBe('');
+    expect(formatMonthYear(undefined)).toBe('');
+  });
+});
+
+describe('formatRoleDateRange', () => {
+  it('formats short internship dates (YYYY-MM to YYYY-MM)', () => {
+    expect(formatRoleDateRange('2019-06', '2019-08')).toBe('Jun 2019 — Aug 2019');
+  });
+
+  it('formats multi-year roles cleanly', () => {
+    expect(formatRoleDateRange('2020', '2025')).toBe('2020 — 2025');
+  });
+
+  it('formats current active roles with Present', () => {
+    expect(formatRoleDateRange('2022-01', 'Present', true)).toBe('Jan 2022 — Present');
+    expect(formatRoleDateRange('2022', undefined, true)).toBe('2022 — Present');
+  });
+
+  it('handles missing or partial dates safely', () => {
+    expect(formatRoleDateRange('2023')).toBe('2023 — Present');
+    expect(formatRoleDateRange(undefined, undefined)).toBe('');
   });
 });

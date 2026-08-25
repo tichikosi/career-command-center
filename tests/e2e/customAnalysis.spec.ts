@@ -45,6 +45,6 @@ test.describe('Role Analysis E2E', () => {
     // Should navigate to analysis results page for custom role
     await page.waitForURL(/\/analysis\/opp-custom-.+/);
     await expect(page.locator('h1')).toContainText('Director of Revenue Operations');
-    await expect(page.getByText(/Version 1 Simplified Heuristic Analysis/i)).toBeVisible();
+    await expect(page.getByText('Overall Fit', { exact: true })).toBeVisible();
   });
 });

@@ -294,4 +294,132 @@ describe('countPendingActions', () => {
     // Same as original - the Applied action shouldn't affect Identified count
     expect(countIdentified).toBe(countPendingActions(allActions, 'Identified'));
   });
+
+  describe('Action Plan Tab Count Canonical Lifecycle (8-step verification)', () => {
+    it('1. 8 pending visible actions yields pending count of 8', () => {
+      // 5 stage actions + 3 role actions = 8 visible actions, all incomplete
+      const stageActs = buildStageActions('Identified'); // 5
+      const roleActs = buildRoleActions('opp-test', ['Action 1', 'Action 2', 'Action 3']); // 3
+      const actions = [...stageActs, ...roleActs];
+
+      const pending = countPendingActions(actions, 'Identified');
+      expect(pending).toBe(8);
+
+      const tabLabel = `Action Plan${pending > 0 ? ` (${pending})` : ''}`;
+      expect(tabLabel).toBe('Action Plan (8)');
+    });
+
+    it('2 & 3. complete 2 actions -> pending count becomes 6 (both tab badge and inner remaining count derive identically)', () => {
+      const stageActs = buildStageActions('Identified');
+      const roleActs = buildRoleActions('opp-test', ['Action 1', 'Action 2', 'Action 3']);
+      const actions = [...stageActs, ...roleActs];
+
+      // Mark 2 complete
+      actions[0].completed = true;
+      actions[1].completed = true;
+
+      const pending = countPendingActions(actions, 'Identified');
+      expect(pending).toBe(6);
+
+      const tabLabel = `Action Plan${pending > 0 ? ` (${pending})` : ''}`;
+      const innerRemainingText = `${pending} items remaining`;
+
+      expect(tabLabel).toBe('Action Plan (6)');
+      expect(innerRemainingText).toBe('6 items remaining');
+    });
+
+    it('4. reopen 1 action -> pending count becomes 7', () => {
+      const stageActs = buildStageActions('Identified');
+      const roleActs = buildRoleActions('opp-test', ['Action 1', 'Action 2', 'Action 3']);
+      const actions = [...stageActs, ...roleActs];
+
+      actions[0].completed = true;
+      actions[1].completed = true;
+
+      // Reopen 1
+      actions[0].completed = false;
+
+      const pending = countPendingActions(actions, 'Identified');
+      expect(pending).toBe(7);
+
+      const tabLabel = `Action Plan${pending > 0 ? ` (${pending})` : ''}`;
+      expect(tabLabel).toBe('Action Plan (7)');
+    });
+
+    it('5. completed actions remain visible in getDisplayActions', () => {
+      const stageActs = buildStageActions('Identified');
+      const roleActs = buildRoleActions('opp-test', ['Action 1']);
+      const actions = [...stageActs, ...roleActs];
+
+      actions[0].completed = true;
+
+      const visible = getDisplayActions(actions, 'Identified');
+      expect(visible.length).toBe(6); // All 6 remain visible
+      expect(visible.find(a => a.id === actions[0].id)?.completed).toBe(true);
+    });
+
+    it('6. stage changes recalculate correctly for new stage templates', () => {
+      const oppId = 'opp-stage-change';
+      const roleActs = ['Role act 1'];
+      const initial = mergeActionsForStage(oppId, 'Identified', roleActs, []);
+
+      // In Identified: 5 stage + 1 role = 6
+      expect(countPendingActions(initial, 'Identified')).toBe(6);
+
+      // Move to Screening (5 stage actions + 1 role action = 6)
+      const inScreening = mergeActionsForStage(oppId, 'Screening', roleActs, initial);
+      expect(countPendingActions(inScreening, 'Screening')).toBe(6);
+
+      // Complete 3 screening actions
+      const screeningStageActions = inScreening.filter(a => a.stage === 'Screening');
+      screeningStageActions[0].completed = true;
+      screeningStageActions[1].completed = true;
+      screeningStageActions[2].completed = true;
+
+      expect(countPendingActions(inScreening, 'Screening')).toBe(3);
+    });
+
+    it('7. custom action increments when added and decrements when completed', () => {
+      const actions = buildStageActions('Identified'); // 5
+      expect(countPendingActions(actions, 'Identified')).toBe(5);
+
+      const customId = generateCustomActionId();
+      const withCustom: OpportunityAction[] = [
+        ...actions,
+        {
+          id: customId,
+          text: 'Custom preparation task',
+          source: 'custom',
+          completed: false,
+        },
+      ];
+
+      expect(countPendingActions(withCustom, 'Identified')).toBe(6);
+
+      // Complete custom action
+      withCustom[5].completed = true;
+      expect(countPendingActions(withCustom, 'Identified')).toBe(5);
+    });
+
+    it('8. persistence survives reload / state round-trips', () => {
+      const oppId = 'opp-persist-test';
+      const roleActs = ['Follow-up with recruiter'];
+      const initial = mergeActionsForStage(oppId, 'Identified', roleActs, []);
+
+      // Mark stage action 0 and role action 0 as completed
+      const modified = initial.map((a) => {
+        if (a.id === 'stage:Identified:0' || a.id === `role:${oppId}:0`) {
+          return { ...a, completed: true, completedAt: '2026-08-14T10:00:00.000Z' };
+        }
+        return a;
+      });
+
+      // Simulate re-hydration / page reload via mergeActionsForStage
+      const rehydrated = mergeActionsForStage(oppId, 'Identified', roleActs, modified);
+
+      expect(countPendingActions(rehydrated, 'Identified')).toBe(4); // 5 - 1 stage + 1 - 1 role = 4 pending
+      expect(rehydrated.find((a) => a.id === 'stage:Identified:0')?.completed).toBe(true);
+      expect(rehydrated.find((a) => a.id === `role:${oppId}:0`)?.completed).toBe(true);
+    });
+  });
 });

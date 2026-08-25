@@ -25,8 +25,12 @@ export function sanitizeInput(rawText: string): SanitizationResult {
     .replace(/<style\b[^<]*>([\s\S]*?)<\/style>/gi, '')
     .replace(/<[^>]+>/g, ' ');
 
-  // 2. Normalize whitespace and newlines
-  cleaned = cleaned.replace(/\s+/g, ' ').trim();
+  // 2. Normalize whitespace while preserving line breaks
+  cleaned = cleaned
+    .replace(/[^\S\r\n]+/g, ' ')
+    .replace(/\r/g, '')
+    .replace(/\n\s*\n+/g, '\n\n')
+    .trim();
 
   // 3. Check character ceiling (15,000 max)
   if (cleaned.length > 15000) {

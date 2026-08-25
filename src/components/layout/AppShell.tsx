@@ -6,13 +6,15 @@ import { Sidebar } from './Sidebar';
 import { MobileNav } from './MobileNav';
 import { StorageWarningNotice } from '@/components/ui/Notice';
 import { GlobalSearchModal } from '@/components/ui/GlobalSearchModal';
+import { LocalCloudMigrationModal } from '@/components/LocalCloudMigrationModal';
+import { AuthProvider } from '@/context/AuthContext';
 import { isLocalStorageAvailable } from '@/lib/storage';
 
 const emptySubscribe = () => () => {};
 const getStorageSnapshot = () => !isLocalStorageAvailable();
 const getStorageServerSnapshot = () => false;
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+function AppShellContent({ children }: { children: React.ReactNode }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
 
@@ -53,6 +55,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 font-sans antialiased selection:bg-indigo-100 selection:text-indigo-900 dark:selection:bg-slate-800 dark:selection:text-slate-100 transition-colors">
+      <LocalCloudMigrationModal />
       <Header
         onOpenMobileNav={() => setMobileNavOpen(true)}
         onOpenSearch={() => setIsSearchOpen(true)}
@@ -68,5 +71,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </main>
       </div>
     </div>
+  );
+}
+
+export function AppShell({ children }: { children: React.ReactNode }) {
+  return (
+    <AuthProvider>
+      <AppShellContent>{children}</AppShellContent>
+    </AuthProvider>
   );
 }

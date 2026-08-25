@@ -13,6 +13,9 @@ import { AnalysisFreshnessBadge } from '@/components/ui/AnalysisFreshnessBadge';
 import { useCandidateProfile } from '@/lib/useCandidate';
 import { getAnalysisFreshness } from '@/lib/candidateAdapter';
 import { Modal } from '@/components/ui/Modal';
+import { KanbanBoard } from '@/components/kanban/KanbanBoard';
+import { useNetwork } from '@/lib/networkStorage';
+import { findMatchingContacts } from '@/lib/networkMatcher';
 import {
   IconSearch,
   IconRefresh,
@@ -23,7 +26,11 @@ import {
   IconSortDesc,
   IconSortNeutral,
   IconExternalLink,
+  IconKanban,
+  IconNetwork,
+  IconPlus,
 } from '@/components/icons';
+import { AddOpportunityModal } from '@/components/opportunities/AddOpportunityModal';
 import {
   JobOpportunity,
   PipelineStage,
@@ -162,8 +169,10 @@ function OpportunitiesContent() {
 
   const opportunities = useOpportunities();
   const { profile, mounted } = useCandidateProfile();
+  const { contacts: networkContacts } = useNetwork();
   const [settings] = useState(() => getUISettings());
 
+  const [viewMode, setViewMode] = useState<'table' | 'board'>(settings.viewMode ?? 'table');
   const [searchTerm, setSearchTerm] = useState(settings.searchTerm ?? '');
   const [stageFilter, setStageFilter] = useState<string>(
     initialStageFilter !== 'All' ? initialStageFilter : (settings.stageFilter ?? 'All')
@@ -185,6 +194,7 @@ function OpportunitiesContent() {
   const [editingNotesOpp, setEditingNotesOpp] = useState<JobOpportunity | null>(null);
   const [notesDraft, setNotesDraft] = useState('');
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  const [isAddOpportunityModalOpen, setIsAddOpportunityModalOpen] = useState(false);
 
   useEffect(() => {
     saveUISettings({
@@ -195,8 +205,9 @@ function OpportunitiesContent() {
       priorityFilter,
       followUpFilter,
       searchTerm,
+      viewMode,
     });
-  }, [sortField, sortDirection, stageFilter, recommendationFilter, priorityFilter, followUpFilter, searchTerm]);
+  }, [sortField, sortDirection, stageFilter, recommendationFilter, priorityFilter, followUpFilter, searchTerm, viewMode]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -262,7 +273,42 @@ function OpportunitiesContent() {
             Manage recruiting conversations, update stages, and review fit reports.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* View Mode Toggle */}
+          <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
+            <button
+              type="button"
+              onClick={() => setViewMode('table')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 ${
+                viewMode === 'table'
+                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-xs'
+                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-100'
+              }`}
+            >
+              <span>Table</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('board')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 ${
+                viewMode === 'board'
+                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-xs'
+                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-100'
+              }`}
+            >
+              <IconKanban className="w-3.5 h-3.5" />
+              <span>Board</span>
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setIsAddOpportunityModalOpen(true)}
+            className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-xs font-bold text-white rounded-lg shadow-xs transition-colors flex items-center gap-1.5"
+          >
+            <IconPlus className="w-3.5 h-3.5" />
+            <span>+ Add Opportunity</span>
+          </button>
           <button
             onClick={() => setIsResetModalOpen(true)}
             className="px-3.5 py-2 text-xs font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors flex items-center gap-1.5"
@@ -366,13 +412,20 @@ function OpportunitiesContent() {
         </div>
       </Card>
 
-      {/* Table Container */}
-      <Card padding="none" className="overflow-hidden">
-        {/* Mobile Horizontal Scroll Cue */}
-        <div className="sm:hidden px-4 py-2 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 text-[11px] font-medium text-slate-600 dark:text-slate-300 flex items-center justify-between">
-          <span>Scroll horizontally to view all columns</span>
-          <span aria-hidden="true">&rarr;</span>
-        </div>
+      {/* Board or Table View */}
+      {viewMode === 'board' ? (
+        <KanbanBoard
+          opportunities={filteredOpportunities}
+          networkContacts={networkContacts}
+          onStageChange={handleStageChange}
+        />
+      ) : (
+        <Card padding="none" className="overflow-hidden">
+          {/* Mobile Horizontal Scroll Cue */}
+          <div className="sm:hidden px-4 py-2 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 text-[11px] font-medium text-slate-600 dark:text-slate-300 flex items-center justify-between">
+            <span>Scroll horizontally to view all columns</span>
+            <span aria-hidden="true">&rarr;</span>
+          </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs text-slate-700 dark:text-slate-300 min-w-[900px]">
@@ -419,14 +472,45 @@ function OpportunitiesContent() {
                   const followUpStatus = classifyFollowUpDate(opp.followUpDate);
                   const companyUrl = validateUrl(opp.companyWebsiteUrl ?? '');
                   const appUrl = validateUrl(opp.applicationUrl ?? '');
+                  const matchedNetwork = findMatchingContacts(opp.company, networkContacts);
 
                   return (
                     <tr key={opp.id} className="group hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors">
                       {/* Sticky First Column */}
                       <td className="sticky left-0 bg-white dark:bg-slate-900 group-hover:bg-slate-50 dark:group-hover:bg-slate-800 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] py-3.5 pl-6 pr-4 transition-colors">
                         <div className="font-semibold text-slate-900 dark:text-slate-100 text-sm">{opp.title}</div>
-                        <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-1.5">
+                        <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
                           <span>{opp.company}</span>
+                          {opp.verificationStatus === 'verified-live' && (
+                            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900">
+                              ⚡ Live
+                            </span>
+                          )}
+                          {opp.verificationStatus === 'curated' && (
+                            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-900">
+                              📁 Demo
+                            </span>
+                          )}
+                          {opp.verificationStatus === 'unverified-legacy' && (
+                            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                              ⚠️ Unverified
+                            </span>
+                          )}
+                          {opp.verificationStatus === 'expired' && (
+                            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-900">
+                              ✕ Expired
+                            </span>
+                          )}
+                          {matchedNetwork.length > 0 && (
+                            <Link
+                              href={`/network?opportunityId=${opp.id}`}
+                              title={`${matchedNetwork.length} Network Contact${matchedNetwork.length > 1 ? 's' : ''} at ${opp.company}`}
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/50 text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 hover:underline"
+                            >
+                              <IconNetwork className="w-2.5 h-2.5" />
+                              <span>{matchedNetwork.length} contact{matchedNetwork.length > 1 ? 's' : ''}</span>
+                            </Link>
+                          )}
                           {companyUrl && (
                             <a
                               href={companyUrl}
@@ -572,6 +656,7 @@ function OpportunitiesContent() {
           </table>
         </div>
       </Card>
+      )}
 
       {/* Modals */}
       <Modal
@@ -616,6 +701,15 @@ function OpportunitiesContent() {
           </div>
         </Modal>
       )}
+
+      {/* Create Opportunity Modal */}
+      <AddOpportunityModal
+        isOpen={isAddOpportunityModalOpen}
+        onClose={() => setIsAddOpportunityModalOpen(false)}
+        onCreated={() => {
+          setIsAddOpportunityModalOpen(false);
+        }}
+      />
     </div>
   );
 }

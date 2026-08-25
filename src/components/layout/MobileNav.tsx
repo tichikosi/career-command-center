@@ -6,17 +6,23 @@ import { usePathname } from 'next/navigation';
 import {
   IconDashboard,
   IconAnalyze,
+  IconCompass,
   IconPipeline,
+  IconNetwork,
   IconProfile,
   IconAbout,
+  IconShield,
   IconClose,
 } from '@/components/icons';
 
 const NAV_ITEMS = [
   { label: 'Dashboard', href: '/', icon: IconDashboard },
   { label: 'Analyze a Role', href: '/analyze', icon: IconAnalyze },
+  { label: 'Discover Roles', href: '/discover', icon: IconCompass },
   { label: 'Opportunities', href: '/opportunities', icon: IconPipeline },
+  { label: 'Network', href: '/network', icon: IconNetwork },
   { label: 'Candidate Profile', href: '/profile', icon: IconProfile },
+  { label: 'Cloud & Account', href: '/login', icon: IconShield },
   { label: 'About the Project', href: '/about', icon: IconAbout },
 ];
 
@@ -78,9 +84,9 @@ export function MobileNav({ isOpen, onClose }: MobileNavProps) {
         </nav>
 
         <div className="mt-auto pt-6 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400">
-          <p className="font-medium text-slate-800 dark:text-slate-200">Alex Vance Profile Active</p>
+          <p className="font-medium text-slate-800 dark:text-slate-200">Career Command Center</p>
           <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">
-            Version 1.1B — Synthetic Demo
+            Version 3.2 (Cloud & Automation)
           </p>
         </div>
       </div>

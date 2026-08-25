@@ -106,6 +106,18 @@ export interface FitAnalysisReport {
   analysisNotice?: string;
   candidateProvenance?: CandidateProvenance;
   evidenceSnapshot?: EvidenceItem[];
+  analysisEngine?: 'gemini' | 'deterministic';
+  modelUsed?: string;
+  latencyMs?: number;
+
+  // V2.0 Resilience and Execution Metadata
+  requestedModel?: string;
+  actualModel?: string;
+  engineType?: 'gemini' | 'deterministic';
+  attemptCount?: number;
+  failoverOccurred?: boolean;
+  fallbackOccurred?: boolean;
+  sanitizedFailureReason?: string;
 }
 
 export interface JobOpportunity {
@@ -129,6 +141,11 @@ export interface JobOpportunity {
   applicationUrl?: string;
   actions: OpportunityAction[];  // Unified structured action list
   archivedReason?: string;
+
+  // V3.1 / V3.2 Provenance and Trust metadata
+  verificationStatus?: 'verified-live' | 'grounded-unverified' | 'needs-verification' | 'curated' | 'unverified-legacy' | 'expired' | 'unreachable' | 'unsupported';
+  verifiedAt?: string;
+  sourceDomain?: string;
 }
 
 export interface OpportunityUISettings {
@@ -140,4 +157,5 @@ export interface OpportunityUISettings {
   followUpFilter: FollowUpStatus | 'All';
   searchTerm: string;
   themeMode: ThemeMode; // V1.1B
+  viewMode?: 'table' | 'board'; // V2.0 Kanban CRM
 }

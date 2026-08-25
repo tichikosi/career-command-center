@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useOpportunities } from '@/lib/useOpportunities';
 import { useCandidateProfile } from '@/lib/useCandidate';
+import { useNetwork } from '@/lib/networkStorage';
 import { buildSearchIndex, searchGlobalIndex, SearchGroup, SearchIndexItem } from '@/lib/search';
 import { IconSearch, IconClose, IconArrowRight } from '@/components/icons';
 
@@ -14,6 +15,7 @@ interface Props {
 
 const GROUP_LABELS: Record<SearchGroup, string> = {
   opportunity: 'Opportunities',
+  network: 'Professional Network',
   analysis: 'Analysis Reports & Evidence',
   profile: 'Candidate Profile',
   navigation: 'Application Pages',
@@ -23,6 +25,7 @@ export function GlobalSearchModal({ isOpen, onClose }: Props) {
   const router = useRouter();
   const opportunities = useOpportunities();
   const { profile, mounted } = useCandidateProfile();
+  const { contacts: networkContacts } = useNetwork();
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
 
@@ -30,28 +33,17 @@ export function GlobalSearchModal({ isOpen, onClose }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
-  // Render-time state adjustment when query changes (replaces useEffect setSelectedIndex)
-  const [prevQuery, setPrevQuery] = useState(query);
-  if (prevQuery !== query) {
-    setPrevQuery(query);
+  const handleClose = useCallback(() => {
+    setQuery('');
     setSelectedIndex(0);
-  }
+    onClose();
+  }, [onClose]);
 
-  // Render-time state adjustment when modal closes (replaces useEffect setQuery/setSelectedIndex)
-  const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
-  if (prevIsOpen !== isOpen) {
-    setPrevIsOpen(isOpen);
-    if (!isOpen) {
-      setQuery('');
-      setSelectedIndex(0);
-    }
-  }
-
-  // Build search index reactively from current opportunities and active candidate profile when mounted
+  // Build search index reactively from current opportunities, active candidate profile, and network contacts
   const activeProfile = mounted ? profile : undefined;
   const index = useMemo(
-    () => buildSearchIndex(opportunities, activeProfile),
-    [opportunities, activeProfile]
+    () => buildSearchIndex(opportunities, activeProfile, networkContacts),
+    [opportunities, activeProfile, networkContacts]
   );
 
   // Perform search query
@@ -82,7 +74,7 @@ export function GlobalSearchModal({ isOpen, onClose }: Props) {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
-        onClose();
+        handleClose();
       } else if (e.key === 'ArrowDown') {
         e.preventDefault();
         if (results.length > 0) {
@@ -98,14 +90,14 @@ export function GlobalSearchModal({ isOpen, onClose }: Props) {
         if (results.length > 0 && results[selectedIndex]) {
           const target = results[selectedIndex];
           router.push(target.href);
-          onClose();
+          handleClose();
         }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, results, selectedIndex, router, onClose]);
+  }, [isOpen, results, selectedIndex, router, handleClose]);
 
   // Ensure active highlighted item is visible in scroll container
   useEffect(() => {
@@ -125,10 +117,10 @@ export function GlobalSearchModal({ isOpen, onClose }: Props) {
       acc[item.group].push(item);
       return acc;
     },
-    { opportunity: [], analysis: [], profile: [], navigation: [] }
+    { opportunity: [], network: [], analysis: [], profile: [], navigation: [] }
   );
 
-  const groupKeys: SearchGroup[] = ['opportunity', 'analysis', 'profile', 'navigation'];
+  const groupKeys: SearchGroup[] = ['opportunity', 'network', 'analysis', 'profile', 'navigation'];
 
   let globalItemCounter = 0;
 
@@ -164,7 +156,7 @@ export function GlobalSearchModal({ isOpen, onClose }: Props) {
             </button>
           )}
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="px-2 py-1 text-xs font-semibold text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 bg-slate-100 dark:bg-slate-800 rounded"
           >
             ESC

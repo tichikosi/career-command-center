@@ -4,11 +4,48 @@ import { fixtureRole2SalesOps } from './fixtures/role-2-sales-ops';
 import { fixtureRole3DataEngineer } from './fixtures/role-3-data-engineer';
 import { fixtureRole4ChiefOfStaff } from './fixtures/role-4-chief-of-staff';
 import { fixtureRole5StrategyLead } from './fixtures/role-5-strategy-lead';
+import { fixtureQaTestGoogle } from './fixtures/qa-test-google';
 
 // Note: actions arrays are populated by normalizeOpportunity() in storage.ts
 // at first read. Fixtures define the canonical workflow data only.
 
 export const initialOpportunities: JobOpportunity[] = [
+  {
+    id: 'opp-qa-test-google-ai-strategy',
+    title: 'Director, AI Strategy & Operations',
+    company: 'Google',
+    location: 'Mountain View, CA (Hybrid)',
+    compensation: '$250,000 - $310,000 + Equity',
+    sourceUrl: 'https://careers.google.com/jobs/results/qa-test-director-ai-strategy',
+    companyWebsiteUrl: 'https://about.google',
+    applicationUrl: 'https://careers.google.com/jobs/results/qa-test-director-ai-strategy',
+    rawJobDescription: `[QA TEST OPPORTUNITY]
+Role: Director, AI Strategy & Operations at Google
+Location: Mountain View, CA (Hybrid)
+
+About the Role:
+Google is seeking an experienced Director of AI Strategy & Operations to lead strategic AI enablement, cross-functional operational rhythms, and enterprise AI solution alignment across product and go-to-market teams.
+
+Responsibilities:
+- Drive enterprise AI strategy, operational planning, and executive decision frameworks.
+- Lead cross-functional alignment between engineering, product, marketing, and sales operations.
+- Develop scalable operational toolsets and AI-powered workflow automation.
+- Foster executive stakeholder relationships and manage strategic program budgets.
+
+Requirements:
+- 10+ years in technology strategy, operations, or enterprise GTM leadership.
+- Demonstrated success scaling AI initiatives and operational frameworks.
+- Strong executive communication and matrixed stakeholder management experience.`,
+    createdAt: '2026-08-14T20:00:00.000Z',
+    updatedAt: '2026-08-14T20:00:00.000Z',
+    stage: 'Identified',
+    analysis: fixtureQaTestGoogle,
+    priority: 'High',
+    notes: '[QA TEST OPPORTUNITY] Created for human verification of Network-to-Opportunity matching with real Google network contacts.',
+    followUpDate: '2026-08-21',
+    archivedReason: '',
+    actions: [],
+  },
   {
     id: 'opp-role-1-ai-strategy',
     title: 'Director of AI Strategy & Operations',

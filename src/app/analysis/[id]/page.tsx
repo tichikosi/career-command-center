@@ -20,14 +20,18 @@ import { useCandidateProfile } from '@/lib/useCandidate';
 import {
   resolveEvidenceForReportCitations,
   getAnalysisFreshness,
+  toAnalysisCandidate,
+  getAnalysisCandidateSubtitle,
 } from '@/lib/candidateAdapter';
 import {
   updateOpportunityStage,
   deleteOpportunity,
+  saveOpportunity,
 } from '@/lib/storage';
 import { useOpportunity } from '@/lib/useOpportunities';
-import { getDisplayActions } from '@/lib/stageActions';
+import { countPendingActions, mergeActionsForStage } from '@/lib/stageActions';
 import { validateUrl } from '@/lib/dateUtils';
+import { getAnalysisEngine } from '@/lib/engine';
 
 export default function AnalysisResultsPage() {
   const router = useRouter();
@@ -46,6 +50,7 @@ export default function AnalysisResultsPage() {
     'overview' | 'qualifications' | 'evidence' | 'prep' | 'action-plan'
   >('overview');
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isReanalyzing, setIsReanalyzing] = useState(false);
 
   if (!opportunity) {
     return (
@@ -91,11 +96,50 @@ export default function AnalysisResultsPage() {
     router.push('/opportunities');
   };
 
+  const handleReanalyze = async () => {
+    if (!opportunity || isReanalyzing) return;
+    setIsReanalyzing(true);
+    try {
+      const engine = getAnalysisEngine('gemini');
+      const freshReport = await engine.analyzeRole(
+        {
+          jobTitle: opportunity.title,
+          company: opportunity.company,
+          jobDescription: opportunity.rawJobDescription,
+          location: opportunity.location,
+          compensation: opportunity.compensation,
+          sourceUrl: opportunity.sourceUrl,
+          sampleRoleId: opportunity.id.startsWith('opp-role-') ? opportunity.id : undefined,
+        },
+        toAnalysisCandidate(profile)
+      );
+
+      const updatedActions = mergeActionsForStage(
+        opportunity.id,
+        opportunity.stage,
+        freshReport.nextActions,
+        opportunity.actions
+      );
+
+      const updatedOpportunity = {
+        ...opportunity,
+        analysis: freshReport,
+        actions: updatedActions,
+        updatedAt: new Date().toISOString(),
+      };
+
+      saveOpportunity(updatedOpportunity);
+      window.location.reload();
+    } catch (err) {
+      console.error('Failed to re-analyze opportunity:', err);
+      setIsReanalyzing(false);
+    }
+  };
+
   const companyUrl = validateUrl(opportunity.companyWebsiteUrl ?? '');
   const appUrl = validateUrl(opportunity.applicationUrl ?? '');
 
-  const visibleActions = getDisplayActions(opportunity.actions, opportunity.stage);
-  const visibleActionCount = visibleActions.length;
+  const pendingVisibleActionCount = countPendingActions(opportunity.actions, opportunity.stage);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-200">
@@ -142,15 +186,16 @@ export default function AnalysisResultsPage() {
               Historical Analysis (Candidate Profile Changed)
             </span>
             <p className="text-amber-800 dark:text-amber-300">
-              Historical analysis generated using {analysis.candidateProvenance?.candidateName || 'Alex Vance'}. The active candidate profile has changed. Re-run the analysis to evaluate the current profile.
+              Historical analysis generated using {analysis.candidateProvenance?.candidateName || 'a previous candidate profile'}. Active candidate profile is {profile.name || 'Current Profile'}. Re-run the analysis to evaluate the active candidate.
             </p>
           </div>
-          <Link
-            href="/analyze"
-            className="px-3.5 py-2 bg-amber-900 dark:bg-amber-100 text-white dark:text-amber-900 font-semibold rounded-lg text-xs shrink-0 w-fit"
+          <button
+            onClick={handleReanalyze}
+            disabled={isReanalyzing}
+            className="px-3.5 py-2 bg-amber-900 dark:bg-amber-100 text-white dark:text-amber-900 font-semibold rounded-lg text-xs shrink-0 w-fit hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center gap-1.5"
           >
-            Re-analyze Role
-          </Link>
+            {isReanalyzing ? 'Re-analyzing Role...' : 'Re-analyze for Active Candidate'}
+          </button>
         </div>
       )}
 
@@ -164,12 +209,13 @@ export default function AnalysisResultsPage() {
               Historical analysis created before candidate provenance was tracked. Re-run the analysis to evaluate the active profile.
             </p>
           </div>
-          <Link
-            href="/analyze"
-            className="px-3.5 py-2 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-semibold rounded-lg text-xs shrink-0 w-fit"
+          <button
+            onClick={handleReanalyze}
+            disabled={isReanalyzing}
+            className="px-3.5 py-2 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-semibold rounded-lg text-xs shrink-0 w-fit hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center gap-1.5"
           >
-            Re-analyze Role
-          </Link>
+            {isReanalyzing ? 'Re-analyzing Role...' : 'Re-analyze Role'}
+          </button>
         </div>
       )}
 
@@ -261,7 +307,7 @@ export default function AnalysisResultsPage() {
             { key: 'qualifications', label: `Qualifications & Gaps (${analysis.qualifications.length})` },
             { key: 'evidence', label: `Evidence & Objections (${resolvedAchievements.length})` },
             { key: 'prep', label: 'Interview Preparation' },
-            { key: 'action-plan', label: `Action Plan${visibleActionCount > 0 ? ` (${visibleActionCount})` : ''}` },
+            { key: 'action-plan', label: `Action Plan${pendingVisibleActionCount > 0 ? ` (${pendingVisibleActionCount})` : ''}` },
           ] as const
         ).map(({ key, label }) => (
           <button
@@ -332,7 +378,7 @@ export default function AnalysisResultsPage() {
           <Card padding="none" className="overflow-hidden">
             <CardHeader
               title="Required vs. Preferred Qualifications"
-              subtitle="Line-item breakdown matching Alex Vance evidence against role specifications"
+              subtitle={getAnalysisCandidateSubtitle(analysis, profile)}
               className="p-6 pb-4 mb-0"
             />
             <div className="overflow-x-auto">

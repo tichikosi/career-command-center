@@ -1,6 +1,6 @@
 {
   "name": "career-command-center",
-  "version": "0.1.0",
+  "version": "2.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -13,22 +13,37 @@
     "test:smoke": "playwright test tests/e2e/smoke.spec.ts",
     "test:e2e": "playwright test",
     "test:regression": "vitest run && playwright test tests/e2e/regression.spec.ts",
+    "eval": "tsx scripts/evalRunner.ts",
+    "verify:discovery-live": "tsx scripts/verifyDiscoveryLive.ts",
     "qa": "npm run lint && npm run test:unit && npm run build && npm run test:e2e"
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
+    "@google/genai": "^2.17.1",
+    "@supabase/ssr": "^0.12.5",
+    "@supabase/supabase-js": "^2.112.4",
+    "mammoth": "^1.12.1",
     "next": "16.2.11",
+    "papaparse": "^5.6.0",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "xlsx": "^0.18.5",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20.19.43",
+    "@types/papaparse": "^5.5.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "dotenv": "^17.4.2",
     "eslint": "^9",
     "eslint-config-next": "16.2.11",
     "tailwindcss": "^4",
+    "tsx": "^4.23.12",
     "typescript": "^5",
     "vitest": "^4.1.10"
   }

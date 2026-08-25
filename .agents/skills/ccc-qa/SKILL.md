@@ -5,52 +5,79 @@ description: Automated QA playbook, quality gate procedures, and test runner ins
 
 # Career Command Center — QA & Evaluation Playbook
 
-This skill outlines the automated quality assurance architecture, test commands, benchmark cases, and release verification gates for **Career Command Center (V1)**.
+This skill outlines the automated quality assurance architecture, test commands, benchmark cases, AI evaluation harness, and release verification gates for **Career Command Center (V2.0 → V2.1 → V3.0 Core → V3.1 Grounded Discovery)**.
 
 ## 1. Automated QA Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    CAREER COMMAND CENTER QA                 │
-├──────────────────────────────┬──────────────────────────────┤
-│ UNIT & CONTRACT TESTS        │ END-TO-END BROWSER TESTS     │
-│ (Vitest)                     │ (Playwright)                 │
-│ • stageActions.test.ts       │ • smoke.spec.ts              │
-│ • candidateAdapter.test.ts   │ • pipelineWorkflow.spec.ts   │
-│ • engineContract.test.ts     │ • candidateProfile.spec.ts   │
-│ • search.test.ts             │ • customAnalysis.spec.ts     │
-│ • dateUtils.test.ts          │ • regression.spec.ts         │
-│ • normalization.test.ts      │                              │
-│ • storage.test.ts            │                              │
-└──────────────────────────────┴──────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    CAREER COMMAND CENTER V3.1 QA GATES                  │
+├──────────────────────────────┬───────────────────────────┬──────────────┤
+│ UNIT & CONTRACT TESTS        │ END-TO-END BROWSER TESTS  │ AI GOVERNANCE│
+│ (Vitest 265/265 PASS)        │ (Playwright 23/23 PASS)   │ (Harness)    │
+│ • stageActions.test.ts       │ • smoke.spec.ts           │ • evaluator  │
+│ • candidateAdapter.test.ts   │ • pipelineWorkflow.spec.ts│ • evalRunner │
+│ • engineContract.test.ts     │ • candidateProfile.spec.ts│ • latest.json│
+│ • search.test.ts             │ • customAnalysis.spec.ts  │ • latest.md  │
+│ • dateUtils.test.ts          │ • v2Features.spec.ts      │              │
+│ • normalization.test.ts      │ • regression.spec.ts      │              │
+│ • storage.test.ts            │                           │              │
+│ • geminiEngine.test.ts       │                           │              │
+│ • geminiResilience.test.ts   │                           │              │
+│ • candidateIsolation.test.ts │                           │              │
+│ • resumeParser.test.ts       │                           │              │
+│ • network.test.ts            │                           │              │
+│ • opportunityCreation.test.ts│                           │              │
+│ • scoringIndependence.test.ts│                           │              │
+│ • discovery.test.ts          │                           │              │
+│ • storageRepositories.test.ts│                           │              │
+│ • evaluator.test.ts          │                           │              │
+│ • urlValidator.test.ts       │                           │              │
+│ • listingVerifier.test.ts    │                           │              │
+│ • groundingProvenance.test.ts│                           │              │
+│ • discoveryDedupe.test.ts     │                           │              │
+│ • discoveryPromotion.test.ts │                           │              │
+└──────────────────────────────┴───────────────────────────┴──────────────┘
 ```
 
 ## 2. Test Execution Commands
 
 | Command | Scope & Purpose |
 | :--- | :--- |
-| `npm run test:unit` | Executes all 7 Vitest unit & contract test suites (127+ tests). |
-| `npm run test:smoke` | Executes quick Playwright browser smoke tests on all 6 routes. |
-| `npm run test:e2e` | Runs full suite of Playwright end-to-end user workflows. |
+| `npm run test:unit` | Executes all 22 Vitest unit & contract test suites (265 tests). |
+| `npm run test:smoke` | Executes quick Playwright browser smoke tests across all routes. |
+| `npm run test:e2e` | Runs full suite of Playwright end-to-end user workflows (23 tests). |
 | `npm run test:regression` | Runs unit tests + Playwright regression suite. |
-| `npm run build` | Compiles Next.js production build and typechecks. |
-| `npm run lint` | ESLint rule enforcement. |
+| `npm run verify:discovery-live` | Developer CLI to verify live Google Search grounding against Gemini API. |
+| `npm run build` | Compiles Next.js production build with Turbopack and typechecks. |
+| `npm run lint` | ESLint 9 rule enforcement (0 errors, 0 warnings). |
+| `npm run eval` | Executes AI Evaluation and Governance benchmark runner. |
 | `npm run qa` | **Master Quality Gate**: Runs lint + unit + build + e2e sequentially. |
 
-## 3. Benchmark Verification Suite
+## 3. AI Evaluation & Governance Harness
 
-The V1 contract test suite (`tests/unit/engineContract.test.ts`) verifies the 5 Standard Benchmark Cases against all 18 mandatory report sections:
+The AI evaluation runner (`scripts/evalRunner.ts`) runs multi-metric scoring across synthetic benchmark roles:
+- **Schema Adherence**: 100% Zod validation of fit analysis reports.
+- **Evidence Grounding**: Filters citations to verify every claim is backed by real candidate evidence.
+- **Hallucination Safety**: Flags any fabricated claims or unattributed metrics.
+- **Gap Identification**: Assesses material gap detection against unfulfilled requirements.
+- **Recommendation Consistency**: Validates strategic recommendation alignment with fit scores.
 
-1. **Benchmark 1**: Director of AI Strategy (`opp-role-1-ai-strategy`) -> 88–94% -> `Apply`
-2. **Benchmark 2**: VP of Sales Operations (`opp-role-2-sales-ops`) -> 72–78% -> `Network First`
-3. **Benchmark 3**: Principal Data Engineer (`opp-role-3-data-engineer`) -> 35–45% -> `Deprioritize`
-4. **Benchmark 4**: Chief of Staff (`opp-role-4-chief-of-staff`) -> 85–89% -> `Apply`
-5. **Benchmark 5**: Strategy Lead (`opp-role-5-strategy-lead`) -> 50–69% -> `Monitor`
+Run the evaluation harness:
+```bash
+npm run eval
+# Or evaluate with a subset limit
+npm run eval -- --limit 2
+```
+Output artifacts are saved to `eval-results/latest.json` and `eval-results/latest.md`.
 
-## 4. Key Behavioral Invariants
+## 4. Key Behavioral & Architectural Invariants
 
-- Action items completed in Stage A persist completed state when transitioning to Stage B and returning to Stage A.
-- Inactive-stage actions do not inflate visible pending action count badges.
-- Deleting a Career Role in Candidate Profile does NOT delete or destroy linked Evidence Items; it marks them unassigned while preserving IDs, metrics, and searchability.
-- Analysis evidence snapshots remain immutable for historical reports.
-- Browser print stylesheet prints clean reports and interview preparation materials without UI clutter.
+- **Two-Step Fit Scoring**: Requirements are extracted independently from JD text before candidate matching begins; candidate evaluation strictly cites real evidence items (`EVID-IMP-*`).
+- **Action State Persistence**: Action items completed in Stage A persist completed state across stage transitions.
+- **Evidence Preservation**: Deleting a Career Role in Candidate Profile does NOT destroy linked Evidence Items; it retains unassigned evidence with IDs and metrics intact.
+- **Candidate Data Isolation**: Sample opportunities and fresh analyses are strictly isolated to active candidate context.
+- **Network Normalization & Ranking**: Company names are stripped of legal suffixes and matched accurately; contacts are deterministically ranked by seniority and domain alignment.
+- **Opportunity Creation & Safe Fetching**: Supports manual entry, pasted JD, and SSRF-safe URL scraping rejecting private/loopback IPs.
+- **Autonomous Discovery Workspace**: Deduplicates jobs by URL and fingerprint, scores candidate relevance (`High Potential`, `Possible Fit`), supports 1-click promotion to active pipeline.
+- **Safe Hydration**: LocalStorage subscriptions use `useSyncExternalStore` with frozen immutable snapshots, guaranteeing zero hydration mismatches and zero cascading renders.

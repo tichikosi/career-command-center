@@ -1,6 +1,8 @@
 export type VerificationStatus =
   | 'candidate-confirmed'
+  | 'candidate-provided'
   | 'imported-unverified'
+  | 'verified'
   | 'synthetic';
 
 export type EvidenceType =

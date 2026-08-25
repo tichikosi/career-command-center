@@ -24,7 +24,7 @@ test.describe('Smoke Tests — Navigation, Page Health & Core UI', () => {
   test('Analyze a Role page loads with sample selection and custom JD form', async ({ page }) => {
     await page.goto('/analyze');
     await expect(page.locator('h1')).toContainText('Analyze a Role');
-    await expect(page.getByText('Select Pre-Loaded Sample Role')).toBeVisible();
+    await expect(page.getByText('Try a Sample Role')).toBeVisible();
     await expect(page.getByText('Paste Custom Job Description')).toBeVisible();
 
     // Click custom tab
@@ -85,5 +85,22 @@ test.describe('Smoke Tests — Navigation, Page Health & Core UI', () => {
       // Should change without crashing
       await expect(page.locator('body')).toBeVisible();
     }
+  });
+
+  test('Professional Network Directory page loads with directory and company metrics', async ({ page }) => {
+    await page.goto('/network');
+    await expect(page.locator('h1')).toContainText('Professional Network Directory');
+    await expect(page.getByText('Total Contacts')).toBeVisible();
+    await expect(page.getByText('Unique Companies')).toBeVisible();
+    await expect(page.getByText('Import Connections (CSV/XLSX)')).toBeVisible();
+  });
+
+  test('Server health endpoint returns HTTP 200 with healthy engine status', async ({ request }) => {
+    const response = await request.get('/api/health');
+    expect(response.status()).toBe(200);
+    const body = await response.json();
+    expect(body.status).toBe('healthy');
+    expect(body.service).toBe('career-command-center');
+    expect(body.version).toBe('2.0.0');
   });
 });
