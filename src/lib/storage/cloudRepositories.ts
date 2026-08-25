@@ -116,9 +116,10 @@ export class CloudCandidateRepository implements ICandidateRepository {
       payload.user_id = userId;
     }
 
+    const onConflictTarget = userId ? 'user_id' : 'id';
     const { error } = await this.supabase
       .from('candidate_profiles')
-      .upsert(payload, { onConflict: 'id' });
+      .upsert(payload, { onConflict: onConflictTarget });
 
     if (error) {
       console.error('[CloudCandidateRepository] saveProfile error:', {

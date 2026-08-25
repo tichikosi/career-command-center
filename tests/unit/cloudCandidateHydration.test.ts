@@ -306,4 +306,91 @@ describe('V3.2 Cloud Candidate Read-Path & Source of Truth', () => {
     expect(active.name).toBe('Tanaka Ian Chikosi');
     expect(active.dataMode).toBe('user');
   });
+
+  it('CloudCandidateRepository.saveProfile targets onConflict: user_id when userId is provided', async () => {
+    const authUserId = '2bd4618e-4a6f-45fe-89cb-72c01994a5ea';
+    let upsertedPayload: Record<string, unknown> | null = null;
+    let onConflictTarget: string | null = null;
+
+    const mockSupabase = {
+      from: (table: string) => {
+        expect(table).toBe('candidate_profiles');
+        return {
+          upsert: (payload: Record<string, unknown>, opts: { onConflict: string }) => {
+            upsertedPayload = payload;
+            onConflictTarget = opts.onConflict;
+            return Promise.resolve({ error: null });
+          },
+        };
+      },
+    } as unknown as import('@supabase/supabase-js').SupabaseClient;
+
+    const { CloudCandidateRepository } = await import('@/lib/storage/cloudRepositories');
+    const repo = new CloudCandidateRepository(mockSupabase);
+
+    const profileToSave: CandidateProfile = {
+      id: 'cand-custom-domain-id',
+      name: 'Tanaka Ian Chikosi',
+      headline: 'VP Strategy & Operations',
+      location: 'San Francisco, CA',
+      summary: 'Executive Leader',
+      targetRoles: ['VP Ops'],
+      targetIndustries: ['AI'],
+      preferredLocations: ['SF'],
+      coreCompetencies: [],
+      careerHistory: [],
+      education: [],
+      certifications: [],
+      evidenceItems: [],
+      sources: [],
+      updatedAt: '2026-08-25T00:00:00Z',
+      dataMode: 'user',
+    };
+
+    const saved = await repo.saveProfile(profileToSave, authUserId);
+    expect(saved.name).toBe('Tanaka Ian Chikosi');
+    expect(onConflictTarget).toBe('user_id');
+    expect(upsertedPayload).not.toBeNull();
+    expect((upsertedPayload as Record<string, unknown>).user_id).toBe(authUserId);
+  });
+
+  it('repeated saves and migration retries update the canonical profile under the same user_id', async () => {
+    const authUserId = 'user-single-candidate-owner';
+    const profileV1: CandidateProfile = {
+      id: 'cand-v1',
+      name: 'Tanaka Ian Chikosi',
+      headline: 'Director of Ops',
+      location: 'San Francisco, CA',
+      summary: 'Initial import',
+      targetRoles: ['Director'],
+      targetIndustries: ['AI'],
+      preferredLocations: ['SF'],
+      coreCompetencies: [],
+      careerHistory: [],
+      education: [],
+      certifications: [],
+      evidenceItems: [],
+      sources: [],
+      updatedAt: '2026-08-25T00:00:00Z',
+      dataMode: 'user',
+    };
+
+    // Save v1
+    await mockAdapter.candidates.saveProfile(profileV1, authUserId);
+    expect((await mockAdapter.candidates.getProfile(authUserId)).headline).toBe('Director of Ops');
+
+    // Save v2 (e.g. migration retry or edit)
+    const profileV2: CandidateProfile = {
+      ...profileV1,
+      id: 'cand-v2-retry',
+      headline: 'VP Strategy & Operations',
+      updatedAt: '2026-08-25T01:00:00Z',
+    };
+    await mockAdapter.candidates.saveProfile(profileV2, authUserId);
+
+    // Verify adapter only holds 1 candidate profile for this user
+    expect(mockAdapter.candidateProfiles.size).toBe(1);
+    const updated = await mockAdapter.candidates.getProfile(authUserId);
+    expect(updated.headline).toBe('VP Strategy & Operations');
+  });
 });
