@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { evaluateOpportunityFollowUp, calculateNextBestActions } from '@/lib/followUpEngine';
-import { generateMockQuestions, evaluateMockAnswer } from '@/lib/server/mockInterviewEngine';
+import { MockInterviewEngine } from '@/lib/server/mockInterviewEngine';
 import { MockQuestionsRequestSchema, MockEvaluationRequestSchema } from '@/lib/server/schemas';
 import { JobOpportunity } from '@/types/opportunity';
 import { OpportunityActivity } from '@/types/interview';
@@ -276,36 +276,39 @@ describe('V3.3 Mock Interview Two-Axis Hardening & Schema Validation', () => {
     }
   });
 
-  it('generates 4 rapid questions for Timed Screen mode', () => {
-    const questions = generateMockQuestions(
-      { id: 'opp-1', title: 'VP of Product', company: 'Stripe' },
-      mockCandidate,
-      'rigorous',
-      'timed'
-    );
+  it('generates 4 rapid questions for Timed Screen mode', async () => {
+    const engine = new MockInterviewEngine();
+    const result = await engine.generateQuestions({
+      opportunity: { id: 'opp-1', title: 'VP of Product', company: 'Stripe' } as JobOpportunity,
+      candidate: mockCandidate,
+      difficulty: 'rigorous',
+      mode: 'timed',
+    });
 
-    expect(questions.length).toBe(4);
-    expect(questions[0].question.length).toBeGreaterThan(10);
+    expect(result.questions.length).toBe(4);
+    expect(result.questions[0].question.length).toBeGreaterThan(10);
   });
 
-  it('generates 8 round-structured questions for Full Loop mode', () => {
-    const questions = generateMockQuestions(
-      { id: 'opp-1', title: 'Director of AI Strategy', company: 'Microsoft' },
-      mockCandidate,
-      'standard',
-      'full'
-    );
+  it('generates 8 round-structured questions for Full Loop mode', async () => {
+    const engine = new MockInterviewEngine();
+    const result = await engine.generateQuestions({
+      opportunity: { id: 'opp-1', title: 'Director of AI Strategy', company: 'Microsoft' } as JobOpportunity,
+      candidate: mockCandidate,
+      difficulty: 'standard',
+      mode: 'full',
+    });
 
-    expect(questions.length).toBe(8);
+    expect(result.questions.length).toBe(8);
   });
 
-  it('strictly scores trivial answers with 1s and provides grounded coaching', () => {
-    const trivialEvaluation = evaluateMockAnswer({
+  it('strictly scores trivial answers with 1s and provides grounded coaching', async () => {
+    const engine = new MockInterviewEngine();
+    const trivialEvaluation = await engine.evaluateAnswer({
       question: 'How do you prioritize competing executive demands across business and engineering?',
       questionCategory: 'behavioral',
       candidateAnswer: 'I just prioritize what is most important and talk to people.',
-      opportunity: { id: 'opp-1', title: 'Chief of Staff', company: 'OpenAI' },
-      candidateSnapshot: mockCandidate,
+      opportunity: { id: 'opp-1', title: 'Chief of Staff', company: 'OpenAI' } as JobOpportunity,
+      candidate: mockCandidate,
       difficulty: 'rigorous',
     });
 

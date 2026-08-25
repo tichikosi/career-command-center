@@ -1,5 +1,5 @@
 import { evaluateOpportunityFollowUp, calculateNextBestActions } from '../src/lib/followUpEngine';
-import { generateMockQuestions, evaluateMockAnswer } from '../src/lib/server/mockInterviewEngine';
+import { MockInterviewEngine } from '../src/lib/server/mockInterviewEngine';
 import { MockQuestionsRequestSchema, MockEvaluationRequestSchema } from '../src/lib/server/schemas';
 import { JobOpportunity } from '../src/types/opportunity';
 import { OpportunityActivity } from '../src/types/interview';
@@ -201,22 +201,38 @@ async function verifyAll() {
   }
 
   // Question generator formats
-  const practiceQs = generateMockQuestions({ id: 'opp-1', title: 'Chief of Staff', company: 'Acme' }, mockCandidate, 'standard', 'practice');
-  assert(practiceQs.length >= 3, 'Practice mode generates standard question bank');
+  const engine = new MockInterviewEngine();
+  const practiceRes = await engine.generateQuestions({
+    opportunity: { id: 'opp-1', title: 'Chief of Staff', company: 'Acme' } as JobOpportunity,
+    candidate: mockCandidate,
+    difficulty: 'standard',
+    mode: 'practice',
+  });
+  assert(practiceRes.questions.length >= 3, 'Practice mode generates standard question bank');
 
-  const timedQs = generateMockQuestions({ id: 'opp-1', title: 'Chief of Staff', company: 'Acme' }, mockCandidate, 'rigorous', 'timed');
-  assert(timedQs.length === 4, 'Timed Screen mode generates exactly 4 high-velocity screening questions');
+  const timedRes = await engine.generateQuestions({
+    opportunity: { id: 'opp-1', title: 'Chief of Staff', company: 'Acme' } as JobOpportunity,
+    candidate: mockCandidate,
+    difficulty: 'rigorous',
+    mode: 'timed',
+  });
+  assert(timedRes.questions.length === 4, 'Timed Screen mode generates exactly 4 high-velocity screening questions');
 
-  const fullQs = generateMockQuestions({ id: 'opp-1', title: 'Chief of Staff', company: 'Acme' }, mockCandidate, 'stress_test', 'full');
-  assert(fullQs.length === 8, 'Full Loop mode generates exactly 8 round-structured questions');
+  const fullRes = await engine.generateQuestions({
+    opportunity: { id: 'opp-1', title: 'Chief of Staff', company: 'Acme' } as JobOpportunity,
+    candidate: mockCandidate,
+    difficulty: 'stress_test',
+    mode: 'full',
+  });
+  assert(fullRes.questions.length === 8, 'Full Loop mode generates exactly 8 round-structured questions');
 
   // Strict scoring on trivial answers
-  const trivialEvaluation = evaluateMockAnswer({
+  const trivialEvaluation = await engine.evaluateAnswer({
     question: 'How do you prioritize competing executive demands?',
     questionCategory: 'behavioral',
     candidateAnswer: 'I just prioritize what is most important and talk to people.',
-    opportunity: { id: 'opp-1', title: 'Chief of Staff', company: 'OpenAI' },
-    candidateSnapshot: mockCandidate,
+    opportunity: { id: 'opp-1', title: 'Chief of Staff', company: 'OpenAI' } as JobOpportunity,
+    candidate: mockCandidate,
     difficulty: 'rigorous',
   });
   assert(trivialEvaluation.score.evidenceSpecificity === 1, 'Trivial answer receives score 1 on evidenceSpecificity');
