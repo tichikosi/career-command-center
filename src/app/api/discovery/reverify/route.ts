@@ -4,6 +4,9 @@ import { verifyJobListingContent } from '@/lib/server/listingVerifier';
 import { sanitizeErrorMessage } from '@/lib/server/geminiRetry';
 import { VerificationStatus } from '@/types/discovery';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();

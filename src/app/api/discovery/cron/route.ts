@@ -7,6 +7,9 @@ import { DiscoveredJob } from '@/types/discovery';
 import { deduplicateDiscoveredJobs } from '@/lib/discoveryStorage';
 import { isGeminiConfigured } from '@/lib/server/geminiConfig';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest) {
   return handleCron(req);
 }
