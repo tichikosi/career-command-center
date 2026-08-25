@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { NetworkContact } from '@/types/network';
-import { IconUsers, IconSearch, IconX, IconCheckCircle } from '@/components/icons';
+import { IconUsers, IconSearch, IconXCircle, IconCheckCircle } from '@/components/icons';
 
 interface SearchableContactPickerProps {
   contacts: NetworkContact[];
@@ -127,7 +127,7 @@ export function SearchableContactPicker({
               onClick={() => handleSelect(null)}
               className="text-[11px] font-normal text-rose-500 hover:text-rose-600 dark:text-rose-400 flex items-center gap-0.5"
             >
-              <IconX className="w-3 h-3" />
+              <IconXCircle className="w-3 h-3" />
               <span>Clear Contact</span>
             </button>
           )}
@@ -186,7 +186,7 @@ export function SearchableContactPicker({
             className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5"
             aria-label="Clear selection"
           >
-            <IconX className="w-3.5 h-3.5" />
+            <IconXCircle className="w-3.5 h-3.5" />
           </button>
         )}
       </div>
