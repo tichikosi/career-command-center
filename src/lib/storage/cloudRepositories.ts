@@ -896,9 +896,6 @@ export class CloudActivityRepository implements IActivityRepository {
 
   async getActivities(opportunityId: string, userId?: string): Promise<OpportunityActivity[]> {
     userId = await resolveUserId(this.supabase, userId);
-    if (!userId) {
-      return defaultLocalStorageAdapter.activities.getActivities(opportunityId);
-    }
 
     let query = this.supabase
       .from('opportunity_activities')
@@ -920,9 +917,6 @@ export class CloudActivityRepository implements IActivityRepository {
 
   async getAllActivities(userId?: string): Promise<OpportunityActivity[]> {
     userId = await resolveUserId(this.supabase, userId);
-    if (!userId) {
-      return defaultLocalStorageAdapter.activities.getAllActivities();
-    }
 
     let query = this.supabase
       .from('opportunity_activities')
@@ -944,7 +938,7 @@ export class CloudActivityRepository implements IActivityRepository {
   async recordActivity(activity: Omit<OpportunityActivity, 'id' | 'createdAt' | 'updatedAt'>, userId?: string): Promise<OpportunityActivity> {
     userId = await resolveUserId(this.supabase, userId);
     if (!userId) {
-      return defaultLocalStorageAdapter.activities.recordActivity(activity);
+      throw new Error('User must be authenticated to record activity in cloud storage.');
     }
 
     const id = `act-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -980,7 +974,7 @@ export class CloudActivityRepository implements IActivityRepository {
   async updateActivity(id: string, updates: Partial<OpportunityActivity>, userId?: string): Promise<OpportunityActivity | null> {
     userId = await resolveUserId(this.supabase, userId);
     if (!userId) {
-      return defaultLocalStorageAdapter.activities.updateActivity(id, updates);
+      throw new Error('User must be authenticated to update activity in cloud storage.');
     }
 
     const mapped: Record<string, unknown> = { updated_at: new Date().toISOString() };
@@ -1009,7 +1003,7 @@ export class CloudActivityRepository implements IActivityRepository {
   async deleteActivity(id: string, userId?: string): Promise<void> {
     userId = await resolveUserId(this.supabase, userId);
     if (!userId) {
-      return defaultLocalStorageAdapter.activities.deleteActivity(id);
+      throw new Error('User must be authenticated to delete activity from cloud storage.');
     }
 
     let query = this.supabase.from('opportunity_activities').delete().eq('id', id);
@@ -1049,9 +1043,6 @@ export class CloudInterviewPrepRepository implements IInterviewPrepRepository {
 
   async getActivePrep(opportunityId: string, userId?: string): Promise<InterviewPreparation | null> {
     userId = await resolveUserId(this.supabase, userId);
-    if (!userId) {
-      return defaultLocalStorageAdapter.interviewPrep.getActivePrep(opportunityId);
-    }
 
     let query = this.supabase
       .from('interview_preparations')
@@ -1075,7 +1066,7 @@ export class CloudInterviewPrepRepository implements IInterviewPrepRepository {
   async savePrep(prep: InterviewPreparation, userId?: string): Promise<InterviewPreparation> {
     userId = await resolveUserId(this.supabase, userId);
     if (!userId) {
-      return defaultLocalStorageAdapter.interviewPrep.savePrep(prep);
+      throw new Error('User must be authenticated to save interview prep to cloud storage.');
     }
 
     // Deactivate previous active preps for this opportunity
@@ -1117,9 +1108,6 @@ export class CloudInterviewPrepRepository implements IInterviewPrepRepository {
 
   async getHistory(opportunityId: string, userId?: string): Promise<InterviewPreparation[]> {
     userId = await resolveUserId(this.supabase, userId);
-    if (!userId) {
-      return defaultLocalStorageAdapter.interviewPrep.getHistory(opportunityId);
-    }
 
     let query = this.supabase
       .from('interview_preparations')
@@ -1141,7 +1129,7 @@ export class CloudInterviewPrepRepository implements IInterviewPrepRepository {
   async deletePrep(id: string, userId?: string): Promise<void> {
     userId = await resolveUserId(this.supabase, userId);
     if (!userId) {
-      return defaultLocalStorageAdapter.interviewPrep.deletePrep(id);
+      throw new Error('User must be authenticated to delete prep from cloud storage.');
     }
 
     let query = this.supabase.from('interview_preparations').delete().eq('id', id);
@@ -1192,9 +1180,6 @@ export class CloudInterviewSessionRepository implements IInterviewSessionReposit
 
   async getSessions(opportunityId: string, userId?: string): Promise<InterviewSession[]> {
     userId = await resolveUserId(this.supabase, userId);
-    if (!userId) {
-      return defaultLocalStorageAdapter.interviewSessions.getSessions(opportunityId);
-    }
 
     let query = this.supabase
       .from('interview_sessions')
@@ -1215,9 +1200,6 @@ export class CloudInterviewSessionRepository implements IInterviewSessionReposit
 
   async getSessionById(id: string, userId?: string): Promise<InterviewSession | null> {
     userId = await resolveUserId(this.supabase, userId);
-    if (!userId) {
-      return defaultLocalStorageAdapter.interviewSessions.getSessionById(id);
-    }
 
     let query = this.supabase.from('interview_sessions').select('*').eq('id', id);
     if (userId) query = query.eq('user_id', userId);
@@ -1229,7 +1211,7 @@ export class CloudInterviewSessionRepository implements IInterviewSessionReposit
   async saveSession(session: InterviewSession, userId?: string): Promise<InterviewSession> {
     userId = await resolveUserId(this.supabase, userId);
     if (!userId) {
-      return defaultLocalStorageAdapter.interviewSessions.saveSession(session);
+      throw new Error('User must be authenticated to save interview session to cloud storage.');
     }
 
     const payload = {
@@ -1266,7 +1248,7 @@ export class CloudInterviewSessionRepository implements IInterviewSessionReposit
   async deleteSession(id: string, userId?: string): Promise<void> {
     userId = await resolveUserId(this.supabase, userId);
     if (!userId) {
-      return defaultLocalStorageAdapter.interviewSessions.deleteSession(id);
+      throw new Error('User must be authenticated to delete session from cloud storage.');
     }
 
     let query = this.supabase.from('interview_sessions').delete().eq('id', id);
