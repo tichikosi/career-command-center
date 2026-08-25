@@ -6,6 +6,9 @@ import { NetworkContact } from '@/types/network';
 import { InterviewType, OpportunityActivity } from '@/types/interview';
 import { IconCalendar, IconClock, IconUsers } from '@/components/icons';
 
+import { SearchableContactPicker } from '@/components/network/SearchableContactPicker';
+import { useNetwork } from '@/lib/networkStorage';
+
 interface ScheduledInterviewModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -35,6 +38,7 @@ export function ScheduledInterviewModal({
   matchingContacts,
   onSave,
 }: ScheduledInterviewModalProps) {
+  const { contacts: allNetworkContacts } = useNetwork();
   const today = new Date().toISOString().split('T')[0];
 
   const [date, setDate] = useState(today);
@@ -43,20 +47,22 @@ export function ScheduledInterviewModal({
   const [interviewerName, setInterviewerName] = useState('');
   const [interviewerTitle, setInterviewerTitle] = useState('');
   const [selectedContactId, setSelectedContactId] = useState('');
+  const [selectedContactName, setSelectedContactName] = useState('');
   const [notes, setNotes] = useState('');
   const [isCompleted, setIsCompleted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const handleContactSelect = (contactId: string) => {
-    setSelectedContactId(contactId);
-    if (contactId) {
-      const contact = matchingContacts.find((c) => c.id === contactId);
-      if (contact) {
-        setInterviewerName(contact.fullName);
-        setInterviewerTitle(contact.position || '');
-      }
+  const handleContactSelect = (contact: NetworkContact | null) => {
+    if (contact) {
+      setSelectedContactId(contact.id);
+      setSelectedContactName(contact.fullName);
+      setInterviewerName(contact.fullName);
+      setInterviewerTitle(contact.position || '');
+    } else {
+      setSelectedContactId('');
+      setSelectedContactName('');
     }
   };
 
@@ -185,26 +191,15 @@ export function ScheduledInterviewModal({
           </select>
         </div>
 
-        {matchingContacts.length > 0 && (
-          <div>
-            <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
-              <IconUsers className="w-3.5 h-3.5 text-indigo-500" />
-              <span>Link to Network Contact</span>
-            </label>
-            <select
-              value={selectedContactId}
-              onChange={(e) => handleContactSelect(e.target.value)}
-              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            >
-              <option value="">-- Select Contact at {opportunityCompany} --</option>
-              {matchingContacts.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.fullName} {c.position ? `(${c.position})` : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
+        <SearchableContactPicker
+          contacts={allNetworkContacts.length > 0 ? allNetworkContacts : matchingContacts}
+          matchingContacts={matchingContacts}
+          selectedContactId={selectedContactId}
+          selectedContactName={selectedContactName}
+          onSelectContact={handleContactSelect}
+          label="Link to Network Contact"
+          placeholder={`Search contacts at ${opportunityCompany} or across your network...`}
+        />
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>

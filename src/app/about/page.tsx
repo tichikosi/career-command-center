@@ -356,9 +356,20 @@ export default function AboutPage() {
           <div className="p-3 bg-indigo-950/80 border border-indigo-800 text-white rounded-lg space-y-1">
             <div className="flex items-center gap-2">
               <span className="font-bold text-indigo-300">V3.3 — Current Release Candidate:</span>
-              <span className="text-slate-300">Interview War Room & Application Intelligence</span>
+              <span className="text-slate-300">Interview Intelligence & Application War Room</span>
             </div>
-            <p className="text-slate-200">Grounded interview briefs, STAR story banks, interactive mock interview simulator with 6-dimension AI coaching, activity timeline, deterministic smart follow-up engine, and next best career action.</p>
+            <p className="text-slate-200">
+              Grounded executive interview briefs, 15-section pre-interview cheat sheet (Markdown & Print/PDF export), interactive mock interview simulator (2-axis model: Practice / Timed Screen with 90s countdown / 4-round Full Loop; Standard / Rigorous VP / Stress Test difficulty), activity timeline, deterministic smart follow-up engine (Scenarios A–J), searchable network contact picker, and password visibility toggle.
+            </p>
+          </div>
+          <div className="p-3 bg-slate-900/60 border border-slate-800 text-white rounded-lg space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-slate-400">V3.4 — Planned Roadmap:</span>
+              <span className="text-slate-400">Real-Time Voice Mock & Integrations</span>
+            </div>
+            <p className="text-slate-400">
+              Live Gemini voice mock interviews (audio in/out), Google Calendar and Gmail interview synchronization, client-side PNG cheat sheet graphic rendering, and automated executive email drafting.
+            </p>
           </div>
         </div>
       </Card>

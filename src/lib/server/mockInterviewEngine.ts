@@ -49,6 +49,12 @@ export interface AnswerEvaluationResult {
   executionMode: 'gemini' | 'deterministic';
 }
 
+function normalizeDifficulty(diff: MockDifficulty): 'standard' | 'rigorous' | 'stress_test' {
+  if (diff === 'rigorous' || diff === 'executive') return 'rigorous';
+  if (diff === 'stress_test' || diff === 'challenging' || diff === 'adversarial') return 'stress_test';
+  return 'standard';
+}
+
 export class MockInterviewEngine {
   async generateQuestions(input: MockInterviewInput, retryOptions?: RetryOptions): Promise<QuestionGenerationResult> {
     const primaryModel = getGeminiModel();
@@ -79,13 +85,19 @@ export class MockInterviewEngine {
       );
 
       const raw = result.result;
-      const questions = Array.isArray(raw.questions) ? raw.questions.slice(0, 8).map(
-        (q: Record<string, unknown>, i: number) => ({
-          id: `mq-${i + 1}`,
-          question: (q.question as string) || '',
-          category: (q.category as string) || 'behavioral',
-        })
-      ) : [];
+      const questions = Array.isArray(raw.questions)
+        ? raw.questions.slice(0, input.mode === 'full' ? 8 : input.mode === 'timed' ? 4 : 6).map(
+            (q: Record<string, unknown>, i: number) => ({
+              id: `mq-${i + 1}`,
+              question: (q.question as string) || '',
+              category: (q.category as string) || 'behavioral',
+            })
+          )
+        : [];
+
+      if (questions.length === 0) {
+        return this.deterministicQuestions(input, primaryModel);
+      }
 
       return { questions, requestedModel: primaryModel, actualModel: result.actualModel, executionMode: 'gemini' };
     } catch (err) {
@@ -98,6 +110,13 @@ export class MockInterviewEngine {
     const primaryModel = getGeminiModel();
     const failoverModel = getGeminiFallbackModel();
     const validEvidenceIds = new Set((input.candidate.evidenceItems || []).map((e: EvidenceItem) => e.id));
+
+    // Handle trivial answers (< 12 words or evasive) deterministically with strict scoring
+    const trimmedAnswer = (input.candidateAnswer || '').trim();
+    const wordCount = trimmedAnswer.split(/\s+/).filter(Boolean).length;
+    if (wordCount < 6 || /^(test|idk|skip|yes|no|none|n\/a|pass)\.?$/i.test(trimmedAnswer)) {
+      return this.trivialAnswerEvaluation(input, primaryModel);
+    }
 
     if (!isGeminiConfigured()) {
       return this.deterministicEvaluation(input, validEvidenceIds, primaryModel);
@@ -204,13 +223,20 @@ export class MockInterviewEngine {
   }
 
   private buildQuestionPrompt(input: MockInterviewInput): string {
+    const normDiff = normalizeDifficulty(input.difficulty);
     const difficultyGuide = {
-      standard: 'Ask clear, direct behavioral and situational questions appropriate for a mid-senior role.',
-      challenging: 'Ask probing follow-up style questions that test depth of experience and strategic thinking.',
-      executive: 'Ask board-level strategic questions that test vision, stakeholder management, and transformation leadership.',
+      standard: 'Standard professional bar. Focus on direct behavioral and functional competencies.',
+      rigorous: 'VP / Executive level bar. Expect high strategic altitude, cross-functional ownership, trade-off articulation, and quantified business outcomes.',
+      stress_test: 'High-rigor stress test. Probing questions challenging assumptions, failure modes, trade-offs, and organizational friction without hostility.',
     };
 
-    return `You are a hiring manager conducting a mock interview for this role:
+    const modeGuide = {
+      practice: 'Generate 5-6 questions focused on developing structured, evidence-grounded STAR answers.',
+      timed: 'Generate 4 concise, high-velocity recruiter-screen style questions suitable for 90-second rapid responses.',
+      full: 'Generate 8 comprehensive questions progressing across 4 recruiting rounds: Recruiter Screen, Hiring Manager Functional, Leadership/Behavioral, and Executive Strategy.',
+    };
+
+    return `You are an executive interviewer conducting a mock interview for this role:
 
 ROLE: ${input.opportunity.title}
 COMPANY: ${input.opportunity.company}
@@ -218,9 +244,10 @@ JOB DESCRIPTION:
 ${input.opportunity.rawJobDescription || 'No description available'}
 
 CANDIDATE: ${input.candidate.name}
-DIFFICULTY: ${input.difficulty} — ${difficultyGuide[input.difficulty]}
+SESSION FORMAT: ${input.mode} — ${modeGuide[input.mode] || modeGuide.practice}
+INTERVIEWER BAR / DIFFICULTY: ${normDiff} — ${difficultyGuide[normDiff]}
 
-Generate 5-8 interview questions as JSON:
+Generate interview questions as JSON:
 {
   "questions": [
     {"question": "...", "category": "behavioral|technical|situational|strategic|culture"}
@@ -228,13 +255,13 @@ Generate 5-8 interview questions as JSON:
 }
 
 Rules:
-1. Questions must be role-specific, not generic.
-2. Include a mix of categories.
-3. Do NOT repeat similar questions.
-4. Match the difficulty level specified.`;
+1. Questions must be role-specific and tailored to the job mandate.
+2. ${input.mode === 'timed' ? 'Generate exactly 4 concise screen questions.' : input.mode === 'full' ? 'Generate 8 questions ordered by hiring rounds.' : 'Generate 5-6 questions.'}
+3. Match the difficulty level specified.`;
   }
 
   private buildEvaluationPrompt(input: AnswerEvaluationInput): string {
+    const normDiff = normalizeDifficulty(input.difficulty);
     const evidenceList = (input.candidate.evidenceItems || [])
       .map((e: EvidenceItem) => `[${e.id}] ${e.title}: ${e.description}${e.metric ? ` (${e.metric})` : ''}`)
       .join('\n');
@@ -244,7 +271,7 @@ Rules:
 ROLE: ${input.opportunity.title} at ${input.opportunity.company}
 QUESTION: ${input.question}
 CATEGORY: ${input.questionCategory}
-DIFFICULTY: ${input.difficulty}
+DIFFICULTY BAR: ${normDiff} (${normDiff === 'rigorous' ? 'VP Level — strict on metrics & strategy' : normDiff === 'stress_test' ? 'Stress Test — rigorous challenge on vagueness & trade-offs' : 'Standard professional bar'})
 
 CANDIDATE ANSWER:
 ${input.candidateAnswer}
@@ -265,16 +292,15 @@ Evaluate the answer and return JSON:
   "coaching": {
     "strengths": ["strength1", ...],
     "improvements": ["improvement1", ...],
-    "improvedAnswer": "A better version of the answer"
+    "improvedAnswer": "Suggested Grounded Answer Framework: A stronger structured response..."
   },
   "evidenceCitations": ["EVID-..."] // Only IDs from the evidence library that were validly referenced
 }
 
 CRITICAL SCORING RULES:
-1. Score each dimension honestly on 1-5 scale.
-2. The improved answer may improve framing and structure but MUST NOT invent candidate facts, metrics, companies, titles, scope, or achievements.
-3. Only cite evidence IDs that exist in the candidate evidence library above.
-4. Strengths and improvements must be specific and actionable.`;
+1. If the candidate answer is trivial, evasive, or lacks substance, score 1 across all dimensions.
+2. The improved answer MUST be clearly framed as a suggested grounded model using candidate evidence, and MUST NOT invent facts not in the evidence library.
+3. In 'rigorous' or 'stress_test' difficulty, enforce higher standards for quantified business outcomes and trade-offs.`;
   }
 
   private clampScore(raw: Record<string, unknown>): MockAnswerScore {
@@ -296,7 +322,6 @@ CRITICAL SCORING RULES:
     const strengths = Array.isArray(raw.strengths) ? (raw.strengths as string[]).slice(0, 4) : [];
     const improvements = Array.isArray(raw.improvements) ? (raw.improvements as string[]).slice(0, 4) : [];
 
-    // Validate improved answer length
     let improvedAnswer = typeof raw.improvedAnswer === 'string' ? raw.improvedAnswer : undefined;
     if (improvedAnswer && improvedAnswer.length > 2000) {
       improvedAnswer = improvedAnswer.slice(0, 2000);
@@ -305,16 +330,83 @@ CRITICAL SCORING RULES:
     return { strengths, improvements, improvedAnswer };
   }
 
+  private trivialAnswerEvaluation(
+    input: AnswerEvaluationInput,
+    requestedModel: string,
+  ): AnswerEvaluationResult {
+    const firstRole = input.candidate.careerHistory?.[0];
+    const company = firstRole?.company || 'previous experience';
+    const roleTitle = firstRole?.title || 'my executive role';
+
+    return {
+      score: {
+        relevance: 1,
+        evidenceSpecificity: 1,
+        strategicDepth: 1,
+        executiveCommunication: 1,
+        structure: 1,
+        concision: 1,
+      },
+      coaching: {
+        strengths: ['Submitted initial response'],
+        improvements: [
+          'Response contains insufficient content for executive evaluation',
+          'Use the STAR structure (Situation, Task, Action, Result) with specific examples',
+          'Quantify outcomes with concrete business metrics (revenue, efficiency, scale)',
+        ],
+        improvedAnswer: `Suggested Grounded Framework (using candidate profile): When serving as ${roleTitle} at ${company}, I addressed this challenge by establishing clear strategic priorities, aligning cross-functional teams, and delivering measurable impact.`,
+      },
+      evidenceCitations: [],
+      requestedModel,
+      actualModel: 'deterministic',
+      executionMode: 'deterministic',
+    };
+  }
+
   private deterministicQuestions(input: MockInterviewInput, requestedModel: string): QuestionGenerationResult {
     const role = input.opportunity.title;
-    const questions = [
-      { id: 'mq-1', question: `Tell me about your background and what makes you a strong fit for the ${role} role.`, category: 'behavioral' },
-      { id: 'mq-2', question: 'Describe a time you led a significant organizational change. What was the outcome?', category: 'behavioral' },
-      { id: 'mq-3', question: `What is your approach to building strategy for a function like the one this ${role} would lead?`, category: 'strategic' },
-      { id: 'mq-4', question: 'How do you handle a situation where you disagree with your direct manager on a critical decision?', category: 'situational' },
-      { id: 'mq-5', question: 'What metrics do you use to measure the success of your team?', category: 'technical' },
-      { id: 'mq-6', question: 'Why are you interested in this particular opportunity?', category: 'culture' },
-    ];
+    const company = input.opportunity.company;
+    const normDiff = normalizeDifficulty(input.difficulty);
+
+    let questions: Array<{ id: string; question: string; category: string }>;
+
+    if (input.mode === 'timed') {
+      questions = [
+        { id: 'mq-1', question: `Give me your 60-second executive elevator pitch and why you are targeting the ${role} role at ${company}.`, category: 'behavioral' },
+        { id: 'mq-2', question: `What is the most significant operational or strategic achievement in your career so far?`, category: 'technical' },
+        { id: 'mq-3', question: `How do your specific strengths address the core challenges facing ${company} today?`, category: 'strategic' },
+        { id: 'mq-4', question: `Why are you looking to make a transition at this stage of your search?`, category: 'culture' },
+      ];
+    } else if (input.mode === 'full') {
+      questions = [
+        { id: 'mq-1', question: `[Round 1: Recruiter Screen] Walk me through your career progression and why the ${role} role aligns with your career trajectory.`, category: 'behavioral' },
+        { id: 'mq-2', question: `[Round 1: Recruiter Screen] What are your compensation expectations and target timeline for this transition?`, category: 'culture' },
+        { id: 'mq-3', question: `[Round 2: Hiring Manager] Describe how you would design and execute the operating model for this function at ${company}.`, category: 'technical' },
+        { id: 'mq-4', question: `[Round 2: Hiring Manager] Tell me about a time you led a high-stakes business transformation under tight resource constraints.`, category: 'strategic' },
+        { id: 'mq-5', question: `[Round 3: Leadership] How do you handle cross-functional misalignment between Engineering, Product, and GTM leaders?`, category: 'situational' },
+        { id: 'mq-6', question: `[Round 3: Leadership] Describe your approach to mentoring high-performing teams and managing underperformance.`, category: 'behavioral' },
+        { id: 'mq-7', question: `[Round 4: Executive Strategy] If you started on day one, what would your 30-60-90 day strategic evaluation look like?`, category: 'strategic' },
+        { id: 'mq-8', question: `[Round 4: Executive Strategy] What is the most critical trade-off you expect to manage in this role at ${company}?`, category: 'strategic' },
+      ];
+    } else {
+      // Practice mode
+      questions = [
+        { id: 'mq-1', question: `Tell me about your background and what makes you a strong fit for the ${role} role at ${company}.`, category: 'behavioral' },
+        { id: 'mq-2', question: 'Describe a time you led a significant organizational change. What was the quantifiable outcome?', category: 'behavioral' },
+        { id: 'mq-3', question: `What is your approach to building strategy for a function like the one this ${role} would lead?`, category: 'strategic' },
+        { id: 'mq-4', question: 'How do you handle a situation where you disagree with an executive stakeholder on a critical decision?', category: 'situational' },
+        { id: 'mq-5', question: 'What metrics do you use to measure the business success and operational rigor of your team?', category: 'technical' },
+        { id: 'mq-6', question: `Why are you specifically interested in ${company} at this stage of its growth?`, category: 'culture' },
+      ];
+    }
+
+    if (normDiff === 'stress_test') {
+      questions = questions.map((q, idx) => ({
+        ...q,
+        question: `[High Rigor] ${q.question} Be specific about trade-offs, metrics, and what you would do differently.`,
+      }));
+    }
+
     return { questions, requestedModel, actualModel: 'deterministic', executionMode: 'deterministic' };
   }
 
@@ -324,12 +416,14 @@ CRITICAL SCORING RULES:
     requestedModel: string,
   ): AnswerEvaluationResult {
     const answer = input.candidateAnswer.trim();
-    const wordCount = answer.split(/\s+/).length;
+    const wordCount = answer.split(/\s+/).filter(Boolean).length;
+    const normDiff = normalizeDifficulty(input.difficulty);
 
     // Structural analysis
-    const hasSpecificExample = /\b(when|while|during|at|in my role)\b/i.test(answer);
-    const hasMetric = /\b(\d+%|\$[\d,]+|\d+x|\d+ (million|billion|thousand|team|people))\b/i.test(answer);
-    const hasResult = /\b(result|outcome|impact|achieved|delivered|increased|reduced|improved)\b/i.test(answer);
+    const hasSpecificExample = /\b(when|while|during|at|in my role|as [a-z]+|i led|i managed|i spearheaded)\b/i.test(answer);
+    const hasMetric = /\b(\d+%|\$[\d,]+|\d+x|\d+ (million|billion|thousand|team|people|direct reports))\b/i.test(answer);
+    const hasResult = /\b(result|outcome|impact|achieved|delivered|increased|reduced|improved|scaled|generated)\b/i.test(answer);
+    const hasTradeoff = /\b(trade-off|tradeoff|prioritized|instead of|sacrifice|balanced|risk)\b/i.test(answer);
 
     // Check for evidence citations in the answer
     const evidenceCitations: string[] = [];
@@ -337,32 +431,54 @@ CRITICAL SCORING RULES:
       if (answer.includes(id)) evidenceCitations.push(id);
     }
 
+    // Baseline scores
+    let relevance = hasSpecificExample ? 3 : 2;
+    let evidenceSpecificity = hasMetric ? 4 : (hasSpecificExample ? 3 : 2);
+    let strategicDepth = (wordCount > 60 && (hasResult || hasTradeoff)) ? 4 : (wordCount > 30 ? 3 : 2);
+    let executiveCommunication = (wordCount >= 25 && wordCount <= 250) ? 4 : 3;
+    let structure = hasResult ? 4 : (hasSpecificExample ? 3 : 2);
+    let concision = (wordCount >= 20 && wordCount <= 180) ? 4 : (wordCount > 250 ? 2 : 3);
+
+    // Adjust for difficulty
+    if (normDiff === 'rigorous') {
+      if (!hasMetric) evidenceSpecificity = Math.max(1, evidenceSpecificity - 1);
+      if (!hasTradeoff && !hasResult) strategicDepth = Math.max(1, strategicDepth - 1);
+    } else if (normDiff === 'stress_test') {
+      if (!hasMetric || !hasSpecificExample) evidenceSpecificity = Math.max(1, evidenceSpecificity - 1);
+      if (wordCount < 40) concision = Math.max(1, concision - 1);
+      if (!hasTradeoff) strategicDepth = Math.max(1, strategicDepth - 1);
+    }
+
     const score: MockAnswerScore = {
-      relevance: hasSpecificExample ? 3 : 2,
-      evidenceSpecificity: hasMetric ? 3 : (hasSpecificExample ? 2 : 1),
-      strategicDepth: wordCount > 80 ? 3 : 2,
-      executiveCommunication: wordCount > 30 && wordCount < 300 ? 3 : 2,
-      structure: hasResult ? 3 : 2,
-      concision: wordCount > 20 && wordCount < 200 ? 3 : 2,
+      relevance: Math.max(1, Math.min(5, relevance)),
+      evidenceSpecificity: Math.max(1, Math.min(5, evidenceSpecificity)),
+      strategicDepth: Math.max(1, Math.min(5, strategicDepth)),
+      executiveCommunication: Math.max(1, Math.min(5, executiveCommunication)),
+      structure: Math.max(1, Math.min(5, structure)),
+      concision: Math.max(1, Math.min(5, concision)),
     };
+
+    const firstRole = input.candidate.careerHistory?.[0];
+    const company = firstRole?.company || 'prior organization';
 
     const coaching: MockAnswerCoaching = {
       strengths: [
-        ...(hasSpecificExample ? ['Included a specific example'] : []),
-        ...(hasMetric ? ['Referenced measurable outcomes'] : []),
-        ...(wordCount > 30 ? ['Provided substantive detail'] : []),
+        ...(hasSpecificExample ? ['Anchored in a concrete experience'] : []),
+        ...(hasMetric ? ['Referenced quantifiable outcomes'] : []),
+        ...(hasResult ? ['Articulated business impact'] : []),
+        ...(wordCount >= 30 ? ['Provided substantive context'] : []),
       ],
       improvements: [
-        ...(!hasSpecificExample ? ['Include a specific example from your experience'] : []),
-        ...(!hasMetric ? ['Add quantifiable results or metrics'] : []),
-        ...(!hasResult ? ['Clearly state the outcome or impact'] : []),
-        ...(wordCount < 30 ? ['Expand your answer with more detail'] : []),
-        ...(wordCount > 300 ? ['Consider being more concise'] : []),
+        ...(!hasSpecificExample ? ['Ground your answer with a specific scenario from your career'] : []),
+        ...(!hasMetric ? ['Quantify business results with measurable metrics ($, %, headcount, scale)'] : []),
+        ...(!hasResult ? ['Explicitly state the business outcome and strategic value created'] : []),
+        ...(!hasTradeoff && normDiff !== 'standard' ? ['Articulate trade-offs and risks evaluated during execution'] : []),
       ],
+      improvedAnswer: `Suggested Grounded Framework: At ${company}, I addressed similar challenges by first evaluating core constraints, aligning stakeholders across functions, and executing with measurable results (${hasMetric ? 'scaling performance significantly' : 'delivering quantified business impact'}).`,
     };
 
-    if (coaching.strengths.length === 0) coaching.strengths.push('Answered the question directly');
-    if (coaching.improvements.length === 0) coaching.improvements.push('Consider adding more specific examples');
+    if (coaching.strengths.length === 0) coaching.strengths.push('Directly addressed the prompt');
+    if (coaching.improvements.length === 0) coaching.improvements.push('Continue to refine concision and strategic altitude');
 
     return {
       score,

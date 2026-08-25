@@ -41,9 +41,14 @@ import { InterviewWarRoom } from '@/components/interview/InterviewWarRoom';
 import { MockInterviewPanel } from '@/components/interview/MockInterviewPanel';
 import { FollowUpEngineView } from '@/components/interview/FollowUpEngineView';
 
+import { useAuth } from '@/context/AuthContext';
+import { getActiveStorageAdapter } from '@/lib/storage/repositoryManager';
+import { OpportunityActivity, ActivityType } from '@/types/interview';
+
 export default function AnalysisResultsPage() {
   const router = useRouter();
   const params = useParams();
+  const { user } = useAuth();
   const { profile, mounted } = useCandidateProfile();
   const idFromPath =
     typeof params?.id === 'string'
@@ -78,6 +83,9 @@ export default function AnalysisResultsPage() {
   >('overview');
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isReanalyzing, setIsReanalyzing] = useState(false);
+  const [reanalyzeStatus, setReanalyzeStatus] = useState<string | null>(null);
+  const [reanalyzeError, setReanalyzeError] = useState<string | null>(null);
+  const [reanalyzeSuccess, setReanalyzeSuccess] = useState<string | null>(null);
   const [isGeneratingPrep, setIsGeneratingPrep] = useState(false);
 
   if (!opportunity) {
@@ -186,7 +194,12 @@ export default function AnalysisResultsPage() {
   const handleReanalyze = async () => {
     if (!opportunity || isReanalyzing) return;
     setIsReanalyzing(true);
+    setReanalyzeError(null);
+    setReanalyzeSuccess(null);
+    setReanalyzeStatus('Re-analyzing role against active candidate profile...');
+
     try {
+      setReanalyzeStatus('Extracting key requirements & matching candidate evidence...');
       const engine = getAnalysisEngine('gemini');
       const freshReport = await engine.analyzeRole(
         {
@@ -201,6 +214,7 @@ export default function AnalysisResultsPage() {
         toAnalysisCandidate(profile)
       );
 
+      setReanalyzeStatus('Synthesizing executive positioning and updating action plan...');
       const updatedActions = mergeActionsForStage(
         opportunity.id,
         opportunity.stage,
@@ -215,11 +229,36 @@ export default function AnalysisResultsPage() {
         updatedAt: new Date().toISOString(),
       };
 
+      // 1. Save to local storage & memory
       saveOpportunity(updatedOpportunity);
-      window.location.reload();
-    } catch (err) {
+
+      // 2. Save to cloud if authenticated
+      if (user?.id && user.id !== 'local-executive-user') {
+        try {
+          const adapter = getActiveStorageAdapter();
+          await adapter.opportunities.save(updatedOpportunity, user.id);
+        } catch (cloudErr) {
+          console.warn('[AnalysisResultsPage] Cloud sync notice:', cloudErr);
+        }
+      }
+
+      // 3. Add activity timeline entry
+      await addActivity({
+        opportunityId: opportunity.id,
+        activityType: 'analysis_run',
+        title: `Role Re-Analyzed for ${profile.name || 'Active Candidate'}`,
+        notes: `Updated fit analysis score: ${freshReport.overallFitScore}%. Recommendation: ${freshReport.recommendation}.`,
+        occurredAt: new Date().toISOString(),
+        source: 'user',
+      });
+
+      setReanalyzeSuccess(`Role successfully re-analyzed for ${profile.name || 'active candidate'}!`);
+    } catch (err: unknown) {
       console.error('Failed to re-analyze opportunity:', err);
+      setReanalyzeError(err instanceof Error ? err.message : 'Failed to re-analyze role. Please check connection and retry.');
+    } finally {
       setIsReanalyzing(false);
+      setReanalyzeStatus(null);
     }
   };
 
@@ -264,8 +303,53 @@ export default function AnalysisResultsPage() {
         <FallbackAnalysisNotice text={analysis.analysisNotice} />
       )}
 
+      {/* Re-analyze Feedback Banners */}
+      {reanalyzeStatus && (
+        <div className="bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 text-indigo-900 dark:text-indigo-200 p-4 rounded-xl text-xs flex items-center gap-3 shadow-xs animate-pulse">
+          <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin shrink-0" />
+          <div>
+            <span className="font-bold block text-sm">Evaluating Role Match</span>
+            <p className="text-indigo-700 dark:text-indigo-300">{reanalyzeStatus}</p>
+          </div>
+        </div>
+      )}
+
+      {reanalyzeSuccess && (
+        <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 p-4 rounded-xl text-xs flex items-center justify-between gap-3 shadow-xs animate-in fade-in duration-200">
+          <div className="flex items-center gap-2">
+            <IconCheckCircle className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+            <span className="font-semibold">{reanalyzeSuccess}</span>
+          </div>
+          <button
+            onClick={() => setReanalyzeSuccess(null)}
+            className="text-xs text-emerald-700 hover:text-emerald-900 font-medium"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {reanalyzeError && (
+        <div className="bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-900 dark:text-rose-200 p-4 rounded-xl text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+          <div className="space-y-1">
+            <span className="font-bold flex items-center gap-1.5 text-sm">
+              <IconAlertTriangle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />
+              Re-Analysis Failed
+            </span>
+            <p className="text-rose-800 dark:text-rose-300">{reanalyzeError}</p>
+          </div>
+          <button
+            onClick={handleReanalyze}
+            disabled={isReanalyzing}
+            className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-lg text-xs shrink-0 w-fit transition-colors"
+          >
+            Retry Re-Analysis
+          </button>
+        </div>
+      )}
+
       {/* Historical Provenance & Freshness Warning Banners */}
-      {mounted && freshness === 'stale' && (
+      {mounted && freshness === 'stale' && !reanalyzeSuccess && (
         <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200 p-4 rounded-xl text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
           <div className="space-y-1">
             <span className="font-bold flex items-center gap-1.5 text-sm">

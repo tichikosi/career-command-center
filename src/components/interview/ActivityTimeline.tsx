@@ -24,6 +24,8 @@ import {
 } from '@/components/icons';
 import { formatShortDate } from '@/lib/dateUtils';
 import { ScheduledInterviewModal } from './ScheduledInterviewModal';
+import { SearchableContactPicker } from '@/components/network/SearchableContactPicker';
+import { useNetwork } from '@/lib/networkStorage';
 
 interface ActivityTimelineProps {
   opportunityId: string;
@@ -70,6 +72,7 @@ export function ActivityTimeline({
   onDeleteActivity,
   isLoading = false,
 }: ActivityTimelineProps) {
+  const { contacts: allNetworkContacts } = useNetwork();
   const [filterType, setFilterType] = useState<string>('all');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
@@ -82,6 +85,7 @@ export function ActivityTimeline({
   const [formNotes, setFormNotes] = useState('');
   const [formDate, setFormDate] = useState(new Date().toISOString().split('T')[0]);
   const [formContactId, setFormContactId] = useState('');
+  const [formContactName, setFormContactName] = useState('');
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -99,6 +103,7 @@ export function ActivityTimeline({
     setFormNotes('');
     setFormDate(new Date().toISOString().split('T')[0]);
     setFormContactId('');
+    setFormContactName('');
     setErrorMessage(null);
     setIsAddModalOpen(true);
   };
@@ -110,6 +115,7 @@ export function ActivityTimeline({
     setFormNotes(activity.notes || '');
     setFormDate(activity.occurredAt.split('T')[0] || new Date().toISOString().split('T')[0]);
     setFormContactId(activity.contactId || '');
+    setFormContactName(activity.contactName || '');
     setErrorMessage(null);
   };
 
@@ -118,7 +124,6 @@ export function ActivityTimeline({
     if (!formTitle.trim()) return;
 
     setErrorMessage(null);
-    const contact = matchingContacts.find((c) => c.id === formContactId);
     const occurredAt = `${formDate}T12:00:00.000Z`;
 
     try {
@@ -129,7 +134,7 @@ export function ActivityTimeline({
           notes: formNotes.trim() || undefined,
           occurredAt,
           contactId: formContactId || undefined,
-          contactName: contact ? contact.fullName : editingActivity.contactName,
+          contactName: formContactName || undefined,
         });
         if (res === null) {
           setErrorMessage('Failed to update activity in cloud storage. Please check connection.');
@@ -144,7 +149,7 @@ export function ActivityTimeline({
           notes: formNotes.trim() || undefined,
           occurredAt,
           contactId: formContactId || undefined,
-          contactName: contact?.fullName || undefined,
+          contactName: formContactName || undefined,
           source: 'user',
         });
         if (res === null) {
@@ -413,25 +418,23 @@ export function ActivityTimeline({
                 />
               </div>
 
-              {matchingContacts.length > 0 && (
-                <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    Linked Contact
-                  </label>
-                  <select
-                    value={formContactId}
-                    onChange={(e) => setFormContactId(e.target.value)}
-                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  >
-                    <option value="">-- None --</option>
-                    {matchingContacts.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.fullName} {c.position ? `(${c.position})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
+              <SearchableContactPicker
+                contacts={allNetworkContacts.length > 0 ? allNetworkContacts : matchingContacts}
+                matchingContacts={matchingContacts}
+                selectedContactId={formContactId}
+                selectedContactName={formContactName}
+                onSelectContact={(c) => {
+                  if (c) {
+                    setFormContactId(c.id);
+                    setFormContactName(c.fullName);
+                  } else {
+                    setFormContactId('');
+                    setFormContactName('');
+                  }
+                }}
+                label="Linked Contact"
+                placeholder={`Search contacts at ${opportunityCompany} or network...`}
+              />
             </div>
 
             <div>

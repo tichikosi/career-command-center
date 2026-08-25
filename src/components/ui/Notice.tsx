@@ -7,11 +7,11 @@ export function SyntheticDisclaimerBanner() {
       <div className="flex items-center gap-2 max-w-7xl mx-auto w-full">
         <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
         <span className="font-medium tracking-wide text-slate-100 uppercase text-[10px]">
-          Public Demonstration
+          Career Command Center V3.3
         </span>
         <span className="text-slate-400">|</span>
         <span className="text-slate-300">
-          100% Synthetic Data & Client-Side Processing (Version 1.1B)
+          Public Synthetic Demo Isolation (Alex Vance) • Authenticated Cloud Persistence
         </span>
       </div>
     </div>
@@ -38,10 +38,10 @@ export function FallbackAnalysisNotice({ text }: { text?: string }) {
       <IconAlertTriangle className="w-5 h-5 text-indigo-600 dark:text-indigo-400 shrink-0 mt-0.5" />
       <div>
         <span className="font-semibold text-indigo-950 dark:text-indigo-100 block">
-          Version 1 Simplified Heuristic Analysis
+          Simplified Heuristic Evaluation
         </span>
         {text ||
-          'This output uses lightweight keyword signal extraction. Live semantic AI analysis is planned for Version 2.'}
+          'Live AI analysis was unreachable; evaluated using deterministic keyword signal extraction.'}
       </div>
     </div>
   );

@@ -450,10 +450,10 @@ export default function AnalyzePage() {
                 Privacy & Data Notice:
               </span>
               <p>
-                In Version 1, custom-pasted text is processed exclusively in your browser using
-                deterministic keyword signal matching. It is stored locally in `localStorage` and
-                never transmitted to external servers. Avoid pasting confidential or proprietary
-                company text.
+                In Career Command Center, custom-pasted role text is evaluated against your candidate profile.
+                For authenticated users, opportunities and analyses persist securely to your private cloud
+                account. For demo sessions, data remains isolated in browser memory and local storage.
+                Avoid pasting confidential or proprietary employer documents.
               </p>
             </div>
 

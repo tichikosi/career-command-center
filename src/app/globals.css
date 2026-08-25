@@ -29,7 +29,8 @@
   nav,
   aside,
   button,
-  .no-print {
+  .no-print,
+  .print\:hidden {
     display: none !important;
   }
   main {
@@ -39,9 +40,12 @@
   }
   .card,
   [class*="rounded-xl"],
+  [class*="rounded-2xl"],
   [class*="border"] {
     box-shadow: none !important;
     border-color: #e2e8f0 !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
   a {
     text-decoration: none !important;

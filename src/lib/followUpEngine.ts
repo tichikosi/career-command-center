@@ -37,7 +37,10 @@ export function evaluateOpportunityFollowUp(
   const followUpClassification = classifyFollowUpDate(opportunity.followUpDate);
 
   // 1. SUPPRESSION: Suppress routine follow-ups for Archived / Rejected / Withdrawn
-  if (opportunity.stage === 'Archived') {
+  const hasDecisionOrWithdrawal = sortedActivities.some(
+    (a) => a.activityType === 'rejection_received' || a.activityType === 'withdrawal'
+  );
+  if (opportunity.stage === 'Archived' || hasDecisionOrWithdrawal) {
     return [];
   }
 

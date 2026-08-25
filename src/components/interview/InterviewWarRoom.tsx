@@ -14,6 +14,8 @@ import {
 } from '@/components/icons';
 import { formatShortDate } from '@/lib/dateUtils';
 
+import { InterviewCheatSheet } from './InterviewCheatSheet';
+
 interface InterviewWarRoomProps {
   opportunity: JobOpportunity;
   candidate: CandidateProfile;
@@ -28,6 +30,7 @@ interface InterviewWarRoomProps {
 export function InterviewWarRoom({
   opportunity,
   candidate,
+  analysisReport,
   activePrep,
   prepHistory,
   onGeneratePrep,
@@ -35,8 +38,8 @@ export function InterviewWarRoom({
   isGenerating = false,
 }: InterviewWarRoomProps) {
   const [activeSubTab, setActiveSubTab] = useState<
-    'strategy' | 'questions' | 'stories' | 'gaps' | 'company' | 'compensation'
-  >('strategy');
+    'cheatsheet' | 'strategy' | 'questions' | 'stories' | 'gaps' | 'company' | 'compensation'
+  >('cheatsheet');
 
   const evidenceMap = new Map<string, EvidenceItem>(
     (candidate.evidenceItems || []).map((e) => [e.id, e])
@@ -58,7 +61,7 @@ export function InterviewWarRoom({
       {/* Top Banner & Generation Trigger */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900 text-white dark:bg-slate-900/80 dark:border dark:border-slate-800 p-5 rounded-2xl shadow-sm">
         <div className="space-y-1">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="p-1.5 bg-indigo-500/20 text-indigo-300 rounded-lg">
               <IconBrain className="w-5 h-5" />
             </span>
@@ -68,15 +71,20 @@ export function InterviewWarRoom({
                 Simplified Coaching Mode
               </span>
             )}
+            {activePrep && (
+              <span className="text-[11px] text-slate-400 font-medium">
+                Last generated: {formatShortDate(activePrep.generatedAt)}
+              </span>
+            )}
           </div>
           <p className="text-xs text-slate-300 max-w-xl">
-            Strategic executive briefing, candidate positioning, question bank, and grounded STAR story bank tailored to{' '}
+            Strategic executive briefing, candidate positioning, pre-interview cheat sheet, question bank, and grounded STAR story bank tailored to{' '}
             <strong className="text-white">{opportunity.title}</strong> at{' '}
             <strong className="text-white">{opportunity.company}</strong>.
           </p>
         </div>
 
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-3 shrink-0 flex-wrap">
           {prepHistory.length > 1 && (
             <select
               aria-label="Preparation history"
@@ -106,24 +114,37 @@ export function InterviewWarRoom({
               {isGenerating
                 ? 'Synthesizing War Room...'
                 : activePrep
-                ? 'Regenerate Brief'
+                ? 'Refresh Interview Brief'
                 : 'Generate Interview Brief'}
             </span>
           </button>
         </div>
       </div>
 
+      {/* Progress / Generating State Banner */}
+      {isGenerating && (
+        <div className="bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 text-indigo-900 dark:text-indigo-200 p-4 rounded-xl text-xs flex items-center gap-3 shadow-xs animate-pulse">
+          <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin shrink-0" />
+          <div className="space-y-0.5">
+            <span className="font-bold text-sm block">Synthesizing Interview War Room</span>
+            <p className="text-indigo-700 dark:text-indigo-300">
+              Reviewing candidate evidence, preparing question bank, and formulating STAR story alignment. Live AI synthesis may take several seconds.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Staleness Warning */}
-      {isStale && (
+      {isStale && !isGenerating && (
         <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200 p-4 rounded-xl text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
           <div className="space-y-1">
             <span className="font-bold flex items-center gap-1.5 text-sm">
               <IconAlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
-              Interview Preparation May Be Outdated
+              Interview Preparation Potentially Stale
             </span>
             <p className="text-amber-800 dark:text-amber-300">
               Candidate profile evidence or opportunity details have changed since this briefing was generated on{' '}
-              {formatShortDate(activePrep.generatedAt)}. Click Regenerate to incorporate new achievements.
+              {formatShortDate(activePrep.generatedAt)}. Click Refresh Interview Brief to incorporate updated achievements.
             </p>
           </div>
           <button
@@ -131,7 +152,7 @@ export function InterviewWarRoom({
             disabled={isGenerating}
             className="px-3.5 py-1.5 bg-amber-900 dark:bg-amber-100 text-white dark:text-amber-900 font-semibold rounded-lg text-xs shrink-0 w-fit hover:opacity-90 transition-opacity"
           >
-            Regenerate Now
+            Refresh Now
           </button>
         </div>
       )}
@@ -208,6 +229,7 @@ export function InterviewWarRoom({
           {/* Sub Navigation */}
           <div className="flex items-center gap-1 border-b border-slate-200 dark:border-slate-800 overflow-x-auto text-xs pb-2">
             {[
+              { key: 'cheatsheet', label: '⭐ Interview Cheat Sheet' },
               { key: 'strategy', label: 'Executive Strategy & Positioning' },
               { key: 'questions', label: `Anticipated Questions (${activePrep.questions.length})` },
               { key: 'stories', label: `Grounded Story Bank (${activePrep.storyBank.length})` },
@@ -218,7 +240,7 @@ export function InterviewWarRoom({
               <button
                 key={t.key}
                 onClick={() => setActiveSubTab(t.key as typeof activeSubTab)}
-                className={`px-3 py-1.5 rounded-lg font-medium transition-colors ${
+                className={`px-3 py-1.5 rounded-lg font-medium transition-colors whitespace-nowrap ${
                   activeSubTab === t.key
                     ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-bold'
                     : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
@@ -228,6 +250,20 @@ export function InterviewWarRoom({
               </button>
             ))}
           </div>
+
+          {/* Tab 0: Flagship Cheat Sheet */}
+          {activeSubTab === 'cheatsheet' && (
+            <div className="animate-in fade-in duration-150">
+              <InterviewCheatSheet
+                opportunity={opportunity}
+                candidate={candidate}
+                activePrep={activePrep}
+                analysisReport={analysisReport}
+                onRefresh={onGeneratePrep}
+                isRefreshing={isGenerating}
+              />
+            </div>
+          )}
 
           {/* Tab 1: Strategy & Positioning */}
           {activeSubTab === 'strategy' && (

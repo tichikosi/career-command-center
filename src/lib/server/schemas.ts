@@ -217,7 +217,7 @@ export const MockQuestionsRequestSchema = z.object({
     rawJobDescription: z.string().default(''),
   }),
   candidateSnapshot: CandidateProfileSnapshotSchema,
-  difficulty: z.enum(['standard', 'challenging', 'executive']).default('standard'),
+  difficulty: z.enum(['standard', 'rigorous', 'stress_test', 'challenging', 'executive', 'adversarial']).default('standard'),
   mode: z.enum(['practice', 'timed', 'full']).default('practice'),
 });
 
@@ -232,7 +232,7 @@ export const MockEvaluationRequestSchema = z.object({
     rawJobDescription: z.string().default(''),
   }),
   candidateSnapshot: CandidateProfileSnapshotSchema,
-  difficulty: z.enum(['standard', 'challenging', 'executive']).default('standard'),
+  difficulty: z.enum(['standard', 'rigorous', 'stress_test', 'challenging', 'executive', 'adversarial']).default('standard'),
 });
 
 export const FollowUpComposeRequestSchema = z.object({

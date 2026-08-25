@@ -168,7 +168,13 @@ export interface InterviewPreparation {
 // Mock Interview Session
 // ---------------------------------------------------------------------------
 
-export type MockDifficulty = 'standard' | 'challenging' | 'executive';
+export type MockDifficulty =
+  | 'standard'
+  | 'rigorous'
+  | 'stress_test'
+  | 'challenging'
+  | 'executive'
+  | 'adversarial';
 
 export interface MockAnswerScore {
   relevance: number;           // 1-5
@@ -194,6 +200,11 @@ export interface MockInterviewExchange {
   coaching: MockAnswerCoaching;
   evidenceCitations: string[];  // EVID-* IDs that were validly referenced
   answeredAt: string;
+  durationSeconds?: number;     // Time spent answering (seconds)
+  isOvertime?: boolean;        // Whether user exceeded timed limit
+  roundName?: string;          // E.g. 'Recruiter Screen', 'Hiring Manager'
+  roundNumber?: number;        // Round index (1-based)
+  totalRounds?: number;
 }
 
 export interface InterviewSession {
@@ -211,6 +222,9 @@ export interface InterviewSession {
   summary: string;
   strengths: string[];
   improvementAreas: string[];
+  averageDurationSeconds?: number;
+  roundsCompleted?: number;
+  totalRounds?: number;
 
   // Provenance
   requestedModel: string;
