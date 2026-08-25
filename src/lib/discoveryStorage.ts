@@ -50,15 +50,39 @@ export function subscribeToDiscovery(listener: () => void): () => void {
 }
 
 /**
- * Normalizes job URL and company/title for robust deduplication.
+ * Normalizes a URL for deduplication by stripping tracking query params and trailing slashes.
+ */
+export function normalizeJobUrl(rawUrl?: string): string {
+  if (!rawUrl || typeof rawUrl !== 'string') return '';
+  try {
+    const parsed = new URL(rawUrl.trim());
+    const trackingParams = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'ref', 'gh_src', 'source', 'fbclid', 'gclid'];
+    trackingParams.forEach((param) => parsed.searchParams.delete(param));
+    let cleaned = parsed.toString().toLowerCase();
+    if (cleaned.endsWith('/')) cleaned = cleaned.slice(0, -1);
+    return cleaned;
+  } catch {
+    return rawUrl.trim().toLowerCase().replace(/\/+$/, '');
+  }
+}
+
+/**
+ * Normalizes company, title, and location for robust semantic deduplication.
  */
 export function generateJobFingerprint(company: string, title: string, location?: string): string {
   const normCo = normalizeCompanyName(company || '');
   const normTitle = (title || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-  const normLoc = (location || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const normLoc = (location || '')
+    .toLowerCase()
+    .replace(/\b(hybrid|remote|onsite|on-site)\b/g, '')
+    .replace(/[^a-z0-9]/g, '');
   return `${normCo}::${normTitle}::${normLoc}`;
 }
 
+/**
+ * Deduplicates incoming discovered roles against existing discovery items, saved roles,
+ * dismissed roles, and active pipeline opportunities.
+ */
 export function deduplicateDiscoveredJobs(
   incomingJobs: DiscoveredJob[],
   existingJobs: DiscoveredJob[],
@@ -70,14 +94,15 @@ export function deduplicateDiscoveredJobs(
   // Index active opportunities
   activeOpportunities.forEach((opp) => {
     existingFingerprints.add(generateJobFingerprint(opp.company, opp.title, opp.location));
-    if (opp.applicationUrl) existingUrls.add(opp.applicationUrl.toLowerCase().trim());
-    if (opp.sourceUrl) existingUrls.add(opp.sourceUrl.toLowerCase().trim());
+    if (opp.applicationUrl) existingUrls.add(normalizeJobUrl(opp.applicationUrl));
+    if (opp.sourceUrl) existingUrls.add(normalizeJobUrl(opp.sourceUrl));
   });
 
-  // Index existing discovery queue
+  // Index existing discovery queue (including saved, promoted, and dismissed)
   existingJobs.forEach((job) => {
     existingFingerprints.add(generateJobFingerprint(job.company, job.title, job.location));
-    if (job.jobUrl) existingUrls.add(job.jobUrl.toLowerCase().trim());
+    if (job.jobUrl) existingUrls.add(normalizeJobUrl(job.jobUrl));
+    if (job.finalCanonicalUrl) existingUrls.add(normalizeJobUrl(job.finalCanonicalUrl));
   });
 
   const uniqueJobs: DiscoveredJob[] = [];
@@ -85,13 +110,20 @@ export function deduplicateDiscoveredJobs(
 
   for (const job of incomingJobs) {
     const fp = generateJobFingerprint(job.company, job.title, job.location);
-    const url = job.jobUrl ? job.jobUrl.toLowerCase().trim() : null;
+    const normUrl = normalizeJobUrl(job.jobUrl);
+    const normCanonical = normalizeJobUrl(job.finalCanonicalUrl);
 
-    if (existingFingerprints.has(fp) || (url && existingUrls.has(url))) {
+    const isDuplicate =
+      existingFingerprints.has(fp) ||
+      (normUrl && existingUrls.has(normUrl)) ||
+      (normCanonical && existingUrls.has(normCanonical));
+
+    if (isDuplicate) {
       duplicatesCount++;
     } else {
       existingFingerprints.add(fp);
-      if (url) existingUrls.add(url);
+      if (normUrl) existingUrls.add(normUrl);
+      if (normCanonical) existingUrls.add(normCanonical);
       uniqueJobs.push(job);
     }
   }
@@ -99,6 +131,9 @@ export function deduplicateDiscoveredJobs(
   return { uniqueJobs, duplicatesCount };
 }
 
+/**
+ * Evaluates candidate-specific discovery relevance based on target roles, industries, and locations.
+ */
 export function scoreDiscoveryRelevance(
   job: Partial<DiscoveredJob>,
   candidate: CandidateProfile
@@ -176,6 +211,25 @@ export function scoreDiscoveryRelevance(
   };
 }
 
+/**
+ * One-time legacy migration for items in localStorage generated prior to V3.1 grounding.
+ */
+function migrateLegacyDiscoveryJobs(jobs: DiscoveredJob[]): DiscoveredJob[] {
+  return jobs.map((job) => {
+    if (!job.verificationStatus) {
+      return {
+        ...job,
+        provider: job.source || 'Legacy Discovery Provider',
+        groundingUsed: false,
+        verificationStatus: 'unverified-legacy',
+        verificationReason: 'Legacy discovery result generated prior to real-time Google Search grounding.',
+        sourceConfidence: 50,
+      };
+    }
+    return job;
+  });
+}
+
 export function getDiscoveredJobs(): DiscoveredJob[] {
   if (cachedDiscoveredJobs !== null) {
     return cachedDiscoveredJobs;
@@ -193,7 +247,9 @@ export function getDiscoveredJobs(): DiscoveredJob[] {
       return cachedDiscoveredJobs;
     }
     const parsed = JSON.parse(raw);
-    cachedDiscoveredJobs = Array.isArray(parsed) ? parsed : [];
+    const rawList = Array.isArray(parsed) ? parsed : [];
+    const migrated = migrateLegacyDiscoveryJobs(rawList);
+    cachedDiscoveredJobs = migrated;
     return cachedDiscoveredJobs;
   } catch {
     cachedDiscoveredJobs = inMemoryDiscoveredJobs;
@@ -202,12 +258,13 @@ export function getDiscoveredJobs(): DiscoveredJob[] {
 }
 
 export function saveDiscoveredJobs(jobs: DiscoveredJob[]): void {
-  cachedDiscoveredJobs = jobs;
-  inMemoryDiscoveredJobs = jobs;
+  const migrated = migrateLegacyDiscoveryJobs(jobs);
+  cachedDiscoveredJobs = migrated;
+  inMemoryDiscoveredJobs = migrated;
 
   if (isLocalStorageAvailable()) {
     try {
-      window.localStorage.setItem(CCC_DISCOVERY_JOBS_KEY, JSON.stringify(jobs));
+      window.localStorage.setItem(CCC_DISCOVERY_JOBS_KEY, JSON.stringify(migrated));
     } catch {
       // Ignore
     }
@@ -270,17 +327,22 @@ export function recordDiscoveryRun(item: Omit<DiscoveryHistoryItem, 'id'>): Disc
   return newItem;
 }
 
+/**
+ * Promotes a discovered role directly into Opportunities pipeline with full provenance.
+ */
 export function promoteDiscoveredJobToOpportunity(job: DiscoveredJob): JobOpportunity {
+  const targetUrl = job.jobUrl || job.finalCanonicalUrl;
   const opp = createOpportunity({
     company: job.company,
     title: job.title,
     location: job.location,
     compensation: job.compensation,
-    applicationUrl: job.jobUrl,
+    sourceUrl: targetUrl,
+    applicationUrl: targetUrl,
     rawJobDescription: job.description || job.snippet || `${job.title} at ${job.company}`,
     stage: 'Identified',
     priority: job.relevanceLevel === 'High Potential' ? 'High' : 'Medium',
-    notes: `Surfaced via ${job.source} on ${job.discoveredAt.slice(0, 10)}. Relevance: ${job.relevanceLevel} (${job.relevanceScore}%).`,
+    notes: `Surfaced via ${job.provider || job.source} on ${job.discoveredAt.slice(0, 10)}. Status: ${job.verificationStatus}. Discovery Relevance: ${job.relevanceLevel} (${job.relevanceScore}%).`,
   });
 
   updateDiscoveredJobStatus(job.id, 'promoted');

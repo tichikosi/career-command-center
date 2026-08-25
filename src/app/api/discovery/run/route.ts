@@ -11,6 +11,32 @@ export async function POST(req: NextRequest) {
 
     const result = await runDiscoveryForCandidate(candidate, { providerPreference });
 
+    if (result.error) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: result.error,
+          stats: {
+            totalFound: 0,
+            durationMs: result.durationMs,
+            source: result.source,
+            provider: result.provider,
+            groundingEnabled: result.groundingEnabled,
+            groundingQueries: result.groundingQueries,
+            jobsReturnedByModel: result.jobsReturnedByModel,
+            jobsGrounded: result.jobsGrounded,
+            jobsUrlValid: result.jobsUrlValid,
+            jobsVerifiedLive: result.jobsVerifiedLive,
+            jobsRejected: result.jobsRejected,
+            modelRequested: result.modelRequested,
+            modelUsed: result.modelUsed,
+            sanitizedFailureReason: result.sanitizedFailureReason,
+          },
+        },
+        { status: 200 } // Return 200 with success: false for clean client-side state handling
+      );
+    }
+
     return NextResponse.json({
       success: true,
       jobs: result.jobs,
@@ -18,10 +44,20 @@ export async function POST(req: NextRequest) {
         totalFound: result.totalFound,
         durationMs: result.durationMs,
         source: result.source,
+        provider: result.provider,
+        groundingEnabled: result.groundingEnabled,
+        groundingQueries: result.groundingQueries,
+        jobsReturnedByModel: result.jobsReturnedByModel,
+        jobsGrounded: result.jobsGrounded,
+        jobsUrlValid: result.jobsUrlValid,
+        jobsVerifiedLive: result.jobsVerifiedLive,
+        jobsRejected: result.jobsRejected,
+        modelRequested: result.modelRequested,
+        modelUsed: result.modelUsed,
       },
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Discovery run failed';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }

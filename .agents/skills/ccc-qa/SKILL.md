@@ -5,16 +5,16 @@ description: Automated QA playbook, quality gate procedures, and test runner ins
 
 # Career Command Center — QA & Evaluation Playbook
 
-This skill outlines the automated quality assurance architecture, test commands, benchmark cases, AI evaluation harness, and release verification gates for **Career Command Center (V2.0 → V2.1 → V3.0 Core)**.
+This skill outlines the automated quality assurance architecture, test commands, benchmark cases, AI evaluation harness, and release verification gates for **Career Command Center (V2.0 → V2.1 → V3.0 Core → V3.1 Grounded Discovery)**.
 
 ## 1. Automated QA Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                    CAREER COMMAND CENTER V3.0 CORE QA                   │
+│                    CAREER COMMAND CENTER V3.1 QA GATES                  │
 ├──────────────────────────────┬───────────────────────────┬──────────────┤
 │ UNIT & CONTRACT TESTS        │ END-TO-END BROWSER TESTS  │ AI GOVERNANCE│
-│ (Vitest 233/233 PASS)        │ (Playwright 22/22 PASS)   │ (Harness)    │
+│ (Vitest 265/265 PASS)        │ (Playwright 23/23 PASS)   │ (Harness)    │
 │ • stageActions.test.ts       │ • smoke.spec.ts           │ • evaluator  │
 │ • candidateAdapter.test.ts   │ • pipelineWorkflow.spec.ts│ • evalRunner │
 │ • engineContract.test.ts     │ • candidateProfile.spec.ts│ • latest.json│
@@ -32,6 +32,11 @@ This skill outlines the automated quality assurance architecture, test commands,
 │ • discovery.test.ts          │                           │              │
 │ • storageRepositories.test.ts│                           │              │
 │ • evaluator.test.ts          │                           │              │
+│ • urlValidator.test.ts       │                           │              │
+│ • listingVerifier.test.ts    │                           │              │
+│ • groundingProvenance.test.ts│                           │              │
+│ • discoveryDedupe.test.ts     │                           │              │
+│ • discoveryPromotion.test.ts │                           │              │
 └──────────────────────────────┴───────────────────────────┴──────────────┘
 ```
 
@@ -39,10 +44,11 @@ This skill outlines the automated quality assurance architecture, test commands,
 
 | Command | Scope & Purpose |
 | :--- | :--- |
-| `npm run test:unit` | Executes all 17 Vitest unit & contract test suites (233 tests). |
+| `npm run test:unit` | Executes all 22 Vitest unit & contract test suites (265 tests). |
 | `npm run test:smoke` | Executes quick Playwright browser smoke tests across all routes. |
-| `npm run test:e2e` | Runs full suite of Playwright end-to-end user workflows (22 tests). |
+| `npm run test:e2e` | Runs full suite of Playwright end-to-end user workflows (23 tests). |
 | `npm run test:regression` | Runs unit tests + Playwright regression suite. |
+| `npm run verify:discovery-live` | Developer CLI to verify live Google Search grounding against Gemini API. |
 | `npm run build` | Compiles Next.js production build with Turbopack and typechecks. |
 | `npm run lint` | ESLint 9 rule enforcement (0 errors, 0 warnings). |
 | `npm run eval` | Executes AI Evaluation and Governance benchmark runner. |

@@ -1,26 +1,31 @@
-# Career Command Center v3.0 Core
+# Career Command Center v3.1
 
-> **AI-Native Career Intelligence, Autonomous Job Discovery, Opportunity Evaluation & Executive Recruiting CRM**
+> **AI-Native Career Intelligence, Live Grounded Job Discovery, Opportunity Evaluation & Executive Recruiting CRM**
 > Built for senior executives, strategy leaders, and operations practitioners.
 
 ---
 
 ## 🌟 Executive Overview
 
-Career Command Center transforms fragmented career searches into an evidence-based, structured intelligence workflow. It couples a live **Gemini 3.7 / 3.6 Flash** evaluation engine with local browser-persisted privacy, structured résumé ingestion, professional network intelligence, an autonomous role discovery feed, and an accessible Kanban CRM.
+Career Command Center transforms fragmented career searches into an evidence-based, structured intelligence workflow. It couples a live **Gemini 3.7 / 3.6 Flash** evaluation engine with official **Google Search Grounding (`tools: [{ googleSearch: {} }]`)**, server-side SSRF URL validation, deterministic ATS listing verification, local browser-persisted privacy, structured résumé ingestion, professional network intelligence, and an accessible Kanban CRM.
 
 ---
 
-## 🚀 Key Capabilities (V2.0 → V2.1 → V3.0 Core)
+## 🚀 Key Capabilities (V2.0 → V3.0 Core → V3.1 Grounded Discovery)
 
-### 1. 🧭 Autonomous Job Discovery Workspace (V3.0 Core)
-- **Autonomous Discovery Feed (`/discover`)**: Automatically surfaces new executive and leadership opportunities matching candidate target roles, preferred locations, and target industries.
-- **Dual Discovery Provider Abstraction**:
-  - **Gemini Intelligent Market Discovery**: Uses Gemini search grounding and real-time market synthesis to discover newly opened executive positions.
-  - **Curated Strategic Feed**: Deterministic high-quality offline feed of executive roles at leading AI and technology platforms.
-- **Smart Deduplication & Pre-Screening**: Rejects duplicate job postings by canonical URL and (Company + Title + Location) fingerprints. Evaluates relevance (`High Potential`, `Possible Fit`, `Low Relevance`) with transparent rationale.
-- **One-Click Pipeline Promotion**: Promotes discovered opportunities directly into the `Identified` pipeline stage, immediately triggering network matching and candidate fit analysis.
-- **Automation & Cron Readiness**: Endpoint `/api/discovery/cron` with Vercel Cron schedule (`vercel.json`) and audit run history (`ccc_discovery_history_v1`).
+### 1. 🧭 Live Google Search Grounded Job Discovery (V3.1)
+- **Live Google Search Grounding (`tools: [{ googleSearch: {} }]`)**: Leverages official Google Search grounding via Gemini to discover real, active executive and leadership job postings matching candidate target roles, locations, and industries.
+- **Strict Grounding Provenance & Trust State Machine**:
+  - `Verified Live`: Model used real-time Google Search grounding with source citations and verified active ATS posting.
+  - `Grounded`: Discovered via search grounding with verified web citation.
+  - `Needs Verification`: Candidate listing reachable but content requires human confirmation.
+  - `Curated / Demo`: Deterministic strategic pipeline feed (isolated from live feed with 100% confidence).
+  - `Legacy Unverified`: Safely migrated historical discovery records.
+- **Server-Side Safe URL & SSRF Validator**: Full protection against SSRF (RFC 1918, CGNAT, IPv6 ULA/link-local, cloud metadata `169.254.169.254` / `metadata.google.internal`), bounded redirects (max 5), strict timeouts, and bounded payload streaming.
+- **Deterministic Listing Verifier**: Analyzes live job posting HTML for company match, title keywords, expiration cues ("position filled", "no longer accepting applications", 404), and enterprise ATS domains (Greenhouse, Lever, Ashby, Workday, etc.).
+- **Smart Deduplication V2**: Strips tracking parameters (`utm_*`, `gh_src`, `ref`) for canonical URL matching and deduplicates across active pipeline opportunities, saved, promoted, and dismissed jobs.
+- **Discovery Relevance vs. Fit Score**: Explicitly distinguishes lightweight initial *Discovery Relevance* (e.g., 90% Match - High Potential) from the deep, multi-dimensional *Full Fit Score* generated after opportunity promotion.
+- **Live Verification CLI**: `npm run verify:discovery-live` developer script to test live search grounding with automated quota/resilience diagnostics.
 
 ### 2. 🤖 Live Gemini Two-Step Fit Analysis Engine (V2.1)
 - **Independent Requirement Extraction**: Pure JD parser extracts and freezes required vs. preferred qualifications strictly from the job posting before candidate matching begins.
@@ -55,10 +60,10 @@ Career Command Center transforms fragmented career searches into an evidence-bas
 
 - **Framework**: Next.js 16 (App Router & Turbopack)
 - **UI & Interaction**: React 19, Tailwind CSS v4, `@dnd-kit/core`, `@dnd-kit/sortable`
-- **AI / LLM**: Google Gemini 3.7 Flash & 3.6 Flash (`@google/genai` official SDK)
-- **Validation**: Zod 4 Schemas
+- **AI & Grounding**: Google Gemini 3.7 Flash & 3.6 Flash (`@google/genai` official SDK) with Google Search Grounding (`googleSearch`)
+- **Validation & Security**: Zod 4 Schemas, SSRF Safe Validator, Deterministic Listing Verifier
 - **Parsing**: `papaparse`, `xlsx`, `mammoth`, `pdf-parse`
-- **Testing & Quality Gate**: Vitest 4 (233 Unit Tests), Playwright 1.62 (22 E2E Tests), ESLint 9
+- **Testing & Quality Gate**: Vitest 4 (265 Unit Tests), Playwright 1.62 (23 E2E Tests), ESLint 9
 
 ---
 
