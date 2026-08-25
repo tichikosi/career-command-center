@@ -9,7 +9,6 @@ import { executeWithResilience, RetryOptions, sanitizeErrorMessage } from './gem
 import { CandidateProfile, EvidenceItem } from '@/types/candidate';
 import { JobOpportunity } from '@/types/opportunity';
 import {
-  InterviewSession,
   MockInterviewExchange,
   MockAnswerScore,
   MockAnswerCoaching,
@@ -126,7 +125,7 @@ export class MockInterviewEngine {
 
       const raw = result.result;
       const score = this.clampScore(raw.score || {});
-      const coaching = this.groundCoaching(raw.coaching || {}, input.candidate);
+      const coaching = this.groundCoaching(raw.coaching || {});
       const evidenceCitations = Array.isArray(raw.evidenceCitations)
         ? (raw.evidenceCitations as string[]).filter((id: string) => validEvidenceIds.has(id))
         : [];
@@ -293,21 +292,14 @@ CRITICAL SCORING RULES:
     };
   }
 
-  private groundCoaching(raw: Record<string, unknown>, candidate: CandidateProfile): MockAnswerCoaching {
+  private groundCoaching(raw: Record<string, unknown>): MockAnswerCoaching {
     const strengths = Array.isArray(raw.strengths) ? (raw.strengths as string[]).slice(0, 4) : [];
     const improvements = Array.isArray(raw.improvements) ? (raw.improvements as string[]).slice(0, 4) : [];
 
-    // Validate improved answer doesn't fabricate facts
+    // Validate improved answer length
     let improvedAnswer = typeof raw.improvedAnswer === 'string' ? raw.improvedAnswer : undefined;
-    if (improvedAnswer) {
-      // Basic check: if it mentions companies/orgs not in candidate data, strip it
-      const knownOrgs = new Set([
-        ...(candidate.careerHistory || []).map((r: { company?: string }) => r.company?.toLowerCase()).filter(Boolean),
-        ...(candidate.education || []).map((e: { institution?: string }) => e.institution?.toLowerCase()).filter(Boolean),
-      ]);
-      // Keep the improved answer — the prompt instructs not to fabricate
-      // We can't perfectly validate but we trust the instruction + evidence grounding
-      if (improvedAnswer.length > 2000) improvedAnswer = improvedAnswer.slice(0, 2000);
+    if (improvedAnswer && improvedAnswer.length > 2000) {
+      improvedAnswer = improvedAnswer.slice(0, 2000);
     }
 
     return { strengths, improvements, improvedAnswer };

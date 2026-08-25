@@ -1,6 +1,6 @@
-# Career Command Center v3.2
+# Career Command Center v3.3
 
-> **AI-Native Career Intelligence, Live Grounded Job Discovery, Opportunity Evaluation, Supabase Cloud Persistence & Executive Recruiting CRM**
+> **AI-Native Career Operating System: Grounded Opportunity Evaluation, Interview War Room, Mock Interview Simulator, Forward Activity Timeline, Smart Follow-Up Engine, Supabase Cloud Persistence & Executive Recruiting CRM**
 > Built for senior executives, strategy leaders, and operations practitioners.
 
 ---
@@ -9,51 +9,53 @@
 
 Career Command Center transforms fragmented career searches into an evidence-based, structured intelligence workflow. It couples a live **Gemini 3.7 / 3.6 Flash** evaluation engine with official **Google Search Grounding (`tools: [{ googleSearch: {} }]`)**, server-side SSRF URL validation, deterministic ATS listing verification, **Supabase PostgreSQL cloud persistence with Row Level Security (RLS)**, multi-device cloud authentication, automated local-to-cloud migration, structured résumé ingestion, professional network intelligence, and an accessible Kanban CRM.
 
+In **V3.3**, Career Command Center completes the end-to-end career lifecycle with the **Interview War Room**, **Interactive Mock Interview Simulator with 6-Dimension AI Coaching**, **Forward-Only Activity Timeline**, **Deterministic Smart Follow-Up Engine**, and **Comprehensive Dashboard Application Intelligence**.
+
 ---
 
-## 🚀 Key Capabilities (V2.0 → V3.1 Grounded Discovery → V3.2 Cloud Automation)
+## 🚀 Key Capabilities
 
-### 1. ☁️ Supabase Cloud Persistence & Authentication (V3.2)
-- **Multi-Device Cloud Sync**: Secure PostgreSQL persistence powered by Supabase with Row Level Security (RLS) policies enforcing multi-tenant isolation (`auth.uid() = user_id`).
-- **Seamless Local-to-Cloud Migration**: Automatic preflight detection of local candidate profiles, opportunities, actions, network contacts (3,400+ scale), and discovery records with transactional chunked cloud sync and rollback resilience.
-- **Active Candidate Source of Truth**: Authenticated cloud candidate profile takes absolute priority across Header, Profile, Fit Analysis, Opportunities, and Network directories, while cleanly suppressing synthetic benchmark personas in authenticated mode.
-- **Local-First Privacy Fallback**: Complete offline resilience — if Supabase credentials are not configured, the entire application operates locally in browser `localStorage`.
+### 1. ⚔️ Interview War Room & Executive Readiness (V3.3)
+- **Executive Role Brief & Positioning**: Strategic synthesis of the hiring mandate aligned directly to verified candidate narrative.
+- **Executive Readiness Score (0–100)**: Multi-dimensional readiness index evaluating role understanding, positioning, story bank preparation, gap mitigation, company knowledge, and question readiness.
+- **Grounded STAR Story Bank**: Verified achievements from candidate evidence mapped to anticipated competency, leadership, and operational questions.
+- **Defensive Gap Mitigation**: Grounded framing bridges addressing identified experience or domain gaps.
+- **Panel Questions & Risk Flags**: Curated high-signal questions to ask interviewers and strategic risk flags to navigate.
+- **Staleness Detection**: Automated change detection when candidate profile or opportunity requirements update after initial brief generation.
 
-### 2. 🧭 Live Google Search Grounded Job Discovery (V3.1 & V3.2)
-- **Live Google Search Grounding (`tools: [{ googleSearch: {} }]`)**: Leverages official Google Search grounding via Gemini to discover real, active executive and leadership job postings matching candidate target roles, locations, and industries.
-- **Strict Grounding Provenance & Trust State Machine**:
-  - `Verified Live`: Model used real-time Google Search grounding with source citations and verified active ATS posting.
-  - `Grounded`: Discovered via search grounding with verified web citation.
-  - `Needs Verification`: Candidate listing reachable but content requires human confirmation.
-  - `Curated / Demo`: Deterministic strategic pipeline feed (isolated from live feed with 100% confidence).
-  - `Legacy Unverified`: Safely migrated historical discovery records.
-- **Server-Side Safe URL & SSRF Validator**: Full protection against SSRF (RFC 1918, CGNAT, IPv6 ULA/link-local, cloud metadata `169.254.169.254` / `metadata.google.internal`), bounded redirects (max 5), strict timeouts, and bounded payload streaming.
-- **Deterministic Listing Verifier**: Analyzes live job posting HTML for company match, title keywords, expiration cues ("position filled", "no longer accepting applications", 404), and enterprise ATS domains (Greenhouse, Lever, Ashby, Workday, etc.).
-- **Smart Deduplication V2**: Strips tracking parameters (`utm_*`, `gh_src`, `ref`) for canonical URL matching and deduplicates across active pipeline opportunities, saved, promoted, and dismissed jobs.
-- **Scheduled Multi-User Automation**: Server-side Vercel Cron worker (`/api/discovery/cron`) secured by `CRON_SECRET` and elevated service role execution for batch scheduled job discovery across active cloud subscribers.
+### 2. 🎙️ Interactive Mock Interview Simulator & 6-Dimension AI Coaching (V3.3)
+- **Interactive Practice Console**: Practice anticipated interview questions one by one across behavioral, strategic, and leadership categories.
+- **6-Dimension AI Evaluation**:
+  - *Relevance*: Alignment with question intent.
+  - *Evidence Specificity*: Concrete facts, metrics, and outcomes.
+  - *Strategic Depth*: Executive perspective and systemic thinking.
+  - *Executive Communication*: Tone, presence, and articulation.
+  - *Structure*: Coherent STAR framework.
+  - *Concision*: Economy of language and signal density.
+- **Truth-Preserving Improved Framing**: AI suggests structural enhancements and executive phrasing without fabricating candidate facts or scope.
+- **Resilient Coaching Fallback**: Transparently transitions to clearly labeled `Simplified Interview Coaching` heuristic mode if AI services are unavailable.
 
-### 3. 🤖 Live Gemini Two-Step Fit Analysis Engine (V2.1)
-- **Independent Requirement Extraction**: Pure JD parser extracts and freezes required vs. preferred qualifications strictly from the job posting before candidate matching begins.
-- **Evidence-Grounding Validator**: Automatically filters AI citations to ensure zero fabricated achievements. Every qualification match is strictly grounded in real candidate evidence IDs.
-- **Explainable Scoring Math**: Weighted qualification math (2x weight on Required, 1x on Preferred) guaranteeing recommendation parity (>=85% Apply, 70-84% Network First, 50-69% Monitor, <50% Deprioritize).
-- **Transient Failover & Resilience**: Primary `gemini-3.7-flash` with automatic transient retry (3 attempts) and graceful live failover to `gemini-3.6-flash` and deterministic heuristic fallback.
+### 3. ⏱️ Activity Timeline & Touchpoint Ledger (V3.3)
+- **Forward-Only Activity Ledger**: Chronological tracking of recruiter calls, screening dates, scheduled and completed interviews, thank-you notes, offers, and decisions.
+- **Professional Network Linking**: Direct association between timeline activities and contacts from the candidate's Professional Network.
+- **Scheduled Interview Modal**: Date, time, interview type, and contact auto-fill.
 
-### 4. 🌐 Professional Network & LinkedIn Intelligence (V2.0 & V2.1)
-- **Connection Ingestion**: Robust CSV/XLSX parser with automatic header row detection after arbitrary informational preamble rows (supporting 3,400+ connections).
-- **Deterministic Contact Ranking**: Transparent heuristic ranking (Exact Company Match > Seniority Level > Domain Alignment > Talent/Recruiting Role > Title Overlap).
-- **Contextual Opportunity Deep Linking**: Navigating to `/network?opportunityId=<id>` or `/network?company=<company>` focuses directory on company matches, displays contextual return banner, and provides clear reset CTA.
-- **Warm Outreach Intelligence**: Displays top ranked contacts on opportunity evaluation cards and one-click creates duplicate-safe custom action items.
+### 4. 📬 Deterministic Smart Follow-Up Engine (V3.3)
+- **Rules-Based Follow-Up Urgency**: Deterministic evaluation of follow-up priorities (Overdue explicit dates, Post-Interview Thank-You required, Application Silence, Recruiter Silence, Referral Nudges).
+- **AI Follow-Up Drafter**: Composes executive follow-up communications across Professional, Warm, and Assertive tones.
+- **Human-in-the-Loop Safeguard**: Explicitly no automated email/LinkedIn sending; all outreach is user-reviewed and recorded.
 
-### 5. 📋 Kanban Opportunity CRM & Real Creation (V2.0 & V2.1)
-- **+ Add Opportunity Workspace**: Create custom opportunities via manual entry, pasted JD, or safe SSRF-protected URL fetching (`/api/opportunity/fetch-url`).
-- **Save vs. Analyze & Save**: Save un-analyzed `Identified` pipeline cards or immediately trigger full candidate fit evaluation.
-- **Drag-and-Drop Pipeline**: Powered by `@dnd-kit` across 6 lifecycle stages (`Identified`, `Applied`, `Screening`, `Interviewing`, `Offer`, `Archived`).
-- **Accessible Interactions**: Keyboard navigation, screen-reader coordinates, and accessible "Move to..." fallback menus.
+### 5. 📊 Dashboard Application Intelligence & Next Best Career Action (V3.3)
+- **Upcoming Interviews Calendar & Follow-Ups Due**: Immediate visibility into active touchpoints and critical dates.
+- **Next Best Career Action**: Deterministic prioritization engine answering: *"What should I focus on next?"*
 
-### 6. 📄 Structured Résumé Ingestion & Knowledge Base (V2.0)
-- **Multi-Format Parsing**: Ingests PDF (`pdf-parse`), Word DOCX (`mammoth`), and raw text files, as well as pasted text.
-- **Local-First PDF Extraction**: Extracts text locally before passing to Gemini for structured extraction.
-- **Merge or Replace Control**: Selectively merge new roles/skills into existing profiles or replace candidate profile with full data isolation.
+### 6. ☁️ Supabase Cloud Persistence & Multi-Device Sync (V3.2 & V3.3)
+- **Multi-Tenant Security**: PostgreSQL tables protected by Row Level Security (RLS) enforcing `auth.uid() = user_id`.
+- **Dual Storage Architecture**: Authenticated accounts sync across devices in cloud PostgreSQL; unauthenticated visitors run completely in browser `localStorage`.
+
+### 7. 🧭 Grounded Job Discovery & AI Role Fit Analysis (V2.x & V3.x)
+- **Google Search Grounded Discovery**: Real-time live listing discovery with SSRF protection and provenance state machine (`Verified Live`, `Grounded`, `Curated / Demo`).
+- **Two-Step Fit Analysis**: Requirement extraction frozen prior to candidate matching, weighted fit scoring, and strict citation validation.
 
 ---
 
@@ -64,8 +66,7 @@ Career Command Center transforms fragmented career searches into an evidence-bas
 - **Database & Auth**: Supabase PostgreSQL with RLS, Supabase Auth SSR SDK (`@supabase/ssr`, `@supabase/supabase-js`)
 - **AI & Grounding**: Google Gemini 3.7 Flash & 3.6 Flash (`@google/genai` official SDK) with Google Search Grounding (`googleSearch`)
 - **Validation & Security**: Zod 4 Schemas, SSRF Safe Validator, Deterministic Listing Verifier
-- **Parsing**: `papaparse`, `xlsx`, `mammoth`, `pdf-parse`
-- **Testing & Quality Gate**: Vitest 4 (302 Unit Tests), Playwright 1.62 (25 E2E Tests), ESLint 9
+- **Testing & Quality Gate**: Vitest 4 (339 Unit Tests), Playwright 1.62 (30 E2E Tests), ESLint 9
 
 ---
 
@@ -119,10 +120,10 @@ npm run start
 # Full automated QA gate (Lint + Unit Tests + Next.js Build + Playwright E2E + Git Diff Check)
 npm run qa
 
-# Unit tests only (302 tests across 29 test suites)
+# Unit tests only (339 tests across 37 test suites)
 npm run test:unit
 
-# Playwright E2E tests only (25 tests across 6 specs)
+# Playwright E2E tests only (30 tests across 7 specs)
 npm run test:e2e
 
 # AI Evaluation & Governance Benchmark

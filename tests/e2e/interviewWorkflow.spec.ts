@@ -6,6 +6,7 @@ test.describe('V3.3 Interview War Room, Activity Timeline & Application Intellig
     const reportLink = page.getByRole('link', { name: /Report/i }).first();
     await expect(reportLink).toBeVisible();
     await reportLink.click();
+    await page.waitForURL(/\/analysis\/.+/);
 
     await expect(page.locator('h1')).toBeVisible();
 
@@ -19,6 +20,7 @@ test.describe('V3.3 Interview War Room, Activity Timeline & Application Intellig
   test('Activity Timeline supports recording notes, scheduling interviews, and tracking stage changes', async ({ page }) => {
     await page.goto('/opportunities');
     await page.getByRole('link', { name: /Report/i }).first().click();
+    await page.waitForURL(/\/analysis\/.+/);
     await expect(page.locator('h1')).toBeVisible();
 
     // Switch to Activity & Timeline tab
@@ -55,7 +57,7 @@ test.describe('V3.3 Interview War Room, Activity Timeline & Application Intellig
 
   test('Interview War Room generates grounded briefing with positioning and story bank', async ({ page }) => {
     // Mock the /api/interview/prep API endpoint
-    await page.route('/api/interview/prep', async (route) => {
+    await page.route('**/api/interview/prep', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -63,7 +65,7 @@ test.describe('V3.3 Interview War Room, Activity Timeline & Application Intellig
           success: true,
           prep: {
             id: 'prep-mock-e2e',
-            opportunityId: 'opp-e2e',
+            opportunityId: 'opp-qa-test-google-ai-strategy',
             candidateProfileId: 'cand-tanaka',
             executiveRoleBrief: 'Executive role driving scalable engineering architecture and cloud transformation.',
             candidatePositioning: 'Senior engineering leader with proven scale and organizational impact.',
@@ -123,6 +125,7 @@ test.describe('V3.3 Interview War Room, Activity Timeline & Application Intellig
     // Open opportunity and switch to War Room
     await page.goto('/opportunities');
     await page.getByRole('link', { name: /Report/i }).first().click();
+    await page.waitForURL(/\/analysis\/.+/);
     await expect(page.locator('h1')).toBeVisible();
 
     await page.getByRole('button', { name: /Interview War Room/i }).click();
@@ -148,7 +151,7 @@ test.describe('V3.3 Interview War Room, Activity Timeline & Application Intellig
 
   test('Mock Interview simulates interactive question answering and scoring', async ({ page }) => {
     // Mock /api/interview/mock API
-    await page.route('/api/interview/mock', async (route) => {
+    await page.route('**/api/interview/mock', async (route) => {
       const body = JSON.parse(route.request().postData() || '{}');
       if (body.action === 'generate_questions') {
         await route.fulfill({
@@ -164,7 +167,7 @@ test.describe('V3.3 Interview War Room, Activity Timeline & Application Intellig
             executionMode: 'gemini',
           }),
         });
-      } else {
+      } else if (body.action === 'evaluate_answer') {
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
@@ -180,9 +183,9 @@ test.describe('V3.3 Interview War Room, Activity Timeline & Application Intellig
                 concision: 4,
               },
               coaching: {
-                strengths: ['Clear strategic framing', 'Demonstrated team leadership'],
-                improvements: ['Include specific hiring metrics'],
-                improvedAnswer: 'In my role as VP, I implemented a structured hiring framework and scaled the org from 20 to 65 engineers.',
+                strengths: ['Clear strategic framing', 'Measurable metrics referenced'],
+                improvements: ['Could mention specific tooling used'],
+                improvedAnswer: 'Enhanced framing with grounded executive focus.',
               },
               evidenceCitations: ['EVID-IMP-01'],
               requestedModel: 'gemini-3.7-flash',
@@ -191,19 +194,22 @@ test.describe('V3.3 Interview War Room, Activity Timeline & Application Intellig
             },
           }),
         });
+      } else {
+        await route.continue();
       }
     });
 
     // Open opportunity and switch to Mock Interview
     await page.goto('/opportunities');
     await page.getByRole('link', { name: /Report/i }).first().click();
+    await page.waitForURL(/\/analysis\/.+/);
     await expect(page.locator('h1')).toBeVisible();
 
     await page.getByRole('button', { name: /Mock Interview/i }).click();
     await expect(page.getByText('Interactive Mock Interview War Room')).toBeVisible();
 
     // Start mock session
-    await page.getByRole('button', { name: /Start New Mock Session/i }).click();
+    await page.getByRole('button', { name: /Start (New )?Mock Session/i }).click();
 
     // Verify question is visible
     await expect(page.getByText(/Describe how you scale engineering teams/i)).toBeVisible();

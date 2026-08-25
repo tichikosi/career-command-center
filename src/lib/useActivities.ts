@@ -16,6 +16,7 @@ export interface UseActivitiesReturn {
 
 export function useActivities(opportunityId?: string): UseActivitiesReturn {
   const { user } = useAuth();
+  const userId = user?.id;
   const [activities, setActivities] = useState<OpportunityActivity[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -29,8 +30,8 @@ export function useActivities(opportunityId?: string): UseActivitiesReturn {
       }
 
       const list = opportunityId
-        ? await repo.getActivities(opportunityId, user?.id)
-        : await repo.getAllActivities(user?.id);
+        ? await repo.getActivities(opportunityId, userId)
+        : await repo.getAllActivities(userId);
 
       setActivities(list || []);
     } catch (err) {
@@ -39,18 +40,50 @@ export function useActivities(opportunityId?: string): UseActivitiesReturn {
     } finally {
       setIsLoading(false);
     }
-  }, [opportunityId, user?.id]);
+  }, [opportunityId, userId]);
 
   useEffect(() => {
-    refreshActivities();
-  }, [refreshActivities]);
+    let active = true;
+    const fetchInitial = async () => {
+      try {
+        const repo = getActivityRepository();
+        if (!repo) {
+          if (active) {
+            setActivities([]);
+            setIsLoading(false);
+          }
+          return;
+        }
+
+        const list = opportunityId
+          ? await repo.getActivities(opportunityId, userId)
+          : await repo.getAllActivities(userId);
+
+        if (active) {
+          setActivities(list || []);
+          setIsLoading(false);
+        }
+      } catch (err) {
+        console.warn('[useActivities] Initial fetch error:', err);
+        if (active) {
+          setActivities([]);
+          setIsLoading(false);
+        }
+      }
+    };
+
+    fetchInitial();
+    return () => {
+      active = false;
+    };
+  }, [opportunityId, userId]);
 
   const addActivity = useCallback(
     async (activity: Omit<OpportunityActivity, 'id' | 'createdAt' | 'updatedAt'>) => {
       try {
         const repo = getActivityRepository();
         if (!repo) return null;
-        const created = await repo.recordActivity(activity, user?.id);
+        const created = await repo.recordActivity(activity, userId);
         setActivities((prev) => [created, ...prev]);
         return created;
       } catch (err) {
@@ -58,7 +91,7 @@ export function useActivities(opportunityId?: string): UseActivitiesReturn {
         return null;
       }
     },
-    [user?.id]
+    [userId]
   );
 
   const editActivity = useCallback(
@@ -66,7 +99,7 @@ export function useActivities(opportunityId?: string): UseActivitiesReturn {
       try {
         const repo = getActivityRepository();
         if (!repo) return null;
-        const updated = await repo.updateActivity(id, updates, user?.id);
+        const updated = await repo.updateActivity(id, updates, userId);
         if (updated) {
           setActivities((prev) => prev.map((a) => (a.id === id ? updated : a)));
         }
@@ -76,7 +109,7 @@ export function useActivities(opportunityId?: string): UseActivitiesReturn {
         return null;
       }
     },
-    [user?.id]
+    [userId]
   );
 
   const removeActivity = useCallback(
@@ -84,13 +117,13 @@ export function useActivities(opportunityId?: string): UseActivitiesReturn {
       try {
         const repo = getActivityRepository();
         if (!repo) return;
-        await repo.deleteActivity(id, user?.id);
+        await repo.deleteActivity(id, userId);
         setActivities((prev) => prev.filter((a) => a.id !== id));
       } catch (err) {
         console.error('[useActivities] Error deleting activity:', err);
       }
     },
-    [user?.id]
+    [userId]
   );
 
   return {

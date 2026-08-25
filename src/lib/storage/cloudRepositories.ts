@@ -18,7 +18,6 @@ import { UserPreferences } from '@/types/auth';
 import { OpportunityActivity, InterviewPreparation, InterviewSession } from '@/types/interview';
 
 import { normalizeCandidateProfile } from '@/lib/storage';
-import { defaultLocalStorageAdapter } from './localStorageAdapter';
 
 /**
  * Cloud Candidate Repository using Supabase PostgreSQL.
@@ -879,54 +878,80 @@ export class CloudPreferencesRepository implements IPreferencesRepository {
 /**
  * Cloud Activity Repository using Supabase PostgreSQL.
  */
+async function resolveUserId(supabase: SupabaseClient, userId?: string): Promise<string | undefined> {
+  if (userId) return userId;
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    return sessionData?.session?.user?.id;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Cloud Activity Repository using Supabase PostgreSQL.
+ */
 export class CloudActivityRepository implements IActivityRepository {
   constructor(private supabase: SupabaseClient) {}
 
   async getActivities(opportunityId: string, userId?: string): Promise<OpportunityActivity[]> {
-    try {
-      let query = this.supabase
-        .from('opportunity_activities')
-        .select('*')
-        .eq('opportunity_id', opportunityId)
-        .order('occurred_at', { ascending: false });
-
-      if (userId) query = query.eq('user_id', userId);
-
-      const { data, error } = await query;
-      if (error) {
-        return defaultLocalStorageAdapter.activities.getActivities(opportunityId, userId);
-      }
-      return (data || []).map(this.mapRow);
-    } catch {
-      return defaultLocalStorageAdapter.activities.getActivities(opportunityId, userId);
+    userId = await resolveUserId(this.supabase, userId);
+    if (!userId) {
+      return defaultLocalStorageAdapter.activities.getActivities(opportunityId);
     }
+
+    let query = this.supabase
+      .from('opportunity_activities')
+      .select('*')
+      .eq('opportunity_id', opportunityId)
+      .order('occurred_at', { ascending: false });
+
+    if (userId) query = query.eq('user_id', userId);
+
+    const { data, error } = await query;
+    if (error) {
+      if (error.code !== 'PGRST116') {
+        console.warn(`[CloudActivityRepository] getActivities notice for opp ${opportunityId}:`, error.message);
+      }
+      return [];
+    }
+    return (data || []).map(this.mapRow);
   }
 
   async getAllActivities(userId?: string): Promise<OpportunityActivity[]> {
-    try {
-      let query = this.supabase
-        .from('opportunity_activities')
-        .select('*')
-        .order('occurred_at', { ascending: false });
-
-      if (userId) query = query.eq('user_id', userId);
-
-      const { data, error } = await query;
-      if (error) {
-        return defaultLocalStorageAdapter.activities.getAllActivities(userId);
-      }
-      return (data || []).map(this.mapRow);
-    } catch {
-      return defaultLocalStorageAdapter.activities.getAllActivities(userId);
+    userId = await resolveUserId(this.supabase, userId);
+    if (!userId) {
+      return defaultLocalStorageAdapter.activities.getAllActivities();
     }
+
+    let query = this.supabase
+      .from('opportunity_activities')
+      .select('*')
+      .order('occurred_at', { ascending: false });
+
+    if (userId) query = query.eq('user_id', userId);
+
+    const { data, error } = await query;
+    if (error) {
+      if (error.code !== 'PGRST116') {
+        console.warn('[CloudActivityRepository] getAllActivities notice:', error.message);
+      }
+      return [];
+    }
+    return (data || []).map(this.mapRow);
   }
 
   async recordActivity(activity: Omit<OpportunityActivity, 'id' | 'createdAt' | 'updatedAt'>, userId?: string): Promise<OpportunityActivity> {
+    userId = await resolveUserId(this.supabase, userId);
+    if (!userId) {
+      return defaultLocalStorageAdapter.activities.recordActivity(activity);
+    }
+
     const id = `act-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const now = new Date().toISOString();
     const payload = {
       id,
-      user_id: userId || 'default-user',
+      user_id: userId,
       opportunity_id: activity.opportunityId,
       activity_type: activity.activityType,
       title: activity.title,
@@ -941,18 +966,23 @@ export class CloudActivityRepository implements IActivityRepository {
       updated_at: now,
     };
 
-    try {
-      const { error } = await this.supabase.from('opportunity_activities').insert(payload);
-      if (error) {
-        return defaultLocalStorageAdapter.activities.recordActivity(activity, userId);
+    const { error } = await this.supabase.from('opportunity_activities').insert(payload);
+    if (error) {
+      console.error('[CloudActivityRepository] recordActivity error:', error.message);
+      if (error.code === '42P01') {
+        throw new Error('V3.3 cloud storage is not available yet. Apply the V3.3 database migration before saving interview data.');
       }
-      return this.mapRow({ ...payload });
-    } catch {
-      return defaultLocalStorageAdapter.activities.recordActivity(activity, userId);
+      throw new Error(`Failed to record activity to cloud: ${error.message}`);
     }
+    return this.mapRow({ ...payload });
   }
 
   async updateActivity(id: string, updates: Partial<OpportunityActivity>, userId?: string): Promise<OpportunityActivity | null> {
+    userId = await resolveUserId(this.supabase, userId);
+    if (!userId) {
+      return defaultLocalStorageAdapter.activities.updateActivity(id, updates);
+    }
+
     const mapped: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (updates.title !== undefined) mapped.title = updates.title;
     if (updates.notes !== undefined) mapped.notes = updates.notes;
@@ -963,29 +993,31 @@ export class CloudActivityRepository implements IActivityRepository {
     if (updates.contactName !== undefined) mapped.contact_name = updates.contactName;
     if (updates.metadata !== undefined) mapped.metadata = updates.metadata;
 
-    try {
-      let query = this.supabase.from('opportunity_activities').update(mapped).eq('id', id);
-      if (userId) query = query.eq('user_id', userId);
-      const { data, error } = await query.select('*').single();
-      if (error || !data) {
-        return defaultLocalStorageAdapter.activities.updateActivity(id, updates, userId);
+    let query = this.supabase.from('opportunity_activities').update(mapped).eq('id', id);
+    if (userId) query = query.eq('user_id', userId);
+    const { data, error } = await query.select('*').single();
+    if (error || !data) {
+      console.error('[CloudActivityRepository] updateActivity error:', error?.message);
+      if (error?.code === '42P01') {
+        throw new Error('V3.3 cloud storage is not available yet. Apply the V3.3 database migration before saving interview data.');
       }
-      return this.mapRow(data);
-    } catch {
-      return defaultLocalStorageAdapter.activities.updateActivity(id, updates, userId);
+      throw new Error(`Failed to update activity in cloud: ${error?.message || 'Record not found'}`);
     }
+    return this.mapRow(data);
   }
 
   async deleteActivity(id: string, userId?: string): Promise<void> {
-    try {
-      let query = this.supabase.from('opportunity_activities').delete().eq('id', id);
-      if (userId) query = query.eq('user_id', userId);
-      const { error } = await query;
-      if (error) {
-        await defaultLocalStorageAdapter.activities.deleteActivity(id, userId);
-      }
-    } catch {
-      await defaultLocalStorageAdapter.activities.deleteActivity(id, userId);
+    userId = await resolveUserId(this.supabase, userId);
+    if (!userId) {
+      return defaultLocalStorageAdapter.activities.deleteActivity(id);
+    }
+
+    let query = this.supabase.from('opportunity_activities').delete().eq('id', id);
+    if (userId) query = query.eq('user_id', userId);
+    const { error } = await query;
+    if (error) {
+      console.error('[CloudActivityRepository] deleteActivity error:', error.message);
+      throw new Error(`Failed to delete activity from cloud: ${error.message}`);
     }
   }
 
@@ -1016,31 +1048,47 @@ export class CloudInterviewPrepRepository implements IInterviewPrepRepository {
   constructor(private supabase: SupabaseClient) {}
 
   async getActivePrep(opportunityId: string, userId?: string): Promise<InterviewPreparation | null> {
-    try {
-      let query = this.supabase
-        .from('interview_preparations')
-        .select('*')
-        .eq('opportunity_id', opportunityId)
-        .eq('is_active', true)
-        .order('generated_at', { ascending: false })
-        .limit(1);
-
-      if (userId) query = query.eq('user_id', userId);
-      const { data, error } = await query;
-      if (error || !data || data.length === 0) {
-        return defaultLocalStorageAdapter.interviewPrep.getActivePrep(opportunityId, userId);
-      }
-      return this.mapRow(data[0]);
-    } catch {
-      return defaultLocalStorageAdapter.interviewPrep.getActivePrep(opportunityId, userId);
+    userId = await resolveUserId(this.supabase, userId);
+    if (!userId) {
+      return defaultLocalStorageAdapter.interviewPrep.getActivePrep(opportunityId);
     }
+
+    let query = this.supabase
+      .from('interview_preparations')
+      .select('*')
+      .eq('opportunity_id', opportunityId)
+      .eq('is_active', true)
+      .order('generated_at', { ascending: false })
+      .limit(1);
+
+    if (userId) query = query.eq('user_id', userId);
+    const { data, error } = await query;
+    if (error || !data || data.length === 0) {
+      if (error && error.code !== 'PGRST116') {
+        console.warn(`[CloudInterviewPrepRepository] getActivePrep notice for opp ${opportunityId}:`, error.message);
+      }
+      return null;
+    }
+    return this.mapRow(data[0]);
   }
 
   async savePrep(prep: InterviewPreparation, userId?: string): Promise<InterviewPreparation> {
-    const targetUserId = userId || 'default-user';
+    userId = await resolveUserId(this.supabase, userId);
+    if (!userId) {
+      return defaultLocalStorageAdapter.interviewPrep.savePrep(prep);
+    }
+
+    // Deactivate previous active preps for this opportunity
+    await this.supabase
+      .from('interview_preparations')
+      .update({ is_active: false })
+      .eq('opportunity_id', prep.opportunityId)
+      .eq('user_id', userId)
+      .eq('is_active', true);
+
     const payload = {
       id: prep.id,
-      user_id: targetUserId,
+      user_id: userId,
       opportunity_id: prep.opportunityId,
       candidate_profile_id: prep.candidateProfileId || null,
       prep_data: prep,
@@ -1056,54 +1104,52 @@ export class CloudInterviewPrepRepository implements IInterviewPrepRepository {
       created_at: new Date().toISOString(),
     };
 
-    try {
-      // Deactivate previous active preps for this opportunity
-      await this.supabase
-        .from('interview_preparations')
-        .update({ is_active: false })
-        .eq('opportunity_id', prep.opportunityId)
-        .eq('user_id', targetUserId)
-        .eq('is_active', true);
-
-      const { error } = await this.supabase.from('interview_preparations').upsert(payload, { onConflict: 'id' });
-      if (error) {
-        return defaultLocalStorageAdapter.interviewPrep.savePrep(prep, userId);
+    const { error } = await this.supabase.from('interview_preparations').upsert(payload, { onConflict: 'id' });
+    if (error) {
+      console.error('[CloudInterviewPrepRepository] savePrep error:', error.message);
+      if (error.code === '42P01') {
+        throw new Error('V3.3 cloud storage is not available yet. Apply the V3.3 database migration before saving interview data.');
       }
-      return prep;
-    } catch {
-      return defaultLocalStorageAdapter.interviewPrep.savePrep(prep, userId);
+      throw new Error(`Failed to save interview prep to cloud: ${error.message}`);
     }
+    return prep;
   }
 
   async getHistory(opportunityId: string, userId?: string): Promise<InterviewPreparation[]> {
-    try {
-      let query = this.supabase
-        .from('interview_preparations')
-        .select('*')
-        .eq('opportunity_id', opportunityId)
-        .order('generated_at', { ascending: false });
-
-      if (userId) query = query.eq('user_id', userId);
-      const { data, error } = await query;
-      if (error || !data) {
-        return defaultLocalStorageAdapter.interviewPrep.getHistory(opportunityId, userId);
-      }
-      return data.map(this.mapRow);
-    } catch {
-      return defaultLocalStorageAdapter.interviewPrep.getHistory(opportunityId, userId);
+    userId = await resolveUserId(this.supabase, userId);
+    if (!userId) {
+      return defaultLocalStorageAdapter.interviewPrep.getHistory(opportunityId);
     }
+
+    let query = this.supabase
+      .from('interview_preparations')
+      .select('*')
+      .eq('opportunity_id', opportunityId)
+      .order('generated_at', { ascending: false });
+
+    if (userId) query = query.eq('user_id', userId);
+    const { data, error } = await query;
+    if (error || !data) {
+      if (error) {
+        console.warn(`[CloudInterviewPrepRepository] getHistory notice for opp ${opportunityId}:`, error.message);
+      }
+      return [];
+    }
+    return data.map(this.mapRow);
   }
 
   async deletePrep(id: string, userId?: string): Promise<void> {
-    try {
-      let query = this.supabase.from('interview_preparations').delete().eq('id', id);
-      if (userId) query = query.eq('user_id', userId);
-      const { error } = await query;
-      if (error) {
-        await defaultLocalStorageAdapter.interviewPrep.deletePrep(id, userId);
-      }
-    } catch {
-      await defaultLocalStorageAdapter.interviewPrep.deletePrep(id, userId);
+    userId = await resolveUserId(this.supabase, userId);
+    if (!userId) {
+      return defaultLocalStorageAdapter.interviewPrep.deletePrep(id);
+    }
+
+    let query = this.supabase.from('interview_preparations').delete().eq('id', id);
+    if (userId) query = query.eq('user_id', userId);
+    const { error } = await query;
+    if (error) {
+      console.error('[CloudInterviewPrepRepository] deletePrep error:', error.message);
+      throw new Error(`Failed to delete prep from cloud: ${error.message}`);
     }
   }
 
@@ -1145,28 +1191,50 @@ export class CloudInterviewSessionRepository implements IInterviewSessionReposit
   constructor(private supabase: SupabaseClient) {}
 
   async getSessions(opportunityId: string, userId?: string): Promise<InterviewSession[]> {
-    try {
-      let query = this.supabase
-        .from('interview_sessions')
-        .select('*')
-        .eq('opportunity_id', opportunityId)
-        .order('created_at', { ascending: false });
-
-      if (userId) query = query.eq('user_id', userId);
-      const { data, error } = await query;
-      if (error || !data) {
-        return defaultLocalStorageAdapter.interviewSessions.getSessions(opportunityId, userId);
-      }
-      return data.map(this.mapRow);
-    } catch {
-      return defaultLocalStorageAdapter.interviewSessions.getSessions(opportunityId, userId);
+    userId = await resolveUserId(this.supabase, userId);
+    if (!userId) {
+      return defaultLocalStorageAdapter.interviewSessions.getSessions(opportunityId);
     }
+
+    let query = this.supabase
+      .from('interview_sessions')
+      .select('*')
+      .eq('opportunity_id', opportunityId)
+      .order('created_at', { ascending: false });
+
+    if (userId) query = query.eq('user_id', userId);
+    const { data, error } = await query;
+    if (error || !data) {
+      if (error) {
+        console.warn(`[CloudInterviewSessionRepository] getSessions notice for opp ${opportunityId}:`, error.message);
+      }
+      return [];
+    }
+    return data.map(this.mapRow);
+  }
+
+  async getSessionById(id: string, userId?: string): Promise<InterviewSession | null> {
+    userId = await resolveUserId(this.supabase, userId);
+    if (!userId) {
+      return defaultLocalStorageAdapter.interviewSessions.getSessionById(id);
+    }
+
+    let query = this.supabase.from('interview_sessions').select('*').eq('id', id);
+    if (userId) query = query.eq('user_id', userId);
+    const { data, error } = await query.maybeSingle();
+    if (error || !data) return null;
+    return this.mapRow(data);
   }
 
   async saveSession(session: InterviewSession, userId?: string): Promise<InterviewSession> {
+    userId = await resolveUserId(this.supabase, userId);
+    if (!userId) {
+      return defaultLocalStorageAdapter.interviewSessions.saveSession(session);
+    }
+
     const payload = {
       id: session.id,
-      user_id: userId || 'default-user',
+      user_id: userId,
       opportunity_id: session.opportunityId,
       prep_id: session.prepId || null,
       mode: session.mode,
@@ -1181,30 +1249,32 @@ export class CloudInterviewSessionRepository implements IInterviewSessionReposit
       execution_mode: session.executionMode,
       started_at: session.startedAt,
       completed_at: session.completedAt || null,
-      created_at: session.createdAt,
+      created_at: new Date().toISOString(),
     };
 
-    try {
-      const { error } = await this.supabase.from('interview_sessions').upsert(payload, { onConflict: 'id' });
-      if (error) {
-        return defaultLocalStorageAdapter.interviewSessions.saveSession(session, userId);
+    const { error } = await this.supabase.from('interview_sessions').upsert(payload, { onConflict: 'id' });
+    if (error) {
+      console.error('[CloudInterviewSessionRepository] saveSession error:', error.message);
+      if (error.code === '42P01') {
+        throw new Error('V3.3 cloud storage is not available yet. Apply the V3.3 database migration before saving interview data.');
       }
-      return session;
-    } catch {
-      return defaultLocalStorageAdapter.interviewSessions.saveSession(session, userId);
+      throw new Error(`Failed to save mock interview session to cloud: ${error.message}`);
     }
+    return session;
   }
 
   async deleteSession(id: string, userId?: string): Promise<void> {
-    try {
-      let query = this.supabase.from('interview_sessions').delete().eq('id', id);
-      if (userId) query = query.eq('user_id', userId);
-      const { error } = await query;
-      if (error) {
-        await defaultLocalStorageAdapter.interviewSessions.deleteSession(id, userId);
-      }
-    } catch {
-      await defaultLocalStorageAdapter.interviewSessions.deleteSession(id, userId);
+    userId = await resolveUserId(this.supabase, userId);
+    if (!userId) {
+      return defaultLocalStorageAdapter.interviewSessions.deleteSession(id);
+    }
+
+    let query = this.supabase.from('interview_sessions').delete().eq('id', id);
+    if (userId) query = query.eq('user_id', userId);
+    const { error } = await query;
+    if (error) {
+      console.error('[CloudInterviewSessionRepository] deleteSession error:', error.message);
+      throw new Error(`Failed to delete session from cloud: ${error.message}`);
     }
   }
 

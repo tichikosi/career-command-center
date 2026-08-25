@@ -1,16 +1,7 @@
-/**
- * Career Command Center V3.3 — AI Governance, Evidence Grounding & Integrity Validators.
- * Provides deterministic contract testing and safety checks for all generated
- * Interview Preparation, Mock Interview Scoring, and Follow-Up communications.
- */
-
-import { CandidateProfile, EvidenceItem } from '@/types/candidate';
-import { JobOpportunity, FitAnalysisReport } from '@/types/opportunity';
+import { CandidateProfile } from '@/types/candidate';
 import {
   InterviewPreparation,
   InterviewSession,
-  MockInterviewExchange,
-  SmartFollowUpRecommendation,
 } from '@/types/interview';
 
 export interface GovernanceValidationResult {
@@ -33,7 +24,6 @@ export interface GovernanceValidationResult {
 export function validateInterviewPrepGovernance(
   prep: InterviewPreparation,
   candidate: CandidateProfile,
-  opportunity?: JobOpportunity,
 ): GovernanceValidationResult {
   const violations: string[] = [];
   const validEvidenceIds = new Set((candidate.evidenceItems || []).map((e) => e.id));

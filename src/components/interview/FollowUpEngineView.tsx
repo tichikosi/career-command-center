@@ -4,16 +4,13 @@ import React, { useState } from 'react';
 import { Card } from '@/components/ui/Card';
 import { JobOpportunity } from '@/types/opportunity';
 import { CandidateProfile } from '@/types/candidate';
-import { OpportunityActivity, SmartFollowUpRecommendation, FollowUpTone, FollowUpActionType } from '@/types/interview';
+import { OpportunityActivity, FollowUpTone, FollowUpActionType } from '@/types/interview';
 import { evaluateOpportunityFollowUp } from '@/lib/followUpEngine';
 import {
   IconMessageSquare,
   IconSparkles,
   IconCopy,
   IconCheck,
-  IconSend,
-  IconClock,
-  IconAlertTriangle,
   IconUsers,
 } from '@/components/icons';
 
@@ -21,7 +18,7 @@ interface FollowUpEngineViewProps {
   opportunity: JobOpportunity;
   candidate: CandidateProfile;
   activities: OpportunityActivity[];
-  onRecordActivity: (activity: Omit<OpportunityActivity, 'id' | 'createdAt' | 'updatedAt'>) => Promise<any>;
+  onRecordActivity: (activity: Omit<OpportunityActivity, 'id' | 'createdAt' | 'updatedAt'>) => Promise<OpportunityActivity | null>;
 }
 
 export function FollowUpEngineView({
@@ -224,6 +221,17 @@ export function FollowUpEngineView({
           </div>
 
           <div>
+            <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Recipient Role / Context</label>
+            <input
+              type="text"
+              placeholder="e.g. VP of Product / Lead Recruiter"
+              value={recipientRole}
+              onChange={(e) => setRecipientRole(e.target.value)}
+              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none"
+            />
+          </div>
+
+          <div>
             <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Tone</label>
             <select
               value={tone}
@@ -235,6 +243,17 @@ export function FollowUpEngineView({
               <option value="assertive">Strategic & Assertive</option>
             </select>
           </div>
+        </div>
+
+        <div>
+          <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Specific Discussion Point or Context (Optional)</label>
+          <input
+            type="text"
+            placeholder="e.g. Referenced Q3 roadmap discussion regarding enterprise LLM governance"
+            value={customContext}
+            onChange={(e) => setCustomContext(e.target.value)}
+            className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none text-xs"
+          />
         </div>
 
         <div className="flex justify-end">

@@ -4,18 +4,14 @@ import React from 'react';
 import Link from 'next/link';
 import { Card } from '@/components/ui/Card';
 import { JobOpportunity } from '@/types/opportunity';
-import { OpportunityActivity, NextBestAction } from '@/types/interview';
+import { OpportunityActivity } from '@/types/interview';
 import { calculateNextBestActions } from '@/lib/followUpEngine';
 import {
   IconCalendar,
   IconClock,
-  IconMessageSquare,
-  IconBrain,
   IconArrowRight,
   IconTarget,
   IconZap,
-  IconCheckCircle,
-  IconAlertTriangle,
 } from '@/components/icons';
 import { formatShortDate } from '@/lib/dateUtils';
 
@@ -24,12 +20,27 @@ interface ApplicationIntelligenceSectionProps {
   activities: OpportunityActivity[];
 }
 
+function isRecentOrUpcoming(scheduledFor?: string, occurredAt?: string): boolean {
+  const cutoff = Date.now() - 1000 * 60 * 60 * 2;
+  const t = scheduledFor ? new Date(scheduledFor).getTime() : occurredAt ? new Date(occurredAt).getTime() : 0;
+  return t >= cutoff;
+}
+
+function isStaleApplied(opp: JobOpportunity, oppActs: OpportunityActivity[]): boolean {
+  if (opp.stage !== 'Applied') return false;
+  const latest = oppActs[0] ? new Date(oppActs[0].occurredAt).getTime() : new Date(opp.updatedAt || opp.createdAt).getTime();
+  return (Date.now() - latest) > 1000 * 60 * 60 * 24 * 7;
+}
+
+function isWithinLast14Days(occurredAt: string): boolean {
+  return (Date.now() - new Date(occurredAt).getTime()) <= 1000 * 60 * 60 * 24 * 14;
+}
+
 export function ApplicationIntelligenceSection({
   opportunities,
   activities,
 }: ApplicationIntelligenceSectionProps) {
   const activeOpportunities = opportunities.filter((o) => o.stage !== 'Archived');
-  const now = Date.now();
 
   // 1. Group activities by opportunityId
   const activitiesByOpp = new Map<string, OpportunityActivity[]>();
@@ -45,11 +56,7 @@ export function ApplicationIntelligenceSection({
 
   // 3. Upcoming Scheduled Interviews
   const upcomingInterviews = activities
-    .filter((a) => {
-      if (a.activityType !== 'interview_scheduled') return false;
-      const t = a.scheduledFor ? new Date(a.scheduledFor).getTime() : new Date(a.occurredAt).getTime();
-      return t >= now - 1000 * 60 * 60 * 2; // future or very recent
-    })
+    .filter((a) => a.activityType === 'interview_scheduled' && isRecentOrUpcoming(a.scheduledFor, a.occurredAt))
     .sort((a, b) => {
       const ta = a.scheduledFor ? new Date(a.scheduledFor).getTime() : new Date(a.occurredAt).getTime();
       const tb = b.scheduledFor ? new Date(b.scheduledFor).getTime() : new Date(b.occurredAt).getTime();
@@ -58,17 +65,12 @@ export function ApplicationIntelligenceSection({
     .slice(0, 3);
 
   // 4. Stale Applications (Applied stage with no activity in > 7 days)
-  const staleApplications = activeOpportunities.filter((opp) => {
-    if (opp.stage !== 'Applied') return false;
-    const oppActs = activitiesByOpp.get(opp.id) || [];
-    const latest = oppActs[0] ? new Date(oppActs[0].occurredAt).getTime() : new Date(opp.updatedAt || opp.createdAt).getTime();
-    return (now - latest) > 1000 * 60 * 60 * 24 * 7;
-  });
+  const staleApplications = activeOpportunities.filter((opp) =>
+    isStaleApplied(opp, activitiesByOpp.get(opp.id) || [])
+  );
 
   // 5. Application Momentum (Activities logged in last 14 days)
-  const recentActivitiesCount = activities.filter(
-    (a) => (now - new Date(a.occurredAt).getTime()) <= 1000 * 60 * 60 * 24 * 14
-  ).length;
+  const recentActivitiesCount = activities.filter((a) => isWithinLast14Days(a.occurredAt)).length;
 
   return (
     <div className="space-y-4">

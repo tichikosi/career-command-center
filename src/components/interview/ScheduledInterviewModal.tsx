@@ -47,12 +47,14 @@ export function ScheduledInterviewModal({
   const [isCompleted, setIsCompleted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
   const handleContactSelect = (contactId: string) => {
     setSelectedContactId(contactId);
     if (contactId) {
       const contact = matchingContacts.find((c) => c.id === contactId);
       if (contact) {
-        setInterviewerName(contact.name);
+        setInterviewerName(contact.fullName);
         setInterviewerTitle(contact.position || '');
       }
     }
@@ -63,6 +65,7 @@ export function ScheduledInterviewModal({
     if (!date) return;
 
     setIsSubmitting(true);
+    setErrorMessage(null);
     try {
       const scheduledDateTime = time ? `${date}T${time}:00.000Z` : `${date}T12:00:00.000Z`;
       const typeLabel = INTERVIEW_TYPES.find((t) => t.value === interviewType)?.label || 'Interview';
@@ -70,7 +73,7 @@ export function ScheduledInterviewModal({
         ? `Interview Completed: ${typeLabel}${interviewerName ? ` w/ ${interviewerName}` : ''}`
         : `Scheduled Interview: ${typeLabel}${interviewerName ? ` w/ ${interviewerName}` : ''}`;
 
-      await onSave({
+      const res = await onSave({
         opportunityId,
         activityType: isCompleted ? 'interview_completed' : 'interview_scheduled',
         title,
@@ -87,9 +90,15 @@ export function ScheduledInterviewModal({
         },
       });
 
+      if (res === null) {
+        setErrorMessage('Failed to save to cloud storage. Please check connection.');
+        return;
+      }
+
       onClose();
-    } catch (err) {
-      console.error('[ScheduledInterviewModal] Submit failed:', err);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to record interview.';
+      setErrorMessage(msg);
     } finally {
       setIsSubmitting(false);
     }
@@ -98,19 +107,35 @@ export function ScheduledInterviewModal({
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Record or Schedule Interview">
       <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+        {errorMessage && (
+          <div className="p-3 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 rounded-lg text-rose-700 dark:text-rose-300 text-xs">
+            {errorMessage}
+          </div>
+        )}
         <p className="text-slate-600 dark:text-slate-400">
           Record an upcoming interview round or log a completed conversation with <strong className="text-slate-900 dark:text-slate-100">{opportunityCompany}</strong>.
         </p>
 
-        <div className="flex items-center gap-3 p-2.5 bg-slate-50 dark:bg-slate-800/60 rounded-lg border border-slate-200 dark:border-slate-700">
-          <label className="flex items-center gap-2 font-medium cursor-pointer text-slate-800 dark:text-slate-200">
+        <div className="flex items-center gap-4 pt-1">
+          <label className="flex items-center gap-2 cursor-pointer">
             <input
-              type="checkbox"
-              checked={isCompleted}
-              onChange={(e) => setIsCompleted(e.target.checked)}
-              className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4"
+              type="radio"
+              name="interviewState"
+              checked={!isCompleted}
+              onChange={() => setIsCompleted(false)}
+              className="text-indigo-600"
             />
-            <span>This interview has already occurred (Log as Completed)</span>
+            <span className="font-semibold text-slate-800 dark:text-slate-200">Scheduled (Upcoming)</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="radio"
+              name="interviewState"
+              checked={isCompleted}
+              onChange={() => setIsCompleted(true)}
+              className="text-indigo-600"
+            />
+            <span className="font-semibold text-slate-800 dark:text-slate-200">Completed (Log Past Round)</span>
           </label>
         </div>
 
@@ -174,7 +199,7 @@ export function ScheduledInterviewModal({
               <option value="">-- Select Contact at {opportunityCompany} --</option>
               {matchingContacts.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.name} {c.position ? `(${c.position})` : ''}
+                  {c.fullName} {c.position ? `(${c.position})` : ''}
                 </option>
               ))}
             </select>

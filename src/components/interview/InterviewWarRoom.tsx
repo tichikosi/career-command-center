@@ -4,18 +4,13 @@ import React, { useState } from 'react';
 import { Card } from '@/components/ui/Card';
 import { JobOpportunity, FitAnalysisReport } from '@/types/opportunity';
 import { CandidateProfile, EvidenceItem } from '@/types/candidate';
-import { InterviewPreparation, InterviewQuestion, StoryBankEntry, GapBridge } from '@/types/interview';
+import { InterviewPreparation } from '@/types/interview';
 import {
   IconBrain,
   IconSparkles,
   IconAlertTriangle,
   IconCheckCircle,
-  IconUsers,
-  IconFileText,
-  IconRefresh,
-  IconExternalLink,
   IconAward,
-  IconTarget,
 } from '@/components/icons';
 import { formatShortDate } from '@/lib/dateUtils';
 
@@ -33,7 +28,6 @@ interface InterviewWarRoomProps {
 export function InterviewWarRoom({
   opportunity,
   candidate,
-  analysisReport,
   activePrep,
   prepHistory,
   onGeneratePrep,

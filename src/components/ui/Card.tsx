@@ -1,13 +1,13 @@
 import React from 'react';
 
-interface CardProps {
+interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
   className?: string;
   padding?: 'none' | 'sm' | 'md' | 'lg';
   id?: string;
 }
 
-export function Card({ children, className = '', padding = 'md', id }: CardProps) {
+export function Card({ children, className = '', padding = 'md', id, ...props }: CardProps) {
   const paddingStyles = {
     none: '',
     sm: 'p-4',
@@ -19,6 +19,7 @@ export function Card({ children, className = '', padding = 'md', id }: CardProps
     <div
       id={id}
       className={`bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-xs transition-colors ${paddingStyles} ${className}`}
+      {...props}
     >
       {children}
     </div>

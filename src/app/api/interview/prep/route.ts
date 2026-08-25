@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { InterviewPrepRequestSchema } from '@/lib/server/schemas';
 import { InterviewPrepEngine } from '@/lib/server/interviewPrepEngine';
 import { CandidateProfile } from '@/types/candidate';
-import { JobOpportunity } from '@/types/opportunity';
+import { JobOpportunity, FitAnalysisReport } from '@/types/opportunity';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     const prep = await engine.generatePrep({
       opportunity: opportunity as unknown as JobOpportunity,
       candidate: candidateSnapshot as unknown as CandidateProfile,
-      analysisReport: analysisReport as unknown as any,
+      analysisReport: analysisReport as unknown as FitAnalysisReport,
     });
 
     return NextResponse.json({

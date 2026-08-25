@@ -13,7 +13,6 @@ import {
   InterviewQuestion,
   StoryBankEntry,
   GapBridge,
-  CompanyIntelligence,
   CompensationResearch,
   InterviewReadinessScore,
 } from '@/types/interview';
@@ -167,14 +166,13 @@ CRITICAL RULES:
 5. Gap bridge strategies should be honest and constructive, not fictional.`;
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private groundQuestions(raw: any, validIds: Set<string>): InterviewQuestion[] {
+  private groundQuestions(raw: unknown, validIds: Set<string>): InterviewQuestion[] {
     if (!Array.isArray(raw)) return [];
-    return raw.slice(0, 15).map((q: any, i: number) => ({
+    return (raw as Record<string, unknown>[]).slice(0, 15).map((q, i: number) => ({
       id: typeof q?.id === 'string' ? q.id : `q-${i + 1}`,
       question: typeof q?.question === 'string' ? q.question : '',
-      category: (['behavioral', 'technical', 'situational', 'strategic', 'culture'].includes(q?.category)
-        ? q.category : 'behavioral') as InterviewQuestion['category'],
+      category: (['behavioral', 'technical', 'situational', 'strategic', 'culture'].includes(q?.category as string)
+        ? (q.category as string) : 'behavioral') as InterviewQuestion['category'],
       expectedFocus: typeof q?.expectedFocus === 'string' ? q.expectedFocus : '',
       suggestedApproach: typeof q?.suggestedApproach === 'string' ? q.suggestedApproach : '',
       relevantEvidenceIds: Array.isArray(q?.relevantEvidenceIds)
@@ -183,10 +181,9 @@ CRITICAL RULES:
     }));
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private groundStoryBank(raw: any, validIds: Set<string>): StoryBankEntry[] {
+  private groundStoryBank(raw: unknown, validIds: Set<string>): StoryBankEntry[] {
     if (!Array.isArray(raw)) return [];
-    return raw.slice(0, 8).map((s: any, i: number) => ({
+    return (raw as Record<string, unknown>[]).slice(0, 8).map((s, i: number) => ({
       id: typeof s?.id === 'string' ? s.id : `story-${i + 1}`,
       title: typeof s?.title === 'string' ? s.title : '',
       situation: typeof s?.situation === 'string' ? s.situation : '',
@@ -202,10 +199,9 @@ CRITICAL RULES:
     }));
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private groundGapBridges(raw: any, validIds: Set<string>): GapBridge[] {
+  private groundGapBridges(raw: unknown, validIds: Set<string>): GapBridge[] {
     if (!Array.isArray(raw)) return [];
-    return raw.slice(0, 5).map((g: any) => ({
+    return (raw as Record<string, unknown>[]).slice(0, 5).map((g) => ({
       gap: typeof g?.gap === 'string' ? g.gap : '',
       bridgeStrategy: typeof g?.bridgeStrategy === 'string' ? g.bridgeStrategy : '',
       supportingEvidenceIds: Array.isArray(g?.supportingEvidenceIds)

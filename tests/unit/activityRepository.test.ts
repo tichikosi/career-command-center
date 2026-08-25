@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { MockCloudStorageAdapter } from '@/lib/storage/mockCloudRepository';
-import { OpportunityActivity } from '@/types/interview';
 
 describe('V3.3 Opportunity Activity Repository Unit Tests', () => {
   let adapter: MockCloudStorageAdapter;

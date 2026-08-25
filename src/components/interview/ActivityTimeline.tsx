@@ -83,6 +83,8 @@ export function ActivityTimeline({
   const [formDate, setFormDate] = useState(new Date().toISOString().split('T')[0]);
   const [formContactId, setFormContactId] = useState('');
 
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
   const filteredActivities = activities.filter((a) => {
     if (filterType === 'all') return true;
     if (filterType === 'interview') return a.activityType.includes('interview');
@@ -97,6 +99,7 @@ export function ActivityTimeline({
     setFormNotes('');
     setFormDate(new Date().toISOString().split('T')[0]);
     setFormContactId('');
+    setErrorMessage(null);
     setIsAddModalOpen(true);
   };
 
@@ -107,37 +110,52 @@ export function ActivityTimeline({
     setFormNotes(activity.notes || '');
     setFormDate(activity.occurredAt.split('T')[0] || new Date().toISOString().split('T')[0]);
     setFormContactId(activity.contactId || '');
+    setErrorMessage(null);
   };
 
   const handleSaveActivity = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formTitle.trim()) return;
 
+    setErrorMessage(null);
     const contact = matchingContacts.find((c) => c.id === formContactId);
     const occurredAt = `${formDate}T12:00:00.000Z`;
 
-    if (editingActivity) {
-      await onEditActivity(editingActivity.id, {
-        title: formTitle.trim(),
-        activityType: formType,
-        notes: formNotes.trim() || undefined,
-        occurredAt,
-        contactId: formContactId || undefined,
-        contactName: contact ? contact.name : editingActivity.contactName,
-      });
-      setEditingActivity(null);
-    } else {
-      await onAddActivity({
-        opportunityId,
-        activityType: formType,
-        title: formTitle.trim(),
-        notes: formNotes.trim() || undefined,
-        occurredAt,
-        contactId: formContactId || undefined,
-        contactName: contact?.name || undefined,
-        source: 'user',
-      });
-      setIsAddModalOpen(false);
+    try {
+      if (editingActivity) {
+        const res = await onEditActivity(editingActivity.id, {
+          title: formTitle.trim(),
+          activityType: formType,
+          notes: formNotes.trim() || undefined,
+          occurredAt,
+          contactId: formContactId || undefined,
+          contactName: contact ? contact.fullName : editingActivity.contactName,
+        });
+        if (res === null) {
+          setErrorMessage('Failed to update activity in cloud storage. Please check connection.');
+          return;
+        }
+        setEditingActivity(null);
+      } else {
+        const res = await onAddActivity({
+          opportunityId,
+          activityType: formType,
+          title: formTitle.trim(),
+          notes: formNotes.trim() || undefined,
+          occurredAt,
+          contactId: formContactId || undefined,
+          contactName: contact?.fullName || undefined,
+          source: 'user',
+        });
+        if (res === null) {
+          setErrorMessage('Failed to record activity in cloud storage. Please check connection.');
+          return;
+        }
+        setIsAddModalOpen(false);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to save activity.';
+      setErrorMessage(msg);
     }
   };
 
@@ -331,7 +349,7 @@ export function ActivityTimeline({
       {/* Add / Edit General Activity Modal */}
       {(isAddModalOpen || editingActivity) && (
         <Modal
-          isOpen={isAddModalOpen || Boolean(editingActivity)}
+          isOpen={isAddModalOpen || !!editingActivity}
           onClose={() => {
             setIsAddModalOpen(false);
             setEditingActivity(null);
@@ -339,6 +357,11 @@ export function ActivityTimeline({
           title={editingActivity ? 'Edit Timeline Activity' : 'Record Timeline Activity'}
         >
           <form onSubmit={handleSaveActivity} className="space-y-4 text-xs">
+            {errorMessage && (
+              <div className="p-3 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 rounded-lg text-rose-700 dark:text-rose-300 text-xs">
+                {errorMessage}
+              </div>
+            )}
             <div>
               <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
                 Activity Category
@@ -403,7 +426,7 @@ export function ActivityTimeline({
                     <option value="">-- None --</option>
                     {matchingContacts.map((c) => (
                       <option key={c.id} value={c.id}>
-                        {c.name} {c.position ? `(${c.position})` : ''}
+                        {c.fullName} {c.position ? `(${c.position})` : ''}
                       </option>
                     ))}
                   </select>

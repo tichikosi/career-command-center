@@ -11,17 +11,13 @@ import {
   MockDifficulty,
   MockAnswerScore,
   InterviewPreparation,
+  OpportunityActivity,
 } from '@/types/interview';
 import {
   IconMicrophone,
   IconSparkles,
-  IconCheckCircle,
-  IconAlertTriangle,
   IconArrowRight,
-  IconRefresh,
   IconTrash,
-  IconAward,
-  IconTarget,
 } from '@/components/icons';
 import { formatShortDate } from '@/lib/dateUtils';
 
@@ -32,7 +28,7 @@ interface MockInterviewPanelProps {
   sessions: InterviewSession[];
   onSaveSession: (session: InterviewSession) => Promise<InterviewSession | null>;
   onDeleteSession: (id: string) => Promise<void>;
-  onRecordActivity?: (data: any) => Promise<any>;
+  onRecordActivity?: (activity: Omit<OpportunityActivity, 'id' | 'createdAt' | 'updatedAt'>) => Promise<OpportunityActivity | null>;
 }
 
 export function MockInterviewPanel({
@@ -237,14 +233,34 @@ export function MockInterviewPanel({
         </div>
 
         {!sessionActive && (
-          <button
-            onClick={handleStartSession}
-            disabled={isGeneratingQuestions}
-            className="px-5 py-2.5 bg-white text-violet-950 font-bold rounded-xl text-xs hover:bg-violet-50 transition-colors shadow-sm disabled:opacity-50 flex items-center gap-2"
-          >
-            <IconSparkles className="w-4 h-4 text-violet-600" />
-            <span>{isGeneratingQuestions ? 'Generating Questions...' : 'Start New Mock Session'}</span>
-          </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <select
+              value={mode}
+              onChange={(e) => setMode(e.target.value as 'practice' | 'timed' | 'full')}
+              className="bg-white/10 border border-white/20 text-white rounded-lg px-2.5 py-2 text-xs focus:outline-none focus:bg-slate-900"
+            >
+              <option value="practice" className="bg-slate-900 text-white">Practice Mode</option>
+              <option value="timed" className="bg-slate-900 text-white">Timed Screen</option>
+              <option value="full" className="bg-slate-900 text-white">Full Loop</option>
+            </select>
+            <select
+              value={difficulty}
+              onChange={(e) => setDifficulty(e.target.value as MockDifficulty)}
+              className="bg-white/10 border border-white/20 text-white rounded-lg px-2.5 py-2 text-xs focus:outline-none focus:bg-slate-900"
+            >
+              <option value="standard" className="bg-slate-900 text-white">Standard</option>
+              <option value="rigorous" className="bg-slate-900 text-white">Rigorous (VP Level)</option>
+              <option value="adversarial" className="bg-slate-900 text-white">Stress Test</option>
+            </select>
+            <button
+              onClick={handleStartSession}
+              disabled={isGeneratingQuestions}
+              className="px-5 py-2 bg-white text-violet-950 font-bold rounded-xl text-xs hover:bg-violet-50 transition-colors shadow-sm disabled:opacity-50 flex items-center gap-2"
+            >
+              <IconSparkles className="w-4 h-4 text-violet-600" />
+              <span>{isGeneratingQuestions ? 'Generating...' : 'Start Mock Session'}</span>
+            </button>
+          </div>
         )}
       </div>
 
@@ -495,6 +511,40 @@ export function MockInterviewPanel({
                   )}
                 </div>
               ))}
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Completion Modal for Current Session */}
+      {completedSession && (
+        <Modal
+          isOpen={Boolean(completedSession)}
+          onClose={() => setCompletedSession(null)}
+          title={`Mock Session Completed — Score: ${completedSession.overallScore}%`}
+        >
+          <div className="space-y-4 text-xs">
+            <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl space-y-1">
+              <strong className="text-emerald-900 dark:text-emerald-200 font-bold">Session Successfully Recorded!</strong>
+              <p className="text-emerald-700 dark:text-emerald-300">{completedSession.summary}</p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                onClick={() => {
+                  setViewingPastSession(completedSession);
+                  setCompletedSession(null);
+                }}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg"
+              >
+                Review Full Transcript & Coaching
+              </button>
+              <button
+                onClick={() => setCompletedSession(null)}
+                className="px-3.5 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold rounded-lg"
+              >
+                Done
+              </button>
             </div>
           </div>
         </Modal>

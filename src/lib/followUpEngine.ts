@@ -9,8 +9,6 @@ import {
   OpportunityActivity,
   SmartFollowUpRecommendation,
   NextBestAction,
-  FollowUpActionType,
-  FollowUpPriority,
   InterviewPreparation,
 } from '@/types/interview';
 import { classifyFollowUpDate } from '@/lib/dateUtils';
@@ -230,7 +228,6 @@ export function calculateNextBestActions(
   prepsMap: Map<string, InterviewPreparation> = new Map(),
 ): NextBestAction[] {
   const actions: NextBestAction[] = [];
-  const now = Date.now();
 
   const activeOpportunities = opportunities.filter((o) => o.stage !== 'Archived');
 

@@ -68,9 +68,7 @@ export default function AnalysisResultsPage() {
     activePrep,
     prepHistory,
     sessions,
-    isLoading: prepLoading,
     savePrep,
-    deletePrep,
     saveSession,
     deleteSession,
   } = useInterviewData(opportunity?.id || '');
@@ -159,7 +157,11 @@ export default function AnalysisResultsPage() {
 
       const data = await res.json();
       if (data.success && data.prep) {
-        await savePrep(data.prep);
+        const prepToSave = {
+          ...data.prep,
+          opportunityId: opportunity.id,
+        };
+        await savePrep(prepToSave);
         await addActivity({
           opportunityId: opportunity.id,
           activityType: 'prep_generated',
