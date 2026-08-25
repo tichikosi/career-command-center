@@ -10,12 +10,28 @@ import { isSyntheticOrDemoProfile } from './migrationService';
 import { saveNetworkContacts, resetNetworkDemoData } from '@/lib/networkStorage';
 import { saveDiscoveredJobs, resetDiscoveryDemoData } from '@/lib/discoveryStorage';
 
+export interface CloudHydrationResult {
+  hasCloudData: boolean;
+  hasCloudCandidate: boolean;
+  oppsCount: number;
+  contactsCount: number;
+  jobsCount: number;
+}
+
 /**
  * Hydrates active client state from Supabase cloud repositories for an authenticated user.
  * Guarantees that cloud data becomes the authoritative source of truth, suppressing demo fallbacks.
  */
-export async function hydrateCloudStateForUser(userId: string): Promise<void> {
-  if (!userId || userId === 'local-executive-user') return;
+export async function hydrateCloudStateForUser(userId: string): Promise<CloudHydrationResult> {
+  if (!userId || userId === 'local-executive-user') {
+    return {
+      hasCloudData: false,
+      hasCloudCandidate: false,
+      oppsCount: 0,
+      contactsCount: 0,
+      jobsCount: 0,
+    };
+  }
 
   const adapter = getActiveStorageAdapter();
 
@@ -39,8 +55,14 @@ export async function hydrateCloudStateForUser(userId: string): Promise<void> {
       }),
     ]);
 
+    const hasCloudCandidate = Boolean(cloudCandidate && cloudCandidate.name && !isSyntheticOrDemoProfile(cloudCandidate));
+    const oppsCount = cloudOpps ? cloudOpps.length : 0;
+    const contactsCount = cloudContacts ? cloudContacts.length : 0;
+    const jobsCount = cloudJobs ? cloudJobs.length : 0;
+    const hasCloudData = hasCloudCandidate || oppsCount > 0 || contactsCount > 0 || jobsCount > 0;
+
     // 1. Authoritative Candidate Profile Resolution
-    if (cloudCandidate && cloudCandidate.name && !isSyntheticOrDemoProfile(cloudCandidate)) {
+    if (hasCloudCandidate && cloudCandidate) {
       hydrateCandidateProfileFromCloud(cloudCandidate);
     } else {
       // Cloud candidate is empty for this authenticated account.
@@ -65,8 +87,28 @@ export async function hydrateCloudStateForUser(userId: string): Promise<void> {
     if (cloudJobs && cloudJobs.length > 0) {
       saveDiscoveredJobs(cloudJobs);
     }
+
+    // 5. Mark cloud data as authoritative in local storage so migration banner is not falsely prompted
+    if (hasCloudData && typeof window !== 'undefined') {
+      window.localStorage.setItem(`ccc_migrated_${userId}`, 'true');
+    }
+
+    return {
+      hasCloudData,
+      hasCloudCandidate,
+      oppsCount,
+      contactsCount,
+      jobsCount,
+    };
   } catch (err) {
     console.error('[CloudHydration] Error during cloud state hydration:', err);
+    return {
+      hasCloudData: false,
+      hasCloudCandidate: false,
+      oppsCount: 0,
+      contactsCount: 0,
+      jobsCount: 0,
+    };
   }
 }
 

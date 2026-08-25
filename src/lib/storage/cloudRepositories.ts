@@ -188,18 +188,48 @@ export class CloudOpportunityRepository implements IOpportunityRepository {
   }
 
   async getAll(userId?: string): Promise<JobOpportunity[]> {
-    let query = this.supabase.from('opportunities').select('*').order('created_at', { ascending: false });
-    if (userId) {
-      query = query.eq('user_id', userId);
-    }
-    const { data, error } = await query;
-    if (error) {
-      console.warn(`[CloudOpportunityRepository] getAll notice for user ${userId}:`, error.message);
-      return [];
-    }
-    if (!data) return [];
+    const pageSize = 1000;
+    let from = 0;
+    const allRows: Record<string, unknown>[] = [];
+    const seenIds = new Set<string>();
 
-    return data.map((d: Record<string, unknown>) => this.mapRowToOpportunity(d));
+    while (true) {
+      let query = this.supabase
+        .from('opportunities')
+        .select('*')
+        .order('id', { ascending: true })
+        .range(from, from + pageSize - 1);
+
+      if (userId) {
+        query = query.eq('user_id', userId);
+      }
+
+      const { data, error } = await query;
+      if (error) {
+        console.warn(`[CloudOpportunityRepository] getAll notice for user ${userId} at range ${from}-${from + pageSize - 1}:`, error.message);
+        break;
+      }
+
+      if (!data || data.length === 0) {
+        break;
+      }
+
+      for (const row of data) {
+        const id = row.id as string;
+        if (id && !seenIds.has(id)) {
+          seenIds.add(id);
+          allRows.push(row);
+        }
+      }
+
+      if (data.length < pageSize) {
+        break;
+      }
+
+      from += pageSize;
+    }
+
+    return allRows.map((d: Record<string, unknown>) => this.mapRowToOpportunity(d));
   }
 
   async getById(id: string, userId?: string): Promise<JobOpportunity | undefined> {
@@ -353,30 +383,60 @@ export class CloudNetworkRepository implements INetworkRepository {
   constructor(private supabase: SupabaseClient) {}
 
   async getContacts(userId?: string): Promise<NetworkContact[]> {
-    let query = this.supabase.from('network_contacts').select('*').order('created_at', { ascending: false });
-    if (userId) {
-      query = query.eq('user_id', userId);
-    }
-    const { data, error } = await query;
-    if (error) {
-      console.warn(`[CloudNetworkRepository] getContacts notice for user ${userId}:`, error.message);
-      return [];
-    }
-    if (!data) return [];
+    const pageSize = 1000;
+    let from = 0;
+    const allRows: Record<string, unknown>[] = [];
+    const seenIds = new Set<string>();
 
-    return data.map((c) => ({
-      id: c.id,
-      fullName: c.name || c.full_name || 'Professional Contact',
-      firstName: c.first_name,
-      lastName: c.last_name,
-      company: c.company || '',
-      position: c.position || '',
-      email: c.email || '',
-      linkedInUrl: c.linkedin_url || '',
+    while (true) {
+      let query = this.supabase
+        .from('network_contacts')
+        .select('*')
+        .order('id', { ascending: true })
+        .range(from, from + pageSize - 1);
+
+      if (userId) {
+        query = query.eq('user_id', userId);
+      }
+
+      const { data, error } = await query;
+      if (error) {
+        console.warn(`[CloudNetworkRepository] getContacts notice for user ${userId} at range ${from}-${from + pageSize - 1}:`, error.message);
+        break;
+      }
+
+      if (!data || data.length === 0) {
+        break;
+      }
+
+      for (const row of data) {
+        const id = row.id as string;
+        if (id && !seenIds.has(id)) {
+          seenIds.add(id);
+          allRows.push(row);
+        }
+      }
+
+      if (data.length < pageSize) {
+        break;
+      }
+
+      from += pageSize;
+    }
+
+    return allRows.map((c) => ({
+      id: c.id as string,
+      fullName: (c.name as string) || (c.full_name as string) || 'Professional Contact',
+      firstName: c.first_name as string | undefined,
+      lastName: c.last_name as string | undefined,
+      company: (c.company as string) || '',
+      position: (c.position as string) || '',
+      email: (c.email as string) || '',
+      linkedInUrl: (c.linkedin_url as string) || '',
       connectedOn: (c.connection_date as string) || (c.connected_on as string) || '',
       source: ((c.source as string) as NetworkContact['source']) || 'generic_csv',
       importedAt: (c.created_at as string) || new Date().toISOString(),
-      notes: c.notes || '',
+      notes: (c.notes as string) || '',
     }));
   }
 
@@ -485,40 +545,72 @@ export class CloudDiscoveryRepository implements IDiscoveryRepository {
   constructor(private supabase: SupabaseClient) {}
 
   async getJobs(userId?: string): Promise<DiscoveredJob[]> {
-    let query = this.supabase.from('discovery_jobs').select('*').order('discovered_at', { ascending: false });
-    if (userId) query = query.eq('user_id', userId);
-    const { data, error } = await query;
-    if (error) {
-      console.warn(`[CloudDiscoveryRepository] getJobs notice for user ${userId}:`, error.message);
-      return [];
-    }
-    if (!data) return [];
+    const pageSize = 1000;
+    let from = 0;
+    const allRows: Record<string, unknown>[] = [];
+    const seenIds = new Set<string>();
 
-    return data.map((d) => ({
-      id: d.id,
-      title: d.title,
-      company: d.company,
-      location: d.location || '',
-      compensation: d.compensation,
-      jobUrl: d.job_url,
-      finalCanonicalUrl: d.final_canonical_url,
-      source: d.source,
-      discoveredAt: d.discovered_at,
+    while (true) {
+      let query = this.supabase
+        .from('discovery_jobs')
+        .select('*')
+        .order('id', { ascending: true })
+        .range(from, from + pageSize - 1);
+
+      if (userId) {
+        query = query.eq('user_id', userId);
+      }
+
+      const { data, error } = await query;
+      if (error) {
+        console.warn(`[CloudDiscoveryRepository] getJobs notice for user ${userId} at range ${from}-${from + pageSize - 1}:`, error.message);
+        break;
+      }
+
+      if (!data || data.length === 0) {
+        break;
+      }
+
+      for (const row of data) {
+        const id = row.id as string;
+        if (id && !seenIds.has(id)) {
+          seenIds.add(id);
+          allRows.push(row);
+        }
+      }
+
+      if (data.length < pageSize) {
+        break;
+      }
+
+      from += pageSize;
+    }
+
+    return allRows.map((d) => ({
+      id: d.id as string,
+      title: d.title as string,
+      company: d.company as string,
+      location: (d.location as string) || '',
+      compensation: d.compensation as string | undefined,
+      jobUrl: d.job_url as string | undefined,
+      finalCanonicalUrl: d.final_canonical_url as string | undefined,
+      source: d.source as string,
+      discoveredAt: d.discovered_at as string,
       status: d.status as DiscoveredJobStatus,
-      relevanceScore: d.relevance_score,
-      relevanceLevel: d.relevance_level,
-      relevanceReasons: d.relevance_reasons || [],
-      matchedPreferences: d.matched_preferences || [],
-      provider: d.provider,
-      groundingUsed: d.grounding_used,
-      verificationStatus: d.verification_status,
-      verifiedAt: d.verified_at,
-      sourceConfidence: d.source_confidence,
-      sourceDomain: d.source_domain,
-      failureReason: d.failure_reason,
-      snippet: d.snippet,
-      description: d.description,
-      matchedGroundingChunks: d.raw_grounding_metadata || undefined,
+      relevanceScore: d.relevance_score as number,
+      relevanceLevel: d.relevance_level as DiscoveredJob['relevanceLevel'],
+      relevanceReasons: (d.relevance_reasons as string[]) || [],
+      matchedPreferences: (d.matched_preferences as string[]) || [],
+      provider: d.provider as string,
+      groundingUsed: Boolean(d.grounding_used),
+      verificationStatus: d.verification_status as DiscoveredJob['verificationStatus'],
+      verifiedAt: d.verified_at as string | undefined,
+      sourceConfidence: d.source_confidence as number | undefined,
+      sourceDomain: d.source_domain as string | undefined,
+      failureReason: d.failure_reason as string | undefined,
+      snippet: d.snippet as string | undefined,
+      description: d.description as string | undefined,
+      matchedGroundingChunks: d.raw_grounding_metadata as DiscoveredJob['matchedGroundingChunks'] | undefined,
     }));
   }
 

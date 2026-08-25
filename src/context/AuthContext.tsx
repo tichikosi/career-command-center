@@ -4,7 +4,12 @@ import React, { createContext, useContext, useEffect, useState, ReactNode, useCa
 import { UserProfile, AuthSession, MigrationSummary } from '@/types/auth';
 import { getSupabaseClient } from '@/lib/supabase/client';
 import { isSupabaseConfigured } from '@/lib/supabase/config';
-import { inspectLocalData, migrateLocalDataToCloud, MigrationProgressUpdate } from '@/lib/storage/migrationService';
+import {
+  inspectLocalData,
+  migrateLocalDataToCloud,
+  isSyntheticOrDemoProfile,
+  MigrationProgressUpdate,
+} from '@/lib/storage/migrationService';
 import { getActiveStorageAdapter } from '@/lib/storage/repositoryManager';
 import { hydrateCloudStateForUser, resetStateOnSignOut } from '@/lib/storage/cloudHydration';
 
@@ -26,7 +31,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [isCloudConnected] = useState(() => isSupabaseConfigured());
+  const isCloudConnected = isSupabaseConfigured();
   const [user, setUser] = useState<UserProfile | null>(() => {
     if (!isSupabaseConfigured()) {
       return {
@@ -45,30 +50,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [migrationProgress, setMigrationProgress] = useState<MigrationProgressUpdate | null>(null);
 
   const checkMigrationEligibility = useCallback(async (authenticatedUser: UserProfile) => {
+    const completed =
+      typeof window !== 'undefined'
+        ? window.localStorage.getItem(`ccc_migrated_${authenticatedUser.id}`)
+        : null;
+
+    if (completed === 'true' || completed === 'dismissed') {
+      setMigrationPending(false);
+      return;
+    }
+
+    // Check if cloud account already contains user data
+    try {
+      const adapter = getActiveStorageAdapter();
+      const [opps, contacts, cand] = await Promise.all([
+        adapter.opportunities.getAll(authenticatedUser.id),
+        adapter.network.getContacts(authenticatedUser.id),
+        adapter.candidates.getProfile(authenticatedUser.id),
+      ]);
+      const cloudHasData =
+        opps.length > 0 ||
+        contacts.length > 0 ||
+        Boolean(cand && cand.name && !isSyntheticOrDemoProfile(cand));
+
+      if (cloudHasData) {
+        // Cloud account is already populated, suppress migration and record completion flag
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem(`ccc_migrated_${authenticatedUser.id}`, 'true');
+        }
+        setMigrationPending(false);
+        return;
+      }
+    } catch {
+      // Non-blocking check
+    }
+
+    // Cloud is empty for this user. Now inspect whether they have genuine pre-existing local data to migrate.
     const local = inspectLocalData();
     if (local.hasLocalData) {
-      const completed =
-        typeof window !== 'undefined'
-          ? window.localStorage.getItem(`ccc_migrated_${authenticatedUser.id}`)
-          : null;
-      if (!completed) {
-        setMigrationPending(true);
-      } else if (completed === 'true') {
-        // If flag was set previously but cloud has 0 records, clear stale flag so user can migrate
-        try {
-          const adapter = getActiveStorageAdapter();
-          const [opps, contacts] = await Promise.all([
-            adapter.opportunities.getAll(authenticatedUser.id),
-            adapter.network.getContacts(authenticatedUser.id),
-          ]);
-          if (opps.length === 0 && contacts.length === 0) {
-            window.localStorage.removeItem(`ccc_migrated_${authenticatedUser.id}`);
-            setMigrationPending(true);
-          }
-        } catch {
-          // Non-blocking check
-        }
-      }
+      setMigrationPending(true);
     } else {
       setMigrationPending(false);
     }
