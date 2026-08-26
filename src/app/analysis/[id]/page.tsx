@@ -14,6 +14,7 @@ import {
   IconTrash,
   IconExternalLink,
   IconPrinter,
+  IconCheckCircle,
 } from '@/components/icons';
 import { PipelineStage } from '@/types/opportunity';
 import { useCandidateProfile } from '@/lib/useCandidate';
@@ -43,7 +44,6 @@ import { FollowUpEngineView } from '@/components/interview/FollowUpEngineView';
 
 import { useAuth } from '@/context/AuthContext';
 import { getActiveStorageAdapter } from '@/lib/storage/repositoryManager';
-import { OpportunityActivity, ActivityType } from '@/types/interview';
 
 export default function AnalysisResultsPage() {
   const router = useRouter();

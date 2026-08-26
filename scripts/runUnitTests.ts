@@ -1,35 +1,37 @@
-import { readdirSync } from 'fs';
-import { join } from 'path';
-
 // Provide global test runners if vitest runner is loaded via node/tsx
-let currentSuite = '';
 let passedTests = 0;
 let failedTests = 0;
 
-(globalThis as any).describe = (name: string, fn: () => void) => {
-  currentSuite = name;
+interface GlobalWithTestHelpers {
+  describe?: (name: string, fn: () => void) => void;
+  it?: (name: string, fn: () => void | Promise<void>) => void;
+}
+
+const customGlobal = globalThis as unknown as GlobalWithTestHelpers;
+
+customGlobal.describe = (name: string, fn: () => void) => {
   console.log(`\n📦 ${name}`);
   fn();
 };
 
-(globalThis as any).it = (name: string, fn: () => void | Promise<void>) => {
+customGlobal.it = (name: string, fn: () => void | Promise<void>) => {
   try {
     const res = fn();
     if (res instanceof Promise) {
       res.then(() => {
         passedTests++;
         console.log(`  ✓ ${name}`);
-      }).catch((err) => {
+      }).catch((err: unknown) => {
         failedTests++;
-        console.error(`  ✗ ${name}:`, err.message || err);
+        console.error(`  ✗ ${name}:`, err instanceof Error ? err.message : String(err));
       });
     } else {
       passedTests++;
       console.log(`  ✓ ${name}`);
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     failedTests++;
-    console.error(`  ✗ ${name}:`, err.message || err);
+    console.error(`  ✗ ${name}:`, err instanceof Error ? err.message : String(err));
   }
 };
 
@@ -55,7 +57,7 @@ async function main() {
   }
 }
 
-main().catch((err) => {
+main().catch((err: unknown) => {
   console.error('Test execution failed:', err);
   process.exit(1);
 });

@@ -114,7 +114,7 @@ export class MockInterviewEngine {
     // Handle trivial answers (< 12 words or evasive) deterministically with strict scoring
     const trimmedAnswer = (input.candidateAnswer || '').trim();
     const wordCount = trimmedAnswer.split(/\s+/).filter(Boolean).length;
-    if (wordCount < 6 || /^(test|idk|skip|yes|no|none|n\/a|pass)\.?$/i.test(trimmedAnswer)) {
+    if (wordCount < 12 || /^(test|idk|skip|yes|no|none|n\/a|pass)\.?$/i.test(trimmedAnswer)) {
       return this.trivialAnswerEvaluation(input, primaryModel);
     }
 
@@ -401,7 +401,7 @@ CRITICAL SCORING RULES:
     }
 
     if (normDiff === 'stress_test') {
-      questions = questions.map((q, idx) => ({
+      questions = questions.map((q) => ({
         ...q,
         question: `[High Rigor] ${q.question} Be specific about trade-offs, metrics, and what you would do differently.`,
       }));
@@ -432,11 +432,11 @@ CRITICAL SCORING RULES:
     }
 
     // Baseline scores
-    let relevance = hasSpecificExample ? 3 : 2;
+    const relevance = hasSpecificExample ? 3 : 2;
     let evidenceSpecificity = hasMetric ? 4 : (hasSpecificExample ? 3 : 2);
     let strategicDepth = (wordCount > 60 && (hasResult || hasTradeoff)) ? 4 : (wordCount > 30 ? 3 : 2);
-    let executiveCommunication = (wordCount >= 25 && wordCount <= 250) ? 4 : 3;
-    let structure = hasResult ? 4 : (hasSpecificExample ? 3 : 2);
+    const executiveCommunication = (wordCount >= 25 && wordCount <= 250) ? 4 : 3;
+    const structure = hasResult ? 4 : (hasSpecificExample ? 3 : 2);
     let concision = (wordCount >= 20 && wordCount <= 180) ? 4 : (wordCount > 250 ? 2 : 3);
 
     // Adjust for difficulty

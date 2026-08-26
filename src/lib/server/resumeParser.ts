@@ -1,4 +1,3 @@
-import mammoth from 'mammoth';
 import { getGeminiClient, getGeminiModel, getGeminiFallbackModel, isGeminiConfigured } from './geminiConfig';
 import { executeWithResilience, sanitizeErrorMessage } from './geminiRetry';
 import { ResumeExtractionSchema, ResumeExtractionResult } from './schemas';
@@ -54,6 +53,8 @@ export class ServerResumeParser {
     if (isDocx && input.fileBufferBase64) {
       try {
         const buffer = Buffer.from(input.fileBufferBase64, 'base64');
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const mammoth = require('mammoth');
         const mammothResult = await mammoth.extractRawText({ buffer });
         if (mammothResult.value && mammothResult.value.trim().length > 0) {
           extractedText = mammothResult.value.trim();

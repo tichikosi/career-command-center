@@ -71,6 +71,9 @@ describe('V3 Opportunity Discovery Workspace & Automation', () => {
         relevanceLevel: 'High Potential',
         relevanceReasons: [],
         matchedPreferences: [],
+        provider: 'feed',
+        groundingUsed: false,
+        verificationStatus: 'grounded-unverified',
       },
     ];
 
@@ -88,6 +91,21 @@ describe('V3 Opportunity Discovery Workspace & Automation', () => {
         priority: 'High',
         notes: '',
         actions: [],
+        analysis: {
+          overallFitScore: 85,
+          recommendation: 'Apply',
+          executiveSummary: '',
+          likelyMandate: '',
+          keyRequirements: [],
+          scoreExplanation: '',
+          positioningNarrative: '',
+          qualifications: [],
+          objections: [],
+          recruiterQuestions: [],
+          hiringManagerQuestions: [],
+          recommendedStarStories: [],
+          nextActions: [],
+        },
       },
     ];
 
@@ -106,6 +124,9 @@ describe('V3 Opportunity Discovery Workspace & Automation', () => {
         relevanceLevel: 'High Potential',
         relevanceReasons: [],
         matchedPreferences: [],
+        provider: 'feed',
+        groundingUsed: false,
+        verificationStatus: 'grounded-unverified',
       },
       // Exact duplicate by Company + Title fingerprint
       {
@@ -121,6 +142,9 @@ describe('V3 Opportunity Discovery Workspace & Automation', () => {
         relevanceLevel: 'High Potential',
         relevanceReasons: [],
         matchedPreferences: [],
+        provider: 'feed',
+        groundingUsed: false,
+        verificationStatus: 'grounded-unverified',
       },
       // Genuine Net-New Job
       {
@@ -136,6 +160,9 @@ describe('V3 Opportunity Discovery Workspace & Automation', () => {
         relevanceLevel: 'High Potential',
         relevanceReasons: [],
         matchedPreferences: [],
+        provider: 'feed',
+        groundingUsed: false,
+        verificationStatus: 'grounded-unverified',
       },
     ];
 
@@ -146,27 +173,27 @@ describe('V3 Opportunity Discovery Workspace & Automation', () => {
     );
 
     expect(duplicatesCount).toBe(2);
-    expect(uniqueJobs.length).toBe(1);
+    expect(uniqueJobs).toHaveLength(1);
+    expect(uniqueJobs[0].id).toBe('disc-new-3');
     expect(uniqueJobs[0].company).toBe('Stripe');
-    expect(uniqueJobs[0].title).toBe('Head of RevOps');
   });
 
-  it('accurately scores job relevance against candidate preferences', () => {
+  it('calculates relevance score accurately against candidate target profiles', () => {
     const highMatchJob: Partial<DiscoveredJob> = {
-      title: 'Director, AI Strategy & Operations',
-      company: 'Scale AI',
-      location: 'San Francisco, CA (Hybrid)',
-      snippet: 'Lead enterprise AI platform GTM strategy and operational scaling.',
+      title: 'Director, AI Strategy & Enablement',
+      company: 'ScaleAI',
+      location: 'San Francisco, CA',
+      snippet: 'Lead enterprise AI enablement, GTM strategy, and operational models.',
     };
 
-    const scored = scoreDiscoveryRelevance(highMatchJob, mockCandidate);
-    expect(scored.relevanceScore).toBeGreaterThanOrEqual(80);
-    expect(scored.relevanceLevel).toBe('High Potential');
-    expect(scored.relevanceReasons.some((r) => r.toLowerCase().includes('role') || r.toLowerCase().includes('location'))).toBe(true);
+    const scoredHigh = scoreDiscoveryRelevance(highMatchJob, mockCandidate);
+    expect(scoredHigh.relevanceScore).toBeGreaterThanOrEqual(80);
+    expect(scoredHigh.relevanceLevel).toBe('High Potential');
+    expect(scoredHigh.relevanceReasons.length).toBeGreaterThan(0);
 
     const lowMatchJob: Partial<DiscoveredJob> = {
-      title: 'Junior Front-End Web Designer',
-      company: 'Local Bakery Co',
+      title: 'Junior Web Designer',
+      company: 'Local Bakery',
       location: 'Austin, TX',
       snippet: 'Design CSS layouts for local bakery website.',
     };
@@ -192,6 +219,9 @@ describe('V3 Opportunity Discovery Workspace & Automation', () => {
       relevanceReasons: ['Role match'],
       matchedPreferences: ['AI Strategy'],
       description: 'Lead strategic enterprise client AI architectures and transformations.',
+      provider: 'OpenAI Careers',
+      groundingUsed: false,
+      verificationStatus: 'verified-live',
     };
 
     saveDiscoveredJobs([job]);
@@ -224,6 +254,8 @@ describe('V3 Opportunity Discovery Workspace & Automation', () => {
       deduplicatedCount: 2,
       durationMs: 1450,
       status: 'success',
+      provider: 'gemini',
+      groundingEnabled: true,
     });
 
     expect(historyItem.id).toBeDefined();

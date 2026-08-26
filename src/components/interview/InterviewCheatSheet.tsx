@@ -1,28 +1,22 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Card } from '@/components/ui/Card';
 import { JobOpportunity, FitAnalysisReport } from '@/types/opportunity';
-import { CandidateProfile, EvidenceItem } from '@/types/candidate';
+import { CandidateProfile } from '@/types/candidate';
 import { InterviewPreparation, OpportunityActivity } from '@/types/interview';
 import {
-  IconBrain,
   IconSparkles,
   IconCheckCircle,
   IconPrinter,
   IconCopy,
-  IconCalendar,
-  IconUsers,
-  IconShield,
-  IconAlertTriangle,
-  IconFlag,
   IconTarget,
+  IconShield,
 } from '@/components/icons';
 import { formatShortDate } from '@/lib/dateUtils';
 
 interface InterviewCheatSheetProps {
   opportunity: JobOpportunity;
-  candidate: CandidateProfile;
+  candidate?: CandidateProfile;
   activePrep: InterviewPreparation;
   analysisReport?: FitAnalysisReport;
   activities?: OpportunityActivity[];
@@ -32,9 +26,7 @@ interface InterviewCheatSheetProps {
 
 export function InterviewCheatSheet({
   opportunity,
-  candidate,
   activePrep,
-  analysisReport,
   activities = [],
   onRefresh,
   isRefreshing = false,
@@ -82,14 +74,7 @@ export function InterviewCheatSheet({
     );
   }
 
-  // 5. Proof Points (Message -> Evidence -> Metric)
-  const proofPoints = activePrep.storyBank.slice(0, 4).map((story) => ({
-    message: story.title,
-    evidence: story.action,
-    metric: story.result,
-  }));
-
-  // 6. What They Are Likely Testing
+  // 5. What They Are Likely Testing
   const likelyTestingThemes = [
     { theme: 'Strategic Altitude & Vision', desc: 'Can you frame problems at the executive level before diving into operational detail?' },
     { theme: 'Operational Execution & Rigor', desc: 'Can you build sustainable operating cadences and hold cross-functional teams accountable?' },
@@ -108,7 +93,7 @@ export function InterviewCheatSheet({
     situation: s.situation,
     action: s.action,
     result: s.result,
-    citation: s.citationIds?.[0] || 'Candidate Profile',
+    citation: s.evidenceIds?.[0] || 'Candidate Profile',
   }));
 
   // 9. Material Gaps & Defense
@@ -159,13 +144,13 @@ ${topMessages.map((m) => `- ${m}`).join('\n')}
 ${likelyTestingThemes.map((t) => `- **${t.theme}**: ${t.desc}`).join('\n')}
 
 ## 6. HIGH-PROBABILITY QUESTIONS
-${priorityQuestions.map((q, i) => `${i + 1}. [${q.category.toUpperCase()}] ${q.question}\n   *Strategy*: ${q.strategy}`).join('\n\n')}
+${priorityQuestions.map((q, i) => `${i + 1}. [${q.category.toUpperCase()}] ${q.question}\n   *Suggested Approach*: ${q.suggestedApproach}`).join('\n\n')}
 
 ## 7. STAR STORY BANK
 ${storyMap.map((s, i) => `### Story ${i + 1}: ${s.theme} (${s.citation})\n- **Situation/Task**: ${s.situation}\n- **Action Taken**: ${s.action}\n- **Quantified Result**: ${s.result}`).join('\n\n')}
 
 ## 8. MATERIAL GAPS & DEFENSE
-${gapDefense.map((g) => `### Gap: ${g.gap}\n- **Likely Concern**: ${g.likelyConcern}\n- **Defense Strategy**: ${g.mitigationStrategy}\n- **Bridge Language**: "${g.bridgeLanguage}"`).join('\n\n')}
+${gapDefense.map((g) => `### Gap: ${g.gap}\n- **Bridge Strategy**: ${g.bridgeStrategy}\n- **Supporting Evidence**: ${g.supportingEvidenceIds?.join(', ') || 'N/A'}`).join('\n\n')}
 
 ## 9. SMART QUESTIONS TO ASK INTERVIEWER
 ${questionsToAsk.map((q, i) => `${i + 1}. ${q}`).join('\n')}
@@ -354,7 +339,7 @@ ${finalReminders.map((r) => `- ${r}`).join('\n')}
                 </div>
                 <p className="font-bold text-slate-900 dark:text-slate-100 leading-snug">{q.question}</p>
                 <p className="text-[11px] text-slate-600 dark:text-slate-400">
-                  <strong className="text-slate-700 dark:text-slate-300">Strategy:</strong> {q.strategy}
+                  <strong className="text-slate-700 dark:text-slate-300">Suggested Approach:</strong> {q.suggestedApproach}
                 </p>
               </div>
             ))}
@@ -396,14 +381,15 @@ ${finalReminders.map((r) => `- ${r}`).join('\n')}
                 <div key={idx} className="p-3.5 bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/60 rounded-xl space-y-1.5">
                   <div className="flex items-center justify-between font-bold text-amber-900 dark:text-amber-200">
                     <span>{g.gap}</span>
-                    <span className="text-[10px] text-amber-700 dark:text-amber-400 uppercase">Concern: {g.likelyConcern}</span>
                   </div>
                   <p className="text-[11px] text-slate-700 dark:text-slate-300">
-                    <strong>Mitigation:</strong> {g.mitigationStrategy}
+                    <strong>Bridge Strategy:</strong> {g.bridgeStrategy}
                   </p>
-                  <p className="text-[11px] text-indigo-900 dark:text-indigo-300 italic bg-white dark:bg-slate-900 p-2 rounded border border-amber-100 dark:border-slate-800">
-                    &ldquo;{g.bridgeLanguage}&rdquo;
-                  </p>
+                  {g.supportingEvidenceIds && g.supportingEvidenceIds.length > 0 && (
+                    <p className="text-[11px] text-indigo-900 dark:text-indigo-300 italic bg-white dark:bg-slate-900 p-2 rounded border border-amber-100 dark:border-slate-800">
+                      Supporting Evidence: {g.supportingEvidenceIds.join(', ')}
+                    </p>
+                  )}
                 </div>
               ))}
             </div>

@@ -42,6 +42,6 @@ describe('Discovery Opportunity Promotion Unit Tests', () => {
     expect(opp.notes).toContain('92%');
 
     // Discovery relevance is distinct from full fit analysis report
-    expect(opp.analysisReport).toBeUndefined();
+    expect((opp as unknown as Record<string, unknown>).analysisReport).toBeUndefined();
   });
 });

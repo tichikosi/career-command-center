@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { NetworkContact } from '@/types/network';
 import { InterviewType, OpportunityActivity } from '@/types/interview';
-import { IconCalendar, IconClock, IconUsers } from '@/components/icons';
+import { IconCalendar, IconClock } from '@/components/icons';
 
 import { SearchableContactPicker } from '@/components/network/SearchableContactPicker';
 import { useNetwork } from '@/lib/networkStorage';

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { OpportunityActivity } from '@/types/interview';
 import { getActivityRepository } from '@/lib/storage/repositoryManager';
+import { defaultLocalStorageAdapter } from '@/lib/storage/localStorageAdapter';
 import { useAuth } from '@/context/AuthContext';
 
 export interface UseActivitiesReturn {
@@ -20,10 +21,14 @@ export function useActivities(opportunityId?: string): UseActivitiesReturn {
   const [activities, setActivities] = useState<OpportunityActivity[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  const getRepo = useCallback(() => {
+    return userId ? getActivityRepository() : defaultLocalStorageAdapter.activities;
+  }, [userId]);
+
   const refreshActivities = useCallback(async () => {
     setIsLoading(true);
     try {
-      const repo = getActivityRepository();
+      const repo = getRepo();
       if (!repo) {
         setActivities([]);
         return;
@@ -40,13 +45,13 @@ export function useActivities(opportunityId?: string): UseActivitiesReturn {
     } finally {
       setIsLoading(false);
     }
-  }, [opportunityId, userId]);
+  }, [opportunityId, userId, getRepo]);
 
   useEffect(() => {
     let active = true;
     const fetchInitial = async () => {
       try {
-        const repo = getActivityRepository();
+        const repo = getRepo();
         if (!repo) {
           if (active) {
             setActivities([]);
@@ -76,12 +81,12 @@ export function useActivities(opportunityId?: string): UseActivitiesReturn {
     return () => {
       active = false;
     };
-  }, [opportunityId, userId]);
+  }, [opportunityId, userId, getRepo]);
 
   const addActivity = useCallback(
     async (activity: Omit<OpportunityActivity, 'id' | 'createdAt' | 'updatedAt'>) => {
       try {
-        const repo = getActivityRepository();
+        const repo = getRepo();
         if (!repo) return null;
         const created = await repo.recordActivity(activity, userId);
         setActivities((prev) => [created, ...prev]);
@@ -91,13 +96,13 @@ export function useActivities(opportunityId?: string): UseActivitiesReturn {
         return null;
       }
     },
-    [userId]
+    [userId, getRepo]
   );
 
   const editActivity = useCallback(
     async (id: string, updates: Partial<OpportunityActivity>) => {
       try {
-        const repo = getActivityRepository();
+        const repo = getRepo();
         if (!repo) return null;
         const updated = await repo.updateActivity(id, updates, userId);
         if (updated) {
@@ -109,13 +114,13 @@ export function useActivities(opportunityId?: string): UseActivitiesReturn {
         return null;
       }
     },
-    [userId]
+    [userId, getRepo]
   );
 
   const removeActivity = useCallback(
     async (id: string) => {
       try {
-        const repo = getActivityRepository();
+        const repo = getRepo();
         if (!repo) return;
         await repo.deleteActivity(id, userId);
         setActivities((prev) => prev.filter((a) => a.id !== id));
@@ -123,7 +128,7 @@ export function useActivities(opportunityId?: string): UseActivitiesReturn {
         console.error('[useActivities] Error deleting activity:', err);
       }
     },
-    [userId]
+    [userId, getRepo]
   );
 
   return {

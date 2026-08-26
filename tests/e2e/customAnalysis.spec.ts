@@ -2,6 +2,42 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Role Analysis E2E', () => {
   test('Sample role selection analysis and custom job description input validation', async ({ page }) => {
+    // Mock /api/analyze endpoint for deterministic fast test execution
+    await page.route('**/api/analyze', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          report: {
+            executiveSummary: 'Strong fit for strategic operations and leadership.',
+            likelyMandate: 'Lead revenue operations scaling.',
+            keyRequirements: ['Leadership', 'Operations'],
+            overallFitScore: 88,
+            scoreExplanation: 'Deep evidence alignment.',
+            recommendation: 'Apply',
+            positioningNarrative: 'Leader with strong execution background.',
+            qualifications: [
+              {
+                id: 'q1',
+                category: 'Required',
+                qualification: 'Cross-functional leadership',
+                matchType: 'Strong Match',
+                explanation: 'Demonstrated experience in enterprise scaling.',
+                supportingEvidenceCitationIds: ['EVID-IMP-01'],
+              },
+            ],
+            objections: [],
+            recruiterQuestions: [],
+            hiringManagerQuestions: [],
+            recommendedStarStories: [],
+            nextActions: ['Align with leadership on KPIs'],
+            analysisEngine: 'deterministic',
+          },
+        }),
+      });
+    });
+
     // 1. Visit Analyze page
     await page.goto('/analyze');
     await expect(page.locator('h1')).toContainText('Analyze a Role');

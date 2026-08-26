@@ -22,8 +22,10 @@ describe('Candidate-Context Analysis Isolation & Grounding Unit Tests', () => {
     targetIndustries: ['Enterprise AI', 'Cloud Software', 'Venture Capital'],
     preferredLocations: ['San Francisco, CA', 'Remote'],
     coreCompetencies: ['AI Strategy', 'GTM Operations', 'RevOps', 'Executive Rhythms', 'Cross-Functional Leadership'],
+    education: [],
+    certifications: [],
+    sources: [],
     dataMode: 'user',
-    createdAt: '2026-08-14T00:00:00.000Z',
     updatedAt: '2026-08-14T00:00:00.000Z',
     careerHistory: [
       {

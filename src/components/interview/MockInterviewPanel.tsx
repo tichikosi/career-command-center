@@ -21,8 +21,6 @@ import {
   IconClock,
   IconCheckCircle,
   IconAlertTriangle,
-  IconShield,
-  IconBrain,
 } from '@/components/icons';
 import { formatShortDate } from '@/lib/dateUtils';
 
@@ -125,12 +123,9 @@ export function MockInterviewPanel({
   useEffect(() => {
     let elapsedTimer: NodeJS.Timeout | null = null;
     if (isGeneratingQuestions || isEvaluating) {
-      setGenerationElapsed(0);
       elapsedTimer = setInterval(() => {
         setGenerationElapsed((prev) => prev + 1);
       }, 1000);
-    } else {
-      setGenerationElapsed(0);
     }
     return () => {
       if (elapsedTimer) clearInterval(elapsedTimer);
@@ -140,6 +135,7 @@ export function MockInterviewPanel({
   // Start Session
   const handleStartSession = async () => {
     setIsGeneratingQuestions(true);
+    setGenerationElapsed(0);
     setStartError(null);
     try {
       const res = await fetch('/api/interview/mock', {
@@ -187,6 +183,7 @@ export function MockInterviewPanel({
     if (!activeQ) return;
 
     setIsEvaluating(true);
+    setGenerationElapsed(0);
     try {
       const res = await fetch('/api/interview/mock', {
         method: 'POST',

@@ -155,6 +155,8 @@ describe('V3.3 Security, RLS & Cloud Persistence Architecture', () => {
           requestedModel: 'gemini-3.7-flash',
           actualModel: 'gemini-3.7-flash',
           executionMode: 'gemini',
+          candidateUpdatedAt: new Date().toISOString(),
+          opportunityUpdatedAt: new Date().toISOString(),
           isActive: true,
         },
         '00000000-0000-0000-0000-000000000001'
@@ -202,6 +204,9 @@ describe('V3.3 Security, RLS & Cloud Persistence Architecture', () => {
 
   it('8. Unauthenticated demo mode operates in localStorage without touching cloud tables', async () => {
     const localAct = defaultLocalStorageAdapter.activities;
+    expect(localAct).toBeDefined();
+    if (!localAct) return;
+
     const recorded = await localAct.recordActivity({
       opportunityId: 'opp-demo',
       activityType: 'note',

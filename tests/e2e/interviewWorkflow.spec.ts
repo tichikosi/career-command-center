@@ -136,6 +136,10 @@ test.describe('V3.3 Interview War Room, Activity Timeline & Application Intellig
 
     // Verify War Room sections rendered
     await expect(page.getByText('Interview Readiness Index')).toBeVisible();
+    await expect(page.getByText('Executive Interview Cheat Sheet')).toBeVisible();
+
+    // Check Strategy Subtab
+    await page.getByRole('button', { name: /Strategy & Positioning/i }).click();
     await expect(page.getByText('Executive Role Brief')).toBeVisible();
     await expect(page.getByText('Candidate Positioning Narrative')).toBeVisible();
     await expect(page.getByText('Platform Reliability', { exact: true })).toBeVisible();
@@ -167,7 +171,7 @@ test.describe('V3.3 Interview War Room, Activity Timeline & Application Intellig
             executionMode: 'gemini',
           }),
         });
-      } else if (body.action === 'evaluate_answer') {
+      } else if (body.action === 'evaluate' || body.action === 'evaluate_answer') {
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
@@ -206,7 +210,7 @@ test.describe('V3.3 Interview War Room, Activity Timeline & Application Intellig
     await expect(page.locator('h1')).toBeVisible();
 
     await page.getByRole('button', { name: /Mock Interview/i }).click();
-    await expect(page.getByText('Interactive Mock Interview War Room')).toBeVisible();
+    await expect(page.getByText('Interactive Mock Interview Simulator')).toBeVisible();
 
     // Start mock session
     await page.getByRole('button', { name: /Start (New )?Mock Session/i }).click();

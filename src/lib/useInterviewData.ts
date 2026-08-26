@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { InterviewPreparation, InterviewSession } from '@/types/interview';
 import { getInterviewPrepRepository, getInterviewSessionRepository } from '@/lib/storage/repositoryManager';
+import { defaultLocalStorageAdapter } from '@/lib/storage/localStorageAdapter';
 import { useAuth } from '@/context/AuthContext';
 
 export interface UseInterviewDataReturn {
@@ -25,12 +26,20 @@ export function useInterviewData(opportunityId: string): UseInterviewDataReturn 
   const [sessions, setSessions] = useState<InterviewSession[]>([]);
   const [isLoading, setIsLoading] = useState(() => Boolean(opportunityId));
 
+  const getPrepRepo = useCallback(() => {
+    return userId ? getInterviewPrepRepository() : defaultLocalStorageAdapter.interviewPrep;
+  }, [userId]);
+
+  const getSessionRepo = useCallback(() => {
+    return userId ? getInterviewSessionRepository() : defaultLocalStorageAdapter.interviewSessions;
+  }, [userId]);
+
   const refresh = useCallback(async () => {
     if (!opportunityId) return;
     setIsLoading(true);
     try {
-      const prepRepo = getInterviewPrepRepository();
-      const sessionRepo = getInterviewSessionRepository();
+      const prepRepo = getPrepRepo();
+      const sessionRepo = getSessionRepo();
 
       const [active, history, sessionList] = await Promise.all([
         prepRepo ? prepRepo.getActivePrep(opportunityId, userId) : Promise.resolve(null),
@@ -46,7 +55,7 @@ export function useInterviewData(opportunityId: string): UseInterviewDataReturn 
     } finally {
       setIsLoading(false);
     }
-  }, [opportunityId, userId]);
+  }, [opportunityId, userId, getPrepRepo, getSessionRepo]);
 
   useEffect(() => {
     let active = true;
@@ -56,8 +65,8 @@ export function useInterviewData(opportunityId: string): UseInterviewDataReturn 
 
     const fetchInitial = async () => {
       try {
-        const prepRepo = getInterviewPrepRepository();
-        const sessionRepo = getInterviewSessionRepository();
+        const prepRepo = getPrepRepo();
+        const sessionRepo = getSessionRepo();
 
         const [activeP, hist, sess] = await Promise.all([
           prepRepo ? prepRepo.getActivePrep(opportunityId, userId) : Promise.resolve(null),
@@ -83,12 +92,12 @@ export function useInterviewData(opportunityId: string): UseInterviewDataReturn 
     return () => {
       active = false;
     };
-  }, [opportunityId, userId]);
+  }, [opportunityId, userId, getPrepRepo, getSessionRepo]);
 
   const savePrep = useCallback(
     async (prep: InterviewPreparation) => {
       try {
-        const repo = getInterviewPrepRepository();
+        const repo = getPrepRepo();
         if (!repo) return null;
         const saved = await repo.savePrep(prep, userId);
         setActivePrep(saved);
@@ -99,13 +108,13 @@ export function useInterviewData(opportunityId: string): UseInterviewDataReturn 
         return null;
       }
     },
-    [userId]
+    [userId, getPrepRepo]
   );
 
   const deletePrep = useCallback(
     async (id: string) => {
       try {
-        const repo = getInterviewPrepRepository();
+        const repo = getPrepRepo();
         if (!repo) return;
         await repo.deletePrep(id, userId);
         setActivePrep((prev) => (prev?.id === id ? null : prev));
@@ -114,13 +123,13 @@ export function useInterviewData(opportunityId: string): UseInterviewDataReturn 
         console.error('[useInterviewData] Error deleting prep:', err);
       }
     },
-    [userId]
+    [userId, getPrepRepo]
   );
 
   const saveSession = useCallback(
     async (session: InterviewSession) => {
       try {
-        const repo = getInterviewSessionRepository();
+        const repo = getSessionRepo();
         if (!repo) return null;
         const saved = await repo.saveSession(session, userId);
         setSessions((prev) => [saved, ...prev.filter((s) => s.id !== saved.id)]);
@@ -130,13 +139,13 @@ export function useInterviewData(opportunityId: string): UseInterviewDataReturn 
         return null;
       }
     },
-    [userId]
+    [userId, getSessionRepo]
   );
 
   const deleteSession = useCallback(
     async (id: string) => {
       try {
-        const repo = getInterviewSessionRepository();
+        const repo = getSessionRepo();
         if (!repo) return;
         await repo.deleteSession(id, userId);
         setSessions((prev) => prev.filter((s) => s.id !== id));
@@ -144,7 +153,7 @@ export function useInterviewData(opportunityId: string): UseInterviewDataReturn 
         console.error('[useInterviewData] Error deleting session:', err);
       }
     },
-    [userId]
+    [userId, getSessionRepo]
   );
 
   return {

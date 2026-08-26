@@ -9,6 +9,7 @@ import {
   IStorageAdapter,
 } from './interfaces';
 import { OpportunityActivity, InterviewPreparation, InterviewSession } from '@/types/interview';
+import { NetworkContact } from '@/types/network';
 import {
   getCandidateProfile,
   saveCandidateProfile,
@@ -72,18 +73,18 @@ export class LocalOpportunityRepository implements IOpportunityRepository {
 }
 
 export class LocalNetworkRepository implements INetworkRepository {
-  getContacts() {
+  getContacts(): NetworkContact[] {
     return getNetworkContacts();
   }
-  addContacts(contacts: Parameters<typeof saveNetworkContacts>[0]) {
+  addContacts(contacts: NetworkContact[]): NetworkContact[] {
     const existing = getNetworkContacts();
     const merged = [...contacts, ...existing];
     saveNetworkContacts(merged);
     return merged;
   }
-  updateContact(id: string, updates: Partial<Parameters<typeof saveNetworkContacts>[0][0]>) {
+  updateContact(id: string, updates: Partial<NetworkContact>): NetworkContact | null {
     const contacts = getNetworkContacts();
-    let updatedContact: Parameters<typeof saveNetworkContacts>[0][0] | null = null;
+    let updatedContact: NetworkContact | null = null;
     const updatedList = contacts.map((c) => {
       if (c.id === id) {
         updatedContact = { ...c, ...updates };
@@ -96,7 +97,7 @@ export class LocalNetworkRepository implements INetworkRepository {
     }
     return updatedContact;
   }
-  deleteContact(id: string) {
+  deleteContact(id: string): void {
     const contacts = getNetworkContacts();
     const filtered = contacts.filter((c) => c.id !== id);
     saveNetworkContacts(filtered);

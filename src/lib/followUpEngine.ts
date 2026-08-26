@@ -168,7 +168,19 @@ export function evaluateOpportunityFollowUp(
     }
 
     case 'Interviewing': {
-      if (!hasPendingThankYou && daysSinceLatest >= 5) {
+      if (latestActivity?.activityType === 'recruiter_contact' && daysSinceLatest >= 5) {
+        recommendations.push({
+          actionType: 'recruiter_follow_up',
+          title: `Follow Up with Recruiter (${opportunity.company})`,
+          rationale: `Last recruiter communication was ${daysSinceLatest} days ago. Inquire about next steps and scheduling.`,
+          priority: daysSinceLatest >= 8 ? 'high' : 'medium',
+          opportunityId: opportunity.id,
+          opportunityTitle: opportunity.title,
+          company: opportunity.company,
+          contactId: latestActivity.contactId,
+          contactName: latestActivity.contactName,
+        });
+      } else if (!hasPendingThankYou && daysSinceLatest >= 5) {
         recommendations.push({
           actionType: 'post_interview_follow_up',
           title: `Status Inquiry after Round (${daysSinceLatest}d since activity)`,

@@ -1,4 +1,4 @@
-import { GoogleGenAI } from '@google/genai';
+import type { GoogleGenAI } from '@google/genai';
 
 /**
  * Server-only Gemini Configuration and Client Factory.
@@ -32,10 +32,12 @@ export function getGeminiClient(): GoogleGenAI {
   }
 
   if (!geminiClientInstance) {
-    geminiClientInstance = new GoogleGenAI({ apiKey });
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { GoogleGenAI: GenAIClass } = require('@google/genai');
+    geminiClientInstance = new GenAIClass({ apiKey });
   }
 
-  return geminiClientInstance;
+  return geminiClientInstance!;
 }
 
 // Reset instance helper (useful for testing or config changes)

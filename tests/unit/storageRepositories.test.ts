@@ -111,6 +111,9 @@ describe('Storage Abstraction Repositories', () => {
           relevanceLevel: 'High Potential',
           relevanceReasons: [],
           matchedPreferences: [],
+          provider: 'test_provider',
+          groundingUsed: false,
+          verificationStatus: 'verified-live',
         },
       ]);
 
@@ -127,6 +130,8 @@ describe('Storage Abstraction Repositories', () => {
         deduplicatedCount: 0,
         durationMs: 100,
         status: 'success',
+        provider: 'test_provider',
+        groundingEnabled: false,
       });
 
       expect(historyItem.id).toBeDefined();
