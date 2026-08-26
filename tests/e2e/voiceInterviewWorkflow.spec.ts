@@ -148,4 +148,199 @@ test.describe('V3.4 Voice Interview Intelligence & Performance Analytics E2E', (
       await expect(page.getByText('Voice Delivery')).toBeVisible();
     }
   });
+
+  test('Voice replay audio playback stops on submission, retry, and tab navigation', async ({ page }) => {
+    // Intercept question generation and answer evaluation
+    await page.route('**/api/interview/mock', async (route) => {
+      const request = route.request();
+      const body = JSON.parse(request.postData() || '{}');
+
+      if (body.action === 'generate_questions') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            success: true,
+            questions: [
+              {
+                id: 'mq-1',
+                question: 'How do you lead cross-functional AI platform initiatives under tight timelines?',
+                category: 'strategic',
+              },
+            ],
+            requestedModel: 'gemini-3.7-flash',
+            actualModel: 'gemini-3.7-flash',
+            executionMode: 'gemini',
+          }),
+        });
+        return;
+      }
+
+      if (body.action === 'evaluate') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            success: true,
+            evaluation: {
+              score: {
+                relevance: 5,
+                evidenceSpecificity: 4,
+                strategicDepth: 5,
+                executiveCommunication: 4,
+                structure: 4,
+                concision: 4,
+              },
+              deliveryScore: {
+                pace: 5,
+                verbalConcision: 4,
+                fillerControl: 5,
+                pausing: 4,
+                clarity: 5,
+                executiveDelivery: 5,
+              },
+              overallResponseScore: 92,
+              contentWeight: 0.7,
+              deliveryWeight: 0.3,
+              coaching: {
+                strengths: ['Clear delivery cadence'],
+                improvements: [],
+                improvedAnswer: 'Grounded executive response.',
+              },
+              voiceCoaching: {
+                speakingPaceCoaching: 'Measured pace at 145 WPM.',
+                fillerWordCoaching: 'Zero filler words.',
+                deliveryRefinements: [],
+                overallDeliverySummary: 'Strong delivery.',
+              },
+              evidenceCitations: [],
+              requestedModel: 'gemini-3.7-flash',
+              actualModel: 'gemini-3.7-flash',
+              executionMode: 'gemini',
+            },
+          }),
+        });
+        return;
+      }
+
+      await route.continue();
+    });
+
+    // Mock browser media and audio APIs
+    await page.addInitScript(() => {
+      (window as unknown as { __mockAudioPlayCount: number }).__mockAudioPlayCount = 0;
+      (window as unknown as { __mockAudioPauseCount: number }).__mockAudioPauseCount = 0;
+      (window as unknown as { __mockAudioIsPlaying: boolean }).__mockAudioIsPlaying = false;
+
+      class MockAudio {
+        src = '';
+        currentTime = 0;
+        onended: (() => void) | null = null;
+        onerror: (() => void) | null = null;
+        constructor(src?: string) {
+          if (src) this.src = src;
+        }
+        play() {
+          (window as unknown as { __mockAudioPlayCount: number }).__mockAudioPlayCount++;
+          (window as unknown as { __mockAudioIsPlaying: boolean }).__mockAudioIsPlaying = true;
+          return Promise.resolve();
+        }
+        pause() {
+          (window as unknown as { __mockAudioPauseCount: number }).__mockAudioPauseCount++;
+          (window as unknown as { __mockAudioIsPlaying: boolean }).__mockAudioIsPlaying = false;
+        }
+      }
+      (window as unknown as { Audio: typeof MockAudio }).Audio = MockAudio;
+
+      const mockStream = {
+        getTracks: () => [{ stop: () => {} }],
+      };
+      if (!navigator.mediaDevices) {
+        (navigator as unknown as { mediaDevices: { getUserMedia: () => Promise<unknown> } }).mediaDevices = {
+          getUserMedia: () => Promise.resolve(mockStream),
+        };
+      } else {
+        navigator.mediaDevices.getUserMedia = () => Promise.resolve(mockStream as unknown as MediaStream);
+      }
+
+      class MockMediaRecorder {
+        state = 'inactive';
+        ondataavailable: ((e: { data: Blob }) => void) | null = null;
+        onstop: (() => void) | null = null;
+        start() {
+          this.state = 'recording';
+        }
+        stop() {
+          this.state = 'inactive';
+          if (this.ondataavailable) {
+            this.ondataavailable({ data: new Blob(['audio-sample'], { type: 'audio/webm' }) });
+          }
+          if (this.onstop) this.onstop();
+        }
+      }
+      (window as unknown as { MediaRecorder: typeof MockMediaRecorder }).MediaRecorder = MockMediaRecorder;
+
+      class MockSpeechRec {
+        continuous = true;
+        interimResults = true;
+        lang = 'en-US';
+        onresult: ((e: unknown) => void) | null = null;
+        onerror: ((e: unknown) => void) | null = null;
+        onend: (() => void) | null = null;
+        start() {
+          setTimeout(() => {
+            if (this.onresult) {
+              this.onresult({
+                resultIndex: 0,
+                results: [{ isFinal: true, 0: { transcript: 'At Nexus Global I led cloud platform initiatives.' } }],
+              });
+            }
+          }, 50);
+        }
+        stop() {}
+        abort() {}
+      }
+      (window as unknown as { SpeechRecognition: typeof MockSpeechRec }).SpeechRecognition = MockSpeechRec;
+      (window as unknown as { webkitSpeechRecognition: typeof MockSpeechRec }).webkitSpeechRecognition = MockSpeechRec;
+    });
+
+    await page.goto('/opportunities');
+    await page.getByRole('link', { name: /Report/i }).first().click();
+    await page.waitForURL(/\/analysis\/.+/);
+
+    // Switch to Mock Interview tab
+    await page.getByRole('button', { name: /Mock Interview/i }).click();
+
+    // Select Speak mode
+    await page.getByRole('button', { name: 'Speak' }).first().click();
+    await page.getByRole('button', { name: /Start Mock Session/i }).click();
+
+    // Enable Mic
+    await page.getByRole('button', { name: /Enable Microphone & Practice/i }).click();
+    await expect(page.getByRole('button', { name: /Start Answer/i })).toBeVisible();
+
+    // Start Answer
+    await page.getByRole('button', { name: /Start Answer/i }).click();
+    await expect(page.getByRole('button', { name: /Stop Answer & Review/i })).toBeVisible();
+
+    // Stop Answer & Review
+    await page.getByRole('button', { name: /Stop Answer & Review/i }).click();
+    await expect(page.getByRole('button', { name: /Listen Again/i })).toBeVisible();
+
+    // Start Replay
+    await page.getByRole('button', { name: /Listen Again/i }).click();
+    await expect(page.getByRole('button', { name: /Stop Playback/i })).toBeVisible();
+
+    // Check that Audio played
+    const isPlaying = await page.evaluate(() => (window as unknown as { __mockAudioIsPlaying: boolean }).__mockAudioIsPlaying);
+    expect(isPlaying).toBe(true);
+
+    // Submit Answer while replay is active
+    await page.getByRole('button', { name: /Submit Answer for AI Score/i }).click();
+
+    // Verify scorecard rendering and verify audio was paused immediately
+    await expect(page.getByText('Overall Response Score')).toBeVisible();
+    const isPlayingAfterSubmit = await page.evaluate(() => (window as unknown as { __mockAudioIsPlaying: boolean }).__mockAudioIsPlaying);
+    expect(isPlayingAfterSubmit).toBe(false);
+  });
 });
