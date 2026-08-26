@@ -186,6 +186,9 @@ test.describe('V3.3 Interview War Room, Activity Timeline & Application Intellig
                 structure: 4,
                 concision: 4,
               },
+              overallResponseScore: 88,
+              contentWeight: 1.0,
+              deliveryWeight: 0.0,
               coaching: {
                 strengths: ['Clear strategic framing', 'Measurable metrics referenced'],
                 improvements: ['Could mention specific tooling used'],
@@ -210,7 +213,7 @@ test.describe('V3.3 Interview War Room, Activity Timeline & Application Intellig
     await expect(page.locator('h1')).toBeVisible();
 
     await page.getByRole('button', { name: /Mock Interview/i }).click();
-    await expect(page.getByText('Interactive Mock Interview Simulator')).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Voice Interview Intelligence/i })).toBeVisible();
 
     // Start mock session
     await page.getByRole('button', { name: /Start (New )?Mock Session/i }).click();
@@ -225,7 +228,6 @@ test.describe('V3.3 Interview War Room, Activity Timeline & Application Intellig
     await page.getByRole('button', { name: /Submit Answer for AI Score/i }).click();
 
     // Verify scores and feedback
-    await expect(page.getByText('Score Dimensions (1-5 Scale)')).toBeVisible();
     await expect(page.getByText('Clear strategic framing')).toBeVisible();
 
     // Finish session

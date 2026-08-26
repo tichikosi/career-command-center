@@ -1,0 +1,384 @@
+/**
+ * Career Command Center V3.4 — Deterministic Voice Delivery Metrics & Scoring Engine
+ *
+ * Evaluates spoken candidate responses across observable verbal delivery dimensions:
+ * - Answer duration, word count, Words Per Minute (WPM)
+ * - Conservative filler-word analysis (rate per minute and top fillers)
+ * - Timing-based pause analysis (explicitly marked unavailable if audio intervals missing)
+ * - Response length / verbosity classification
+ * - 6-dimension delivery scoring (Pace, Concision, Filler Control, Pausing, Clarity, Executive Delivery)
+ * - Question-aware combined scorecard weighting (Content vs Delivery)
+ * - Observable, non-psychological speaking coaching
+ */
+
+import {
+  VoiceDeliveryMetrics,
+  MockDeliveryScore,
+  MockAnswerScore,
+  MockVoiceCoaching,
+  MockDifficulty,
+  TopFillerWord,
+  PauseAnalysisResult,
+} from '@/types/interview';
+
+export interface RawPauseEvent {
+  start: number;
+  duration: number;
+}
+
+export interface PauseTimingData {
+  pauses?: RawPauseEvent[];
+}
+
+const FILLER_PATTERNS = [
+  { pattern: /\bum\b/gi, word: 'um' },
+  { pattern: /\buh\b/gi, word: 'uh' },
+  { pattern: /\berm\b/gi, word: 'erm' },
+  { pattern: /\byou know\b/gi, word: 'you know' },
+  { pattern: /\bi mean\b/gi, word: 'I mean' },
+  { pattern: /\bbasically\b/gi, word: 'basically' },
+  { pattern: /\bactually\b/gi, word: 'actually' },
+  { pattern: /\bsort of\b/gi, word: 'sort of' },
+  { pattern: /\bkind of\b/gi, word: 'kind of' },
+  // Match "like" when isolated or repeated, avoiding direct comparative "like a leader" where practical
+  { pattern: /\b(like,?\s+(?:like|uh|um|so|yeah|i was)|like\s*$|,\s*like\s*,)\b/gi, word: 'like' },
+];
+
+/**
+ * Calculates deterministic speech delivery metrics from transcript and duration.
+ */
+export function calculateDeliveryMetrics(
+  transcript: string,
+  durationSeconds: number,
+  pauseData?: PauseTimingData
+): VoiceDeliveryMetrics {
+  const cleanTranscript = transcript.trim();
+  const words = cleanTranscript.length > 0 ? cleanTranscript.split(/\s+/).filter(Boolean) : [];
+  const wordCount = words.length;
+  const safeDuration = Math.max(1, Math.round(durationSeconds));
+  const durationMinutes = safeDuration / 60;
+
+  // Words per minute (WPM)
+  const wordsPerMinute = wordCount === 0 ? 0 : Math.round((wordCount / safeDuration) * 60);
+
+  // Filler words detection
+  const fillerCounts: Record<string, number> = {};
+  let totalFillers = 0;
+
+  for (const item of FILLER_PATTERNS) {
+    const matches = cleanTranscript.match(item.pattern);
+    if (matches && matches.length > 0) {
+      fillerCounts[item.word] = (fillerCounts[item.word] || 0) + matches.length;
+      totalFillers += matches.length;
+    }
+  }
+
+  // Also check standalone "like" when word count is small or filler rate high
+  if (!fillerCounts['like']) {
+    const standaloneLikeMatches = cleanTranscript.match(/\blike\b/gi);
+    if (standaloneLikeMatches && standaloneLikeMatches.length >= 3) {
+      // Conservative: only count excess likes as fillers
+      const count = standaloneLikeMatches.length - 1;
+      fillerCounts['like'] = count;
+      totalFillers += count;
+    }
+  }
+
+  const topFillerWords: TopFillerWord[] = Object.entries(fillerCounts)
+    .map(([word, count]) => ({ word, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5);
+
+  const fillerRatePerMinute =
+    wordCount === 0 ? 0 : Math.round((totalFillers / Math.max(0.1, durationMinutes)) * 10) / 10;
+
+  // Pause analysis: Only calculate if reliable audio timing is provided — never fabricate!
+  let pauseAnalysis: PauseAnalysisResult;
+  if (pauseData && Array.isArray(pauseData.pauses) && pauseData.pauses.length > 0) {
+    const validPauses = pauseData.pauses.filter((p) => p.duration >= 0.4);
+    if (validPauses.length > 0) {
+      const avg = validPauses.reduce((acc, p) => acc + p.duration, 0) / validPauses.length;
+      const longest = Math.max(...validPauses.map((p) => p.duration));
+      pauseAnalysis = {
+        available: true,
+        pauseCount: validPauses.length,
+        averagePauseSeconds: Math.round(avg * 10) / 10,
+        longestPauseSeconds: Math.round(longest * 10) / 10,
+      };
+    } else {
+      pauseAnalysis = {
+        available: true,
+        pauseCount: 0,
+        averagePauseSeconds: 0,
+        longestPauseSeconds: 0,
+      };
+    }
+  } else {
+    pauseAnalysis = {
+      available: false,
+      pauseCount: 0,
+      averagePauseSeconds: 0,
+      longestPauseSeconds: 0,
+      reason: 'Pause timing data unavailable for this answer',
+    };
+  }
+
+  // Verbosity classification
+  let verbosity: 'too_brief' | 'appropriate' | 'potentially_overlong' = 'appropriate';
+  if (wordCount < 25 && safeDuration < 20) {
+    verbosity = 'too_brief';
+  } else if (wordCount > 280 || safeDuration > 170) {
+    verbosity = 'potentially_overlong';
+  }
+
+  return {
+    durationSeconds: safeDuration,
+    wordCount,
+    wordsPerMinute,
+    fillerWordsCount: totalFillers,
+    fillerRatePerMinute,
+    topFillerWords,
+    pauseAnalysis,
+    verbosity,
+  };
+}
+
+/**
+ * Evaluates 6-dimension delivery score from observable signals (1-5 scale).
+ */
+export function evaluateDeliveryScore(
+  metrics: VoiceDeliveryMetrics,
+  questionCategory: string,
+  difficulty: MockDifficulty = 'standard'
+): MockDeliveryScore {
+  // If answer is trivial (< 12 words), score 1 across all delivery dimensions
+  if (metrics.wordCount < 12) {
+    return {
+      pace: 1,
+      verbalConcision: 1,
+      fillerControl: 1,
+      pausing: 1,
+      clarity: 1,
+      executiveDelivery: 1,
+    };
+  }
+
+  const { wordsPerMinute, fillerRatePerMinute, verbosity, pauseAnalysis } = metrics;
+  const isStressTest = difficulty === 'stress_test' || difficulty === 'adversarial';
+
+  // 1. Pace Score (Target executive reference band: 130–165 WPM)
+  let paceScore = 3;
+  if (wordsPerMinute >= 130 && wordsPerMinute <= 165) {
+    paceScore = 5;
+  } else if ((wordsPerMinute >= 115 && wordsPerMinute < 130) || (wordsPerMinute > 165 && wordsPerMinute <= 180)) {
+    paceScore = 4;
+  } else if ((wordsPerMinute >= 95 && wordsPerMinute < 115) || (wordsPerMinute > 180 && wordsPerMinute <= 195)) {
+    paceScore = 3;
+  } else if ((wordsPerMinute >= 70 && wordsPerMinute < 95) || (wordsPerMinute > 195 && wordsPerMinute <= 220)) {
+    paceScore = 2;
+  } else {
+    paceScore = 1;
+  }
+
+  // 2. Verbal Concision
+  let concisionScore = 4;
+  if (verbosity === 'appropriate') {
+    concisionScore = wordsPerMinute >= 120 && wordsPerMinute <= 175 ? 5 : 4;
+  } else if (verbosity === 'potentially_overlong') {
+    concisionScore = isStressTest ? 2 : 3;
+  } else if (verbosity === 'too_brief') {
+    concisionScore = 2;
+  }
+
+  // 3. Filler Control
+  let fillerScore = 3;
+  if (fillerRatePerMinute <= 1.5) {
+    fillerScore = 5;
+  } else if (fillerRatePerMinute <= 3.5) {
+    fillerScore = 4;
+  } else if (fillerRatePerMinute <= 5.5) {
+    fillerScore = 3;
+  } else if (fillerRatePerMinute <= 8.0) {
+    fillerScore = 2;
+  } else {
+    fillerScore = 1;
+  }
+
+  // 4. Pausing / Composure Proxy
+  let pausingScore = 4;
+  if (pauseAnalysis.available) {
+    const avg = pauseAnalysis.averagePauseSeconds;
+    if (avg >= 0.8 && avg <= 2.2 && pauseAnalysis.pauseCount >= 1) {
+      pausingScore = 5;
+    } else if ((avg >= 0.4 && avg < 0.8) || (avg > 2.2 && avg <= 3.2)) {
+      pausingScore = 4;
+    } else if (avg > 3.2 || (avg < 0.4 && metrics.wordCount > 60)) {
+      pausingScore = 3;
+    }
+  } else {
+    // Unbiased proxy derived from pace and filler control
+    pausingScore = Math.max(2, Math.min(5, Math.round((paceScore + fillerScore) / 2)));
+  }
+
+  // 5. Clarity
+  let clarityScore = 4;
+  if (fillerScore >= 4 && paceScore >= 4 && concisionScore >= 4) {
+    clarityScore = 5;
+  } else if (fillerScore <= 2 || paceScore <= 2) {
+    clarityScore = 3;
+  }
+
+  // 6. Executive Delivery Proxy
+  let executiveScore = Math.round(
+    paceScore * 0.25 +
+    concisionScore * 0.25 +
+    fillerScore * 0.25 +
+    clarityScore * 0.25
+  );
+
+  if (isStressTest && (paceScore < 4 || fillerScore < 4)) {
+    executiveScore = Math.max(1, executiveScore - 1);
+  }
+
+  const clamp = (n: number) => Math.max(1, Math.min(5, n));
+
+  return {
+    pace: clamp(paceScore),
+    verbalConcision: clamp(concisionScore),
+    fillerControl: clamp(fillerScore),
+    pausing: clamp(pausingScore),
+    clarity: clamp(clarityScore),
+    executiveDelivery: clamp(executiveScore),
+  };
+}
+
+/**
+ * Combines Content score with Voice Delivery score using question-aware weights.
+ */
+export function calculateOverallResponseScore(
+  contentScore: MockAnswerScore,
+  deliveryScore: MockDeliveryScore | undefined,
+  questionCategory: string
+): {
+  overallScore: number;
+  contentScorePercent: number;
+  deliveryScorePercent: number;
+  contentWeight: number;
+  deliveryWeight: number;
+} {
+  const contentScoreSum =
+    contentScore.relevance +
+    contentScore.evidenceSpecificity +
+    contentScore.strategicDepth +
+    contentScore.executiveCommunication +
+    contentScore.structure +
+    contentScore.concision;
+
+  const contentScorePercent = Math.round((contentScoreSum / 30) * 100);
+
+  if (!deliveryScore) {
+    return {
+      overallScore: contentScorePercent,
+      contentScorePercent,
+      deliveryScorePercent: 0,
+      contentWeight: 1.0,
+      deliveryWeight: 0.0,
+    };
+  }
+
+  const deliveryScoreSum =
+    deliveryScore.pace +
+    deliveryScore.verbalConcision +
+    deliveryScore.fillerControl +
+    deliveryScore.pausing +
+    deliveryScore.clarity +
+    deliveryScore.executiveDelivery;
+
+  const deliveryScorePercent = Math.round((deliveryScoreSum / 30) * 100);
+
+  // Question-aware weight allocation
+  let contentWeight = 0.7;
+  let deliveryWeight = 0.3;
+
+  const lowerCat = questionCategory.toLowerCase();
+  if (lowerCat === 'behavioral') {
+    contentWeight = 0.75;
+    deliveryWeight = 0.25;
+  } else if (lowerCat === 'strategic' || lowerCat === 'technical') {
+    contentWeight = 0.7;
+    deliveryWeight = 0.3;
+  } else if (lowerCat === 'culture' || lowerCat.includes('pitch')) {
+    contentWeight = 0.6;
+    deliveryWeight = 0.4;
+  }
+
+  const overallScore = Math.round(
+    contentScorePercent * contentWeight + deliveryScorePercent * deliveryWeight
+  );
+
+  return {
+    overallScore,
+    contentScorePercent,
+    deliveryScorePercent,
+    contentWeight,
+    deliveryWeight,
+  };
+}
+
+/**
+ * Generates constructive speaking delivery coaching.
+ */
+export function generateSpeakingCoaching(
+  metrics: VoiceDeliveryMetrics,
+  deliveryScore: MockDeliveryScore
+): MockVoiceCoaching {
+  const { wordsPerMinute, fillerRatePerMinute, topFillerWords, verbosity } = metrics;
+  const refinements: string[] = [];
+
+  // Pace coaching
+  let speakingPaceCoaching: string;
+  if (wordsPerMinute > 175) {
+    speakingPaceCoaching = `Your pace averaged ${wordsPerMinute} WPM, which may feel fast for complex executive decisions. Consider pacing closer to 135–160 WPM and inserting deliberate pauses after stating key recommendations.`;
+    refinements.push('Slow down cadence when introducing key business outcomes or complex metrics');
+  } else if (wordsPerMinute < 110 && wordsPerMinute > 0) {
+    speakingPaceCoaching = `Your pace averaged ${wordsPerMinute} WPM. A slightly more energetic tempo (130–155 WPM) will project stronger operational momentum.`;
+    refinements.push('Aim for a steady conversational tempo around 135–155 WPM');
+  } else {
+    speakingPaceCoaching = `Measured executive pace at ${wordsPerMinute} WPM, providing good clarity and natural cadence.`;
+  }
+
+  // Filler coaching
+  let fillerWordCoaching: string;
+  if (fillerRatePerMinute <= 1.5) {
+    fillerWordCoaching = `Controlled verbal delivery with very low filler usage (${fillerRatePerMinute}/min).`;
+  } else if (fillerRatePerMinute > 4.5) {
+    const topWordsList = topFillerWords.map((f) => `'${f.word}' (${f.count})`).join(', ');
+    fillerWordCoaching = `Noticed elevated filler words (${fillerRatePerMinute}/min, mostly ${topWordsList || 'fillers'}). Practice replacing fillers with a silent 1-second pause.`;
+    refinements.push('Replace filler words with deliberate silent pauses before answering');
+  } else {
+    fillerWordCoaching = `Moderate filler density (${fillerRatePerMinute}/min). Keep pauses silent when formulating secondary points.`;
+  }
+
+  if (verbosity === 'potentially_overlong') {
+    refinements.push('Lead with your bottom-line answer in the first 20 seconds before detailing execution');
+  } else if (verbosity === 'too_brief') {
+    refinements.push('Expand on your personal contribution and the resulting organizational impact');
+  }
+
+  if (refinements.length === 0) {
+    refinements.push('Maintain consistent volume and composure through multi-part answers');
+    refinements.push('Continue steady breathing cadence between structured points');
+  }
+
+  const overallDeliverySummary =
+    deliveryScore.executiveDelivery >= 4
+      ? 'Strong executive delivery with structured articulation, good verbal pacing, and steady presence.'
+      : 'Good baseline delivery; focus on deliberate pausing and tightening verbal concision under pressure.';
+
+  return {
+    speakingPaceCoaching,
+    fillerWordCoaching,
+    deliveryRefinements: refinements.slice(0, 3),
+    overallDeliverySummary,
+  };
+}

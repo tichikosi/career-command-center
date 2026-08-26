@@ -2,9 +2,9 @@ import React from 'react';
 import { Card, CardHeader } from '@/components/ui/Card';
 
 export const metadata = {
-  title: 'Architecture & System Specification v3.3 — Career Command Center',
+  title: 'Architecture & System Specification v3.4 — Career Command Center',
   description:
-    'Comprehensive technical architecture, product philosophy, evidence grounding, cloud persistence, and AI governance specification for Career Command Center v3.3.',
+    'Comprehensive technical architecture, product philosophy, voice interview intelligence, speech delivery metrics, ephemeral audio privacy, and AI governance specification for Career Command Center v3.4.',
 };
 
 export default function AboutPage() {
@@ -14,18 +14,18 @@ export default function AboutPage() {
       <div className="bg-slate-900 dark:bg-slate-900 border border-slate-800 text-white p-7 rounded-2xl shadow-sm space-y-3">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-800 text-indigo-300 border border-slate-700 uppercase tracking-wider">
-            Architecture & System Specification v3.3
+            Architecture & System Specification v3.4
           </span>
-          <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-800">
-            Release Candidate
+          <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-950/80 text-indigo-300 border border-indigo-800">
+            Voice Intelligence Release Candidate
           </span>
         </div>
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">About Career Command Center</h1>
         <p className="text-sm sm:text-base text-slate-300 leading-relaxed max-w-3xl">
-          Career Command Center is an AI-native career operating system for evaluating opportunities, managing a professional job-search pipeline, analyzing network paths, preparing for interviews, and turning structured candidate evidence into grounded career strategy.
+          Career Command Center is an AI-native career operating system for evaluating opportunities, managing a professional pipeline, analyzing network paths, preparing for executive interviews with voice delivery intelligence, and turning candidate evidence into grounded strategy.
         </p>
         <p className="text-xs text-slate-400 leading-relaxed max-w-3xl">
-          The platform combines live Gemini intelligence, structured evidence grounding, deterministic decision logic, authenticated cloud persistence, privacy-aware data isolation, and an executive-grade user experience.
+          The platform combines live Gemini intelligence, voice delivery analytics (WPM, filler control, observable pacing), ephemeral audio privacy, structured evidence grounding, deterministic decision logic, authenticated cloud persistence, and an executive-grade user experience.
         </p>
       </div>
 
@@ -279,27 +279,55 @@ export default function AboutPage() {
         </ul>
       </Card>
 
-      {/* 14. Dashboard Intelligence */}
+      {/* 14. Voice Interview Intelligence & Ephemeral Audio Privacy (V3.4) */}
+      <Card padding="lg" className="space-y-4">
+        <CardHeader title="14. Voice Interview Intelligence & Ephemeral Audio Privacy (V3.4)" />
+        <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+          Career Command Center V3.4 elevates the Mock Interview Simulator into a comprehensive verbal rehearsal system. Spoken candidate responses are captured via client-side Web Audio & Speech APIs, analyzed against observable speech delivery dimensions, and scored alongside content substance.
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1 text-xs">
+          <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-800 space-y-1">
+            <h5 className="font-bold text-indigo-600 dark:text-indigo-400">Observable Verbal Proxies</h5>
+            <p className="text-slate-600 dark:text-slate-400 leading-normal">
+              Evaluates duration, word count, Words Per Minute (130–165 WPM executive reference band), filler-word frequency, pause cadence, and verbosity. Avoids ungrounded psychological claims of nervousness or confidence.
+            </p>
+          </div>
+          <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-800 space-y-1">
+            <h5 className="font-bold text-indigo-600 dark:text-indigo-400">Canonical Editable Transcripts</h5>
+            <p className="text-slate-600 dark:text-slate-400 leading-normal">
+              Candidate spoken transcripts are presented in an editable textarea prior to evaluation. Users can correct transcription inaccuracies; the final reviewed transcript serves as the canonical answer for AI scoring.
+            </p>
+          </div>
+          <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-800 space-y-1">
+            <h5 className="font-bold text-indigo-600 dark:text-indigo-400">Ephemeral Audio Privacy</h5>
+            <p className="text-slate-600 dark:text-slate-400 leading-normal">
+              Microphone streams are scoped strictly in-memory during recording. All MediaStream tracks are terminated on stop/unmount. Raw audio is <strong>never</strong> uploaded, persisted, or logged to Supabase, Vercel, or local storage.
+            </p>
+          </div>
+        </div>
+      </Card>
+
+      {/* 15. Dashboard Intelligence */}
       <Card padding="lg" className="space-y-3">
-        <CardHeader title="14. Dashboard Application Intelligence" />
+        <CardHeader title="15. Dashboard Application Intelligence" />
         <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
           The executive dashboard synthesizes high-priority pipeline state into a unified tactical hub: Upcoming Interviews calendar, Follow-Ups Due, Stale Applications, Recent Milestone Activity feed, and a deterministic Next Best Career Action engine answering: <em>&ldquo;What should I focus on next?&rdquo;</em>
         </p>
       </Card>
 
-      {/* 15. Quality Engineering */}
+      {/* 16. Quality Engineering */}
       <Card padding="lg" className="space-y-3">
-        <CardHeader title="15. Quality Engineering & Automated Quality Gate" />
+        <CardHeader title="16. Quality Engineering & Automated Quality Gate" />
         <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
           Career Command Center enforces comprehensive automated testing across all business logic and user workflows:
         </p>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1 text-center">
           <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-800">
-            <div className="text-lg font-bold text-indigo-600 dark:text-indigo-400">37 Files / 339 Tests</div>
+            <div className="text-lg font-bold text-indigo-600 dark:text-indigo-400">38+ Files / 350+ Tests</div>
             <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Vitest Unit Tests</div>
           </div>
           <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-800">
-            <div className="text-lg font-bold text-indigo-600 dark:text-indigo-400">30 Tests</div>
+            <div className="text-lg font-bold text-indigo-600 dark:text-indigo-400">30+ Tests</div>
             <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Playwright E2E Tests</div>
           </div>
           <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-800">
@@ -313,9 +341,9 @@ export default function AboutPage() {
         </div>
       </Card>
 
-      {/* 16. Development & Release Workflow */}
+      {/* 17. Development & Release Workflow */}
       <Card padding="lg" className="space-y-3">
-        <CardHeader title="16. Development & Release Workflow" />
+        <CardHeader title="17. Development & Release Workflow" />
         <ol className="list-decimal list-inside text-xs text-slate-600 dark:text-slate-400 space-y-1.5 leading-relaxed">
           <li>Feature branch isolation from production baseline.</li>
           <li>Local implementation with deterministic unit and integration test authoring.</li>
@@ -328,9 +356,9 @@ export default function AboutPage() {
         </ol>
       </Card>
 
-      {/* 17. Multi-Phase Roadmap */}
+      {/* 18. Multi-Phase Roadmap */}
       <Card padding="lg" className="space-y-4">
-        <CardHeader title="17. Multi-Phase Product Roadmap" />
+        <CardHeader title="18. Multi-Phase Product Roadmap" />
         <div className="space-y-3 text-xs">
           <div className="p-3 bg-slate-900 text-white rounded-lg space-y-1">
             <div className="flex items-center gap-2">
@@ -353,22 +381,31 @@ export default function AboutPage() {
             </div>
             <p className="text-slate-300">Authenticated PostgreSQL persistence, Row Level Security, large-network paginated hydration, scheduled discovery cron, and production Vercel deployment.</p>
           </div>
+          <div className="p-3 bg-slate-900 text-white rounded-lg space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-emerald-400">V3.3 — Completed:</span>
+              <span className="text-slate-400">Interview Intelligence & Application War Room</span>
+            </div>
+            <p className="text-slate-300">
+              Grounded executive interview briefs, 15-section pre-interview cheat sheet (Markdown & Print/PDF export), interactive mock interview simulator (2-axis model: Practice / Timed Screen with 90s countdown / 4-round Full Loop; Standard / Rigorous VP / Stress Test difficulty), activity timeline, deterministic smart follow-up engine (Scenarios A–J), searchable network contact picker, and password visibility toggle.
+            </p>
+          </div>
           <div className="p-3 bg-indigo-950/80 border border-indigo-800 text-white rounded-lg space-y-1">
             <div className="flex items-center gap-2">
-              <span className="font-bold text-indigo-300">V3.3 — Current Release Candidate:</span>
-              <span className="text-slate-300">Interview Intelligence & Application War Room</span>
+              <span className="font-bold text-indigo-300">V3.4 — Current Release Candidate:</span>
+              <span className="text-slate-300">Voice Interview Intelligence & Performance Analytics</span>
             </div>
             <p className="text-slate-200">
-              Grounded executive interview briefs, 15-section pre-interview cheat sheet (Markdown & Print/PDF export), interactive mock interview simulator (2-axis model: Practice / Timed Screen with 90s countdown / 4-round Full Loop; Standard / Rigorous VP / Stress Test difficulty), activity timeline, deterministic smart follow-up engine (Scenarios A–J), searchable network contact picker, and password visibility toggle.
+              Spoken answer capture, real-time live preview transcript, editable canonical transcript buffer, WPM / duration / filler-word analysis, separate Content (6 dimensions) vs Delivery (6 dimensions) scoring, question-aware weighting, Interviewer Personas, historical performance trends, and two-session comparison.
             </p>
           </div>
           <div className="p-3 bg-slate-900/60 border border-slate-800 text-white rounded-lg space-y-1">
             <div className="flex items-center gap-2">
-              <span className="font-bold text-slate-400">V3.4 — Planned Roadmap:</span>
-              <span className="text-slate-400">Real-Time Voice Mock & Integrations</span>
+              <span className="font-bold text-slate-400">V3.5 — Planned Roadmap:</span>
+              <span className="text-slate-400">Calendar Sync & Automated Outreach</span>
             </div>
             <p className="text-slate-400">
-              Live Gemini voice mock interviews (audio in/out), Google Calendar and Gmail interview synchronization, client-side PNG cheat sheet graphic rendering, and automated executive email drafting.
+              Google Calendar and Gmail interview synchronization, client-side PNG cheat sheet graphic rendering, and automated executive email drafting.
             </p>
           </div>
         </div>

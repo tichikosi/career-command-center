@@ -1,39 +1,43 @@
-# Career Command Center v3.3
+# Career Command Center v3.4
 
-> **AI-Native Career Operating System: Grounded Opportunity Evaluation, Interview War Room, Mock Interview Simulator, Forward Activity Timeline, Smart Follow-Up Engine, Supabase Cloud Persistence & Executive Recruiting CRM**
+> **AI-Native Career Operating System: Voice Interview Intelligence, Speech Delivery Metrics, Interview War Room, Mock Interview Simulator, Forward Activity Timeline, Smart Follow-Up Engine, Supabase Cloud Persistence & Executive Recruiting CRM**
 > Built for senior executives, strategy leaders, and operations practitioners.
 
 ---
 
 ## 🌟 Executive Overview
 
-Career Command Center transforms fragmented career searches into an evidence-based, structured intelligence workflow. It couples a live **Gemini 3.7 / 3.6 Flash** evaluation engine with official **Google Search Grounding (`tools: [{ googleSearch: {} }]`)**, server-side SSRF URL validation, deterministic ATS listing verification, **Supabase PostgreSQL cloud persistence with Row Level Security (RLS)**, multi-device cloud authentication, automated local-to-cloud migration, structured résumé ingestion, professional network intelligence, and an accessible Kanban CRM.
+Career Command Center transforms fragmented career searches into an evidence-based, structured intelligence workflow. It couples a live **Gemini 3.7 / 3.6 Flash** evaluation engine with official **Google Search Grounding (`tools: [{ googleSearch: {} }]`)**, server-side SSRF URL validation, deterministic ATS listing verification, **Supabase PostgreSQL cloud persistence with Row Level Security (RLS)**, multi-device cloud authentication, structured résumé ingestion, professional network intelligence, and an accessible Kanban CRM.
 
-In **V3.3**, Career Command Center completes the end-to-end career lifecycle with the **Interview War Room**, **Interactive Mock Interview Simulator with 6-Dimension AI Coaching**, **Forward-Only Activity Timeline**, **Deterministic Smart Follow-Up Engine**, and **Comprehensive Dashboard Application Intelligence**.
+In **V3.4**, Career Command Center elevates the interview simulator into a full **Voice Interview Intelligence** system featuring **in-browser microphone capture**, **real-time speech-to-text preview**, **editable canonical transcript buffers**, **deterministic speech delivery metrics (WPM, filler rate, pause analysis)**, **dual Content (6 dimensions) vs Delivery (6 dimensions) scoring**, **Interviewer Personas**, **historical performance analytics**, and **ephemeral raw audio privacy by default**.
 
 ---
 
 ## 🚀 Key Capabilities
 
-### 1. ⚔️ Interview War Room & Executive Readiness (V3.3)
+### 1. 🎙️ Voice Interview Intelligence & Speech Delivery Metrics (V3.4)
+- **Answer Mode Flexibility (`[ Type ] [ Speak ]`)**: Rehearse via text or speak naturally using browser microphone capture.
+- **Observable Speech Delivery Metrics**:
+  - *Words Per Minute (WPM)*: Pacing evaluation against executive speaking reference band (130–165 WPM).
+  - *Filler-Word Analysis*: Conservative detection of common fillers (`um`, `uh`, `basically`, `like`, `you know`) with rate per minute calculation.
+  - *Pause Analysis*: Real audio silence interval measurement without fabricating unobservable values.
+  - *Verbosity & Concision*: Response length classification (`too_brief`, `appropriate`, `potentially_overlong`).
+- **Canonical Editable Transcript Buffer**: Candidate spoken transcripts are reviewed and editable prior to evaluation, ensuring only reviewed answers are scored.
+- **Dual Scorecards & Question-Aware Weighting**:
+  - Content Score (6 dimensions: Relevance, Evidence Specificity, Strategic Depth, Executive Comms, Structure, Concision).
+  - Delivery Score (6 dimensions: Pace, Verbal Concision, Filler Control, Pausing, Clarity, Executive Delivery).
+  - Question-aware weighting (e.g., Behavioral 75/25, Strategic 70/30, Culture 60/40, Text 100/0).
+- **Interviewer Personas**: Recruiter, Hiring Manager, Executive / VP, Behavioral Coach, Peer / Tech Lead.
+- **Performance Analytics & Comparison**: Historical trend visualization across sessions and two-session comparison with metric deltas.
+- **Ephemeral Audio Privacy by Default**: Raw microphone audio is held strictly in-memory during recording and never persisted to Supabase, localStorage, Vercel, or logs.
+
+### 2. ⚔️ Interview War Room & Executive Readiness (V3.3 & V3.4)
 - **Executive Role Brief & Positioning**: Strategic synthesis of the hiring mandate aligned directly to verified candidate narrative.
 - **Executive Readiness Score (0–100)**: Multi-dimensional readiness index evaluating role understanding, positioning, story bank preparation, gap mitigation, company knowledge, and question readiness.
 - **Grounded STAR Story Bank**: Verified achievements from candidate evidence mapped to anticipated competency, leadership, and operational questions.
 - **Defensive Gap Mitigation**: Grounded framing bridges addressing identified experience or domain gaps.
 - **Panel Questions & Risk Flags**: Curated high-signal questions to ask interviewers and strategic risk flags to navigate.
 - **Staleness Detection**: Automated change detection when candidate profile or opportunity requirements update after initial brief generation.
-
-### 2. 🎙️ Interactive Mock Interview Simulator & 6-Dimension AI Coaching (V3.3)
-- **Interactive Practice Console**: Practice anticipated interview questions one by one across behavioral, strategic, and leadership categories.
-- **6-Dimension AI Evaluation**:
-  - *Relevance*: Alignment with question intent.
-  - *Evidence Specificity*: Concrete facts, metrics, and outcomes.
-  - *Strategic Depth*: Executive perspective and systemic thinking.
-  - *Executive Communication*: Tone, presence, and articulation.
-  - *Structure*: Coherent STAR framework.
-  - *Concision*: Economy of language and signal density.
-- **Truth-Preserving Improved Framing**: AI suggests structural enhancements and executive phrasing without fabricating candidate facts or scope.
-- **Resilient Coaching Fallback**: Transparently transitions to clearly labeled `Simplified Interview Coaching` heuristic mode if AI services are unavailable.
 
 ### 3. ⏱️ Activity Timeline & Touchpoint Ledger (V3.3)
 - **Forward-Only Activity Ledger**: Chronological tracking of recruiter calls, screening dates, scheduled and completed interviews, thank-you notes, offers, and decisions.
