@@ -322,6 +322,7 @@ test.describe('V3.4 Voice Interview Intelligence & Performance Analytics E2E', (
     // Start Answer
     await page.getByRole('button', { name: /Start Answer/i }).click();
     await expect(page.getByRole('button', { name: /Stop Answer & Review/i })).toBeVisible();
+    await expect(page.getByText('At Nexus Global I led cloud platform initiatives.')).toBeVisible();
 
     // Stop Answer & Review
     await page.getByRole('button', { name: /Stop Answer & Review/i }).click();

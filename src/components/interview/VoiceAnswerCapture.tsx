@@ -22,6 +22,7 @@ import {
   calculateDeliveryMetrics,
   combineTranscripts,
   cleanTranscriptDuplicates,
+  detectLargeBlockDuplicate,
   RawPauseEvent,
 } from '@/lib/voiceDeliveryEngine';
 
@@ -96,7 +97,7 @@ export const VoiceAnswerCapture: React.FC<VoiceAnswerCaptureProps> = ({
   const [isPlayingBack, setIsPlayingBack] = useState<boolean>(false);
   const [playbackAudioUrl, setPlaybackAudioUrl] = useState<string | null>(null);
 
-  // References for resource cleanup, decoupled transcript session state, and playback lifecycle
+  // References for hardware resources and playback lifecycle
   const streamRef = useRef<MediaStream | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -112,7 +113,10 @@ export const VoiceAnswerCapture: React.FC<VoiceAnswerCaptureProps> = ({
   const audioPlaybackRef = useRef<HTMLAudioElement | null>(null);
   const playbackAudioUrlRef = useRef<string | null>(null);
 
-  // Decoupled transcript state across recognition restarts
+  // Decoupled instance commit idempotency state
+  const instanceGenRef = useRef<number>(0);
+  const activeInstanceIdRef = useRef<number>(0);
+  const committedInstancesRef = useRef<Set<number>>(new Set());
   const sessionCommittedTranscriptRef = useRef<string>('');
   const currentInstanceFinalRef = useRef<string>('');
   const isRecordingRef = useRef<boolean>(false);
@@ -215,6 +219,28 @@ export const VoiceAnswerCapture: React.FC<VoiceAnswerCaptureProps> = ({
     };
   }, [cleanupResources]);
 
+  // Single authoritative instance commit helper guaranteeing exact-once commit
+  const commitInstanceFinal = useCallback((instanceId: number, trailingInterim?: string) => {
+    if (committedInstancesRef.current.has(instanceId)) {
+      return;
+    }
+    committedInstancesRef.current.add(instanceId);
+
+    const instanceText = currentInstanceFinalRef.current.trim();
+    let textToCommit = instanceText;
+    if (trailingInterim && trailingInterim.trim()) {
+      textToCommit = combineTranscripts(textToCommit, trailingInterim.trim());
+    }
+
+    if (textToCommit) {
+      sessionCommittedTranscriptRef.current = combineTranscripts(
+        sessionCommittedTranscriptRef.current,
+        textToCommit
+      );
+    }
+    currentInstanceFinalRef.current = '';
+  }, []);
+
   // Request user-initiated microphone access
   const requestMicrophoneAccess = async () => {
     setErrorMessage(null);
@@ -244,7 +270,7 @@ export const VoiceAnswerCapture: React.FC<VoiceAnswerCaptureProps> = ({
     }
   };
 
-  // Helper to initialize and bind a SpeechRecognition instance
+  // Helper to initialize and bind a SpeechRecognition instance with explicit instance ownership
   const initRecognition = useCallback(() => {
     const SpeechRec =
       (window as unknown as { SpeechRecognition?: new () => IWindowSpeechRecognition }).SpeechRecognition ||
@@ -258,7 +284,15 @@ export const VoiceAnswerCapture: React.FC<VoiceAnswerCaptureProps> = ({
       recognition.interimResults = true;
       recognition.lang = 'en-US';
 
+      const instanceId = ++instanceGenRef.current;
+      activeInstanceIdRef.current = instanceId;
+
       recognition.onresult = (event: SpeechRecognitionEvent) => {
+        // Drop any late onresult callbacks if recording stopped or instance already committed
+        if (!isRecordingRef.current || committedInstancesRef.current.has(instanceId)) {
+          return;
+        }
+
         let instanceFinal = '';
         let instanceInterim = '';
 
@@ -288,17 +322,11 @@ export const VoiceAnswerCapture: React.FC<VoiceAnswerCaptureProps> = ({
 
       recognition.onend = () => {
         // Continuous restart handling: commit current instance's final text before restarting
-        if (isRecordingRef.current) {
-          if (currentInstanceFinalRef.current) {
-            sessionCommittedTranscriptRef.current = combineTranscripts(
-              sessionCommittedTranscriptRef.current,
-              currentInstanceFinalRef.current
-            );
-            currentInstanceFinalRef.current = '';
-          }
+        if (isRecordingRef.current && !committedInstancesRef.current.has(instanceId)) {
+          commitInstanceFinal(instanceId);
           setInterimText('');
 
-          // Safely restart recognition instance
+          // Safely restart recognition instance with fresh instance ID
           try {
             const nextRec = initRecognitionRef.current ? initRecognitionRef.current() : null;
             if (nextRec) {
@@ -316,13 +344,13 @@ export const VoiceAnswerCapture: React.FC<VoiceAnswerCaptureProps> = ({
       console.warn('[VoiceAnswerCapture] Web Speech API initialization notice:', e);
       return null;
     }
-  }, []);
+  }, [commitInstanceFinal]);
 
   useEffect(() => {
     initRecognitionRef.current = initRecognition;
   }, [initRecognition]);
 
-  // Start recording answer (enforces mutual exclusion by stopping any active replay)
+  // Start recording answer (enforces mutual exclusion and clean instance tracking)
   const startRecording = () => {
     // 0. Ensure all replay playback is stopped immediately
     disposePlaybackAudio();
@@ -342,7 +370,10 @@ export const VoiceAnswerCapture: React.FC<VoiceAnswerCaptureProps> = ({
     currentPauseStartRef.current = null;
     recordingStartTimeRef.current = Date.now();
 
-    // Reset decoupled transcript state
+    // Reset decoupled instance commit tracking
+    committedInstancesRef.current.clear();
+    instanceGenRef.current = 0;
+    activeInstanceIdRef.current = 0;
     sessionCommittedTranscriptRef.current = '';
     currentInstanceFinalRef.current = '';
     isRecordingRef.current = true;
@@ -437,7 +468,7 @@ export const VoiceAnswerCapture: React.FC<VoiceAnswerCaptureProps> = ({
     setCaptureState('recording');
   };
 
-  // Stop recording and transition to review & edit mode
+  // Stop recording and transition to review & edit mode with race-free exact-once commit
   const stopRecording = () => {
     isRecordingRef.current = false;
 
@@ -454,13 +485,17 @@ export const VoiceAnswerCapture: React.FC<VoiceAnswerCaptureProps> = ({
       currentPauseStartRef.current = null;
     }
 
-    // 1. Stop Speech Recognition
+    // 1. Immediately detach listeners and stop Speech Recognition to prevent late onresult/onend callbacks
     if (recognitionRef.current) {
       try {
+        recognitionRef.current.onresult = null;
+        recognitionRef.current.onerror = null;
+        recognitionRef.current.onend = null;
         recognitionRef.current.stop();
       } catch {
         // Ignore
       }
+      recognitionRef.current = null;
     }
 
     // 2. Stop timer & animation
@@ -498,16 +533,13 @@ export const VoiceAnswerCapture: React.FC<VoiceAnswerCaptureProps> = ({
       }
     }
 
-    // Commit all final text and any trailing interim text into canonical transcript
-    const finalCommitted = combineTranscripts(
-      sessionCommittedTranscriptRef.current,
-      currentInstanceFinalRef.current
-    );
-    const complete = interimText ? combineTranscripts(finalCommitted, interimText) : finalCommitted;
+    // 4. Commit current recognition instance exactly once with any trailing interim
+    commitInstanceFinal(activeInstanceIdRef.current, interimText);
 
-    sessionCommittedTranscriptRef.current = complete;
-    currentInstanceFinalRef.current = '';
-    setTranscript(complete);
+    // 5. Final deterministic deduplication pass on the committed canonical session
+    const finalCleaned = cleanTranscriptDuplicates(sessionCommittedTranscriptRef.current);
+    sessionCommittedTranscriptRef.current = finalCleaned;
+    setTranscript(finalCleaned);
     setInterimText('');
 
     setCaptureState('reviewing');
@@ -524,6 +556,9 @@ export const VoiceAnswerCapture: React.FC<VoiceAnswerCaptureProps> = ({
   // Retry answer (stops audio, cleans up playback URL, and resets to ready)
   const handleRetry = () => {
     disposePlaybackAudio();
+    committedInstancesRef.current.clear();
+    instanceGenRef.current = 0;
+    activeInstanceIdRef.current = 0;
     sessionCommittedTranscriptRef.current = '';
     currentInstanceFinalRef.current = '';
     isRecordingRef.current = false;
@@ -573,6 +608,12 @@ export const VoiceAnswerCapture: React.FC<VoiceAnswerCaptureProps> = ({
       return;
     }
 
+    const duplicationCheck = detectLargeBlockDuplicate(finalTranscript);
+    if (duplicationCheck.isDuplicate) {
+      setErrorMessage('Transcript duplication detected. Please review the transcript or retry your spoken answer before scoring.');
+      return;
+    }
+
     // Calculate deterministic metrics from final canonical transcript and actual elapsed duration
     const pauseData = pausesRef.current.length > 0 ? { pauses: pausesRef.current } : undefined;
     const metrics = calculateDeliveryMetrics(
@@ -593,6 +634,8 @@ export const VoiceAnswerCapture: React.FC<VoiceAnswerCaptureProps> = ({
   const wordsCount = currentRenderedText.split(/\s+/).filter(Boolean).length;
   const liveWpm = elapsedSeconds > 0 ? Math.round((wordsCount / elapsedSeconds) * 60) : 0;
   const isPlausibilityViolation = liveWpm > 400;
+  const duplicationCheck = detectLargeBlockDuplicate(currentRenderedText);
+  const hasDuplicationIssue = duplicationCheck.isDuplicate;
 
   // Format seconds to MM:SS
   const formatTime = (secs: number) => {
@@ -637,7 +680,7 @@ export const VoiceAnswerCapture: React.FC<VoiceAnswerCaptureProps> = ({
               )}
             </div>
 
-            <div className={`rounded px-2 py-1 font-mono ${isPlausibilityViolation ? 'bg-amber-950/80 text-amber-300 border border-amber-800' : 'bg-slate-800 text-slate-300'}`}>
+            <div className={`rounded px-2 py-1 font-mono ${isPlausibilityViolation || hasDuplicationIssue ? 'bg-amber-950/80 text-amber-300 border border-amber-800' : 'bg-slate-800 text-slate-300'}`}>
               {liveWpm} <span className="text-slate-500">WPM</span>
             </div>
           </div>
@@ -652,14 +695,18 @@ export const VoiceAnswerCapture: React.FC<VoiceAnswerCaptureProps> = ({
         </div>
       )}
 
-      {/* Plausibility Warning Banner */}
-      {isPlausibilityViolation && captureState === 'reviewing' && (
+      {/* Plausibility and Duplication Warning Banner */}
+      {(isPlausibilityViolation || hasDuplicationIssue) && captureState === 'reviewing' && (
         <div className="flex items-start space-x-2 rounded-lg border border-amber-500/40 bg-amber-950/40 p-3 text-xs text-amber-200">
           <AlertCircle className="h-4 w-4 shrink-0 text-amber-400 mt-0.5" />
           <div>
-            <strong>Pacing Anomaly Detected ({liveWpm} WPM): </strong>
+            <strong>
+              {hasDuplicationIssue ? 'Transcript Duplication Detected: ' : `Pacing Anomaly Detected (${liveWpm} WPM): `}
+            </strong>
             <span>
-              Speech metrics could not be calculated reliably for this answer. Please review and edit your transcript below, or click &quot;Retry Spoken Answer&quot; before submitting.
+              {hasDuplicationIssue
+                ? 'Repeated answer blocks were detected in the speech transcript. Please review and edit your transcript below, or click "Retry Spoken Answer" before scoring.'
+                : 'Speech metrics could not be calculated reliably for this answer. Please review and edit your transcript below, or click "Retry Spoken Answer" before submitting.'}
             </span>
           </div>
         </div>
@@ -863,7 +910,7 @@ export const VoiceAnswerCapture: React.FC<VoiceAnswerCaptureProps> = ({
             <button
               type="button"
               onClick={handleSubmitAnswer}
-              disabled={disabled || !transcript.trim()}
+              disabled={disabled || !transcript.trim() || hasDuplicationIssue}
               className="inline-flex items-center space-x-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow hover:bg-indigo-500 disabled:opacity-50"
             >
               <Sparkles className="h-3.5 w-3.5" />

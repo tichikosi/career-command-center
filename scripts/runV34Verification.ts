@@ -181,7 +181,7 @@ async function runVerification() {
 
   // 10. Transcript Deduplication & Plausibility Guardrails
   console.log('\n10. Verifying Transcript Deduplication & Plausibility Guardrails...');
-  const { combineTranscripts, cleanTranscriptDuplicates } = await import('../src/lib/voiceDeliveryEngine');
+  const { combineTranscripts, cleanTranscriptDuplicates, detectLargeBlockDuplicate } = await import('../src/lib/voiceDeliveryEngine');
   const baseT = 'At Google I led quarterly reviews';
   const duplicateT = 'At Google I led quarterly reviews';
   const mergedExact = combineTranscripts(baseT, duplicateT);
@@ -194,6 +194,15 @@ async function runVerification() {
   const glitchySpeech = 'We launched the product on schedule. We launched the product on schedule. Next phase began.';
   const cleanedSpeech = cleanTranscriptDuplicates(glitchySpeech);
   assertCheck('Repeated multi-word glitch blocks deduplicated', cleanedSpeech === 'We launched the product on schedule. Next phase began.');
+
+  const legitRepeat = 'This strategic trade-off was very, very important, and I said no, no, we must wait.';
+  assertCheck('Intentional short repetitions preserved', cleanTranscriptDuplicates(legitRepeat) === legitRepeat);
+
+  const longParagraph = 'At Nexus Global, I spearheaded the enterprise migration to an event-driven architecture across twelve regions. We established automated CI/CD pipelines, reducing cycle times from three weeks to daily deployments while saving 1.2 million dollars annually. Real-time observability improved overall platform uptime to 99.99%.';
+  const duplicatedLong = `${longParagraph} ${longParagraph}`;
+  const largeBlockCheck = detectLargeBlockDuplicate(duplicatedLong);
+  assertCheck('Whole-answer/large-block duplication detected by safety net', largeBlockCheck.isDuplicate);
+  assertCheck('Whole-answer duplicate cleanly reduced to single canonical answer', cleanTranscriptDuplicates(duplicatedLong) === longParagraph);
 
   const extremeDensitySpeech = Array.from({ length: 500 }, (_, i) => `metric${i}`).join(' ');
   const extremeWpmMetrics = calculateDeliveryMetrics(extremeDensitySpeech, 20);

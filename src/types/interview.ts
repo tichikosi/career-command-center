@@ -223,7 +223,7 @@ export interface PauseAnalysisResult {
   reason?: string;
 }
 
-export type DeliveryMetricsStatus = 'valid' | 'invalid_transcript_or_timing';
+export type DeliveryMetricsStatus = 'valid' | 'invalid_transcript_or_timing' | 'duplicate_transcript_detected';
 
 export interface VoiceDeliveryMetrics {
   durationSeconds: number;

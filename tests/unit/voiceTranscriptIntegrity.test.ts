@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   combineTranscripts,
   cleanTranscriptDuplicates,
+  detectLargeBlockDuplicate,
   calculateDeliveryMetrics,
   evaluateDeliveryScore,
   generateSpeakingCoaching,
@@ -160,12 +161,82 @@ describe('V3.4 Voice Transcript Integrity & Deduplication', () => {
       expect(cleaned).toBe('This strategic trade-off was very, very important for executive alignment.');
     });
 
+    it('preserves repeated short words and emphatic phrasing like "no, no, we should not"', () => {
+      const speech = 'I said no, no, we should not launch until all unit tests pass with zero errors.';
+      const cleaned = cleanTranscriptDuplicates(speech);
+
+      expect(cleaned).toBe('I said no, no, we should not launch until all unit tests pass with zero errors.');
+    });
+
     it('eliminates accidental multi-word sentence repetition blocks', () => {
       const glitchySpeech =
         'We aligned Engineering and Product on the rollout schedule. We aligned Engineering and Product on the rollout schedule. Then we launched.';
       const cleaned = cleanTranscriptDuplicates(glitchySpeech);
 
       expect(cleaned).toBe('We aligned Engineering and Product on the rollout schedule. Then we launched.');
+    });
+  });
+
+  describe('I. Exact Double-Commit Lifecycle Race (Manual Stop + Late onend)', () => {
+    it('ensures single authoritative instance commit does NOT duplicate transcript when stop and onend race', () => {
+      // Simulating VoiceAnswerCapture instance commit idempotency
+      const committedInstances = new Set<number>();
+      let sessionTranscript = '';
+      let currentInstanceFinal = 'At Google I led our global cloud infrastructure migration across 12 regions.';
+      const activeInstanceId = 1;
+
+      const commitInstance = (instanceId: number) => {
+        if (committedInstances.has(instanceId)) return;
+        committedInstances.add(instanceId);
+        if (currentInstanceFinal) {
+          sessionTranscript = combineTranscripts(sessionTranscript, currentInstanceFinal);
+          currentInstanceFinal = '';
+        }
+      };
+
+      // 1. User clicks manual "Stop Answer & Review"
+      commitInstance(activeInstanceId);
+      expect(sessionTranscript).toBe('At Google I led our global cloud infrastructure migration across 12 regions.');
+
+      // 2. Browser fires asynchronous onend milliseconds later
+      commitInstance(activeInstanceId);
+
+      // Result MUST remain exactly once
+      expect(sessionTranscript).toBe('At Google I led our global cloud infrastructure migration across 12 regions.');
+      expect(sessionTranscript).not.toBe(
+        'At Google I led our global cloud infrastructure migration across 12 regions. At Google I led our global cloud infrastructure migration across 12 regions.'
+      );
+    });
+  });
+
+  describe('J. Whole-Answer (100+ words) Duplication & Metrics Recalculation', () => {
+    it('detects and cleans a 100+ word whole-answer duplicated transcript ($X + X$)', () => {
+      const singleAnswer =
+        'At Nexus Global, I spearheaded the enterprise migration to an event-driven microservices architecture supporting over fifty million monthly active users worldwide. We partnered closely with Product, Security, and Compliance leadership to establish strict automated CI/CD guardrails, reducing our deployment cycle from three weeks to continuous daily rollouts. Furthermore, by introducing intelligent autoscaling and query caching on our primary distributed database clusters, we decreased p99 user latency by 42% while cutting cloud infrastructure operational costs by 1.2 million dollars annually. To ensure zero-downtime cutover during the peak quarterly season, I established an executive war room and implemented proactive blue-green routing alongside comprehensive real-time synthetic monitoring alerts. This initiative not only improved platform resilience to 99.99% availability, but also elevated team engineering velocity across eight distributed scrum squads. When unexpected telemetry anomalies surfaced during load spikes, we conducted blameless post-mortems and codified preventative architectural runbooks to permanently eliminate systemic bottlenecks for subsequent product launches. Ultimately, this multi-phase transformation established a scalable technical baseline for our next-generation platform ecosystem.';
+
+      const wordsInSingle = singleAnswer.split(/\s+/).length;
+      expect(wordsInSingle).toBeGreaterThanOrEqual(150);
+
+      // Duplicated answer: 88 seconds duration with whole-answer double commit
+      const duplicatedAnswer = `${singleAnswer} ${singleAnswer}`;
+      const duplicatedWords = duplicatedAnswer.split(/\s+/).length;
+      expect(duplicatedWords).toBe(wordsInSingle * 2);
+
+      // 1. detectLargeBlockDuplicate flags raw uncleaned double answer
+      const detection = detectLargeBlockDuplicate(duplicatedAnswer);
+      expect(detection.isDuplicate).toBe(true);
+
+      // 2. cleanTranscriptDuplicates automatically removes the whole duplicate block
+      const cleaned = cleanTranscriptDuplicates(duplicatedAnswer);
+      expect(cleaned).toBe(singleAnswer);
+
+      // 3. Metrics calculated on cleaned transcript over 88s yield realistic executive WPM (~138 WPM)
+      const metrics = calculateDeliveryMetrics(cleaned, 88);
+      expect(metrics.wordCount).toBe(wordsInSingle);
+      expect(metrics.wordsPerMinute).toBe(Math.round((wordsInSingle / 88) * 60));
+      expect(metrics.wordsPerMinute).toBeGreaterThan(110);
+      expect(metrics.wordsPerMinute).toBeLessThan(160);
+      expect(metrics.deliveryMetricsStatus).toBe('valid');
     });
   });
 });
