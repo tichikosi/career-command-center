@@ -88,13 +88,20 @@ export function InterviewCheatSheet({
   const priorityQuestions = activePrep.questions.slice(0, 8);
 
   // 8. Best Story / Talk Track Map
-  const storyMap = activePrep.storyBank.slice(0, 4).map((s) => ({
-    theme: s.title,
-    situation: s.situation,
-    action: s.action,
-    result: s.result,
-    citation: s.evidenceIds?.[0] || 'Candidate Profile',
-  }));
+  const storyMap = activePrep.storyBank.slice(0, 4).map((s) => {
+    const isRedundant =
+      s.situation.trim().toLowerCase() === s.action.trim().toLowerCase() ||
+      s.situation.includes(s.action) ||
+      s.action.includes(s.situation);
+    return {
+      theme: s.title,
+      situation: s.situation,
+      action: s.action,
+      result: s.result,
+      isRedundant,
+      citation: s.evidenceIds?.[0] || 'Candidate Profile',
+    };
+  });
 
   // 9. Material Gaps & Defense
   const gapDefense = activePrep.materialGaps.slice(0, 3);
@@ -223,23 +230,23 @@ ${finalReminders.map((r) => `- ${r}`).join('\n')}
       </div>
 
       {/* Printable Executive Cheat Sheet Card */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 sm:p-8 space-y-8 shadow-xs print:border-none print:p-0 print:shadow-none text-slate-900 dark:text-slate-100">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 sm:p-8 space-y-7 shadow-xs print:border-none print:p-0 print:space-y-4 print:shadow-none text-slate-900 dark:text-slate-100">
         {/* Section A: Role Header */}
-        <div className="border-b border-slate-200 dark:border-slate-800 pb-5 space-y-2">
+        <div className="border-b border-slate-200 dark:border-slate-800 pb-4 space-y-1.5 print:pb-2 print-card">
           <div className="flex items-center justify-between flex-wrap gap-2 text-xs text-slate-500 dark:text-slate-400">
-            <span className="font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+            <span className="font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 print:text-black">
               Executive Pre-Interview Briefing
             </span>
-            <span>Generated: {formatShortDate(activePrep.generatedAt)}</span>
+            <span className="print:text-slate-600">Generated: {formatShortDate(activePrep.generatedAt)}</span>
           </div>
 
           <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-2">
             <div>
-              <h2 className="text-xl sm:text-2xl font-black tracking-tight">{roleTitle}</h2>
-              <div className="text-sm font-semibold text-slate-600 dark:text-slate-300 flex items-center gap-2 mt-0.5">
+              <h2 className="text-xl sm:text-2xl font-black tracking-tight print:text-xl print:text-black">{roleTitle}</h2>
+              <div className="text-sm font-semibold text-slate-600 dark:text-slate-300 flex items-center gap-2 mt-0.5 print:text-slate-800 print:text-xs">
                 <span>{company}</span>
                 <span>•</span>
-                <span className="text-indigo-600 dark:text-indigo-400">Stage: {stage}</span>
+                <span className="text-indigo-600 dark:text-indigo-400 print:text-black">Stage: {stage}</span>
                 {opportunity.location && (
                   <>
                     <span>•</span>
@@ -250,60 +257,60 @@ ${finalReminders.map((r) => `- ${r}`).join('\n')}
             </div>
 
             {interviewerName && (
-              <div className="text-xs bg-slate-100 dark:bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700">
-                <span className="font-semibold block text-slate-900 dark:text-slate-100">Interviewer: {interviewerName}</span>
-                {scheduledTime && <span className="text-slate-500 dark:text-slate-400 text-[11px]">{formatShortDate(scheduledTime)}</span>}
+              <div className="text-xs bg-slate-100 dark:bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 print:bg-white print:border-slate-300 print:p-1.5">
+                <span className="font-semibold block text-slate-900 dark:text-slate-100 print:text-black">Interviewer: {interviewerName}</span>
+                {scheduledTime && <span className="text-slate-500 dark:text-slate-400 text-[11px] print:text-slate-600">{formatShortDate(scheduledTime)}</span>}
               </div>
             )}
           </div>
         </div>
 
         {/* Section B & D: Goal & 30-Second Pitch */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="p-4 bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200/80 dark:border-indigo-900/50 rounded-xl space-y-1.5">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-300 flex items-center gap-1.5">
-              <IconTarget className="w-3.5 h-3.5" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:gap-3 print-card">
+          <div className="p-4 bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200/80 dark:border-indigo-900/50 rounded-xl space-y-1.5 print:bg-slate-50 print:border-slate-300 print:p-3">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-300 flex items-center gap-1.5 print:text-black">
+              <IconTarget className="w-3.5 h-3.5 print:hidden" />
               <span>Conversation Goal</span>
             </span>
-            <p className="text-xs font-semibold text-slate-800 dark:text-slate-200 leading-relaxed">
+            <p className="text-xs font-semibold text-slate-800 dark:text-slate-200 leading-relaxed print:text-[9.5pt] print:text-slate-900">
               {interviewGoal}
             </p>
           </div>
 
-          <div className="p-4 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl space-y-1.5">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+          <div className="p-4 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl space-y-1.5 print:bg-slate-50 print:border-slate-300 print:p-3">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 print:text-black">
               30-Second Executive Positioning Pitch
             </span>
-            <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed italic">
+            <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed italic print:text-[9.5pt] print:text-slate-800">
               &ldquo;{pitch30Sec}&rdquo;
             </p>
           </div>
         </div>
 
         {/* Section C & E: Snapshot & Top Messages */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-3">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 pb-1.5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 print:gap-4 print-card">
+          <div className="space-y-2.5">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 pb-1 print:border-slate-200 print:text-black">
               Role Mandate & Company Context
             </h4>
-            <ul className="space-y-2 text-xs text-slate-700 dark:text-slate-300">
+            <ul className="space-y-1.5 text-xs text-slate-700 dark:text-slate-300 print:text-[9.5pt] print:text-slate-800">
               {snapshotBullets.map((b, i) => (
                 <li key={i} className="flex items-start gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0 mt-1.5" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0 mt-1.5 print:bg-black" />
                   <span>{b}</span>
                 </li>
               ))}
             </ul>
           </div>
 
-          <div className="space-y-3">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 pb-1.5">
+          <div className="space-y-2.5">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 pb-1 print:border-slate-200 print:text-black">
               Core Messages to Land
             </h4>
-            <ul className="space-y-2 text-xs text-slate-700 dark:text-slate-300">
+            <ul className="space-y-1.5 text-xs text-slate-700 dark:text-slate-300 print:text-[9.5pt] print:text-slate-800">
               {topMessages.map((m, i) => (
                 <li key={i} className="flex items-start gap-2">
-                  <IconCheckCircle className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                  <IconCheckCircle className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5 print:text-black" />
                   <span className="font-medium">{m}</span>
                 </li>
               ))}
@@ -312,34 +319,34 @@ ${finalReminders.map((r) => `- ${r}`).join('\n')}
         </div>
 
         {/* Section G: What They Are Likely Testing */}
-        <div className="space-y-3">
-          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 pb-1.5">
+        <div className="space-y-2.5 print-card">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 pb-1 print:border-slate-200 print:text-black">
             What They Are Testing (Evaluation Dimensions)
           </h4>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 print:grid-cols-3">
             {likelyTestingThemes.map((t, idx) => (
-              <div key={idx} className="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-lg text-xs space-y-1">
-                <span className="font-bold text-slate-900 dark:text-slate-100 block">{t.theme}</span>
-                <p className="text-slate-500 dark:text-slate-400 text-[11px] leading-snug">{t.desc}</p>
+              <div key={idx} className="p-2.5 bg-slate-50 dark:bg-slate-800/40 rounded-lg text-xs space-y-1 print:bg-white print:border print:border-slate-200">
+                <span className="font-bold text-slate-900 dark:text-slate-100 block print:text-black">{t.theme}</span>
+                <p className="text-slate-500 dark:text-slate-400 text-[11px] leading-snug print:text-slate-700 print:text-[9pt]">{t.desc}</p>
               </div>
             ))}
           </div>
         </div>
 
         {/* Section H: High-Probability Questions & Strategies */}
-        <div className="space-y-3">
-          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 pb-1.5">
+        <div className="space-y-2.5 print-card">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 pb-1 print:border-slate-200 print:text-black">
             Anticipated High-Probability Questions ({priorityQuestions.length})
           </h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 print:grid-cols-2">
             {priorityQuestions.map((q, idx) => (
-              <div key={idx} className="p-3.5 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/60 rounded-xl space-y-1.5 text-xs">
-                <div className="flex items-center justify-between text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase">
+              <div key={idx} className="p-3 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/60 rounded-xl space-y-1 text-xs print:bg-white print:border-slate-300 print:p-2.5 print-card">
+                <div className="flex items-center justify-between text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase print:text-black">
                   <span>Q{idx + 1} • {q.category}</span>
                 </div>
-                <p className="font-bold text-slate-900 dark:text-slate-100 leading-snug">{q.question}</p>
-                <p className="text-[11px] text-slate-600 dark:text-slate-400">
-                  <strong className="text-slate-700 dark:text-slate-300">Suggested Approach:</strong> {q.suggestedApproach}
+                <p className="font-bold text-slate-900 dark:text-slate-100 leading-snug print:text-black print:text-[9.5pt]">{q.question}</p>
+                <p className="text-[11px] text-slate-600 dark:text-slate-400 print:text-slate-700 print:text-[9pt]">
+                  <strong className="text-slate-700 dark:text-slate-300 print:text-black">Approach:</strong> {q.suggestedApproach}
                 </p>
               </div>
             ))}
@@ -347,22 +354,28 @@ ${finalReminders.map((r) => `- ${r}`).join('\n')}
         </div>
 
         {/* Section I: Best Story & Evidence Map */}
-        <div className="space-y-3">
-          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 pb-1.5">
+        <div className="space-y-2.5 print-card">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 pb-1 print:border-slate-200 print:text-black">
             Grounded STAR Story Map
           </h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 text-xs print:grid-cols-2">
             {storyMap.map((s, idx) => (
-              <div key={idx} className="p-3.5 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/60 rounded-xl space-y-1.5">
+              <div key={idx} className="p-3 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/60 rounded-xl space-y-1 print:bg-white print:border-slate-300 print:p-2.5 print-card">
                 <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-900 dark:text-slate-100">{s.theme}</span>
-                  <span className="text-[10px] font-semibold text-slate-400">{s.citation}</span>
+                  <span className="font-bold text-slate-900 dark:text-slate-100 print:text-black">{s.theme}</span>
+                  <span className="text-[10px] font-semibold text-slate-400 print:text-slate-600">{s.citation}</span>
                 </div>
-                <div className="space-y-1 text-[11px] text-slate-600 dark:text-slate-300">
-                  <p><strong className="text-slate-700 dark:text-slate-200">Situation:</strong> {s.situation}</p>
-                  <p><strong className="text-slate-700 dark:text-slate-200">Action:</strong> {s.action}</p>
-                  <p className="font-semibold text-emerald-700 dark:text-emerald-400">
-                    <strong>Result:</strong> {s.result}
+                <div className="space-y-0.5 text-[11px] text-slate-600 dark:text-slate-300 print:text-slate-800 print:text-[9pt]">
+                  {s.isRedundant ? (
+                    <p><strong className="text-slate-700 dark:text-slate-200 print:text-black">Context & Action:</strong> {s.action || s.situation}</p>
+                  ) : (
+                    <>
+                      <p><strong className="text-slate-700 dark:text-slate-200 print:text-black">Situation:</strong> {s.situation}</p>
+                      <p><strong className="text-slate-700 dark:text-slate-200 print:text-black">Action:</strong> {s.action}</p>
+                    </>
+                  )}
+                  <p className="font-semibold text-emerald-700 dark:text-emerald-400 print:text-emerald-900">
+                    <strong className="print:text-black">Result:</strong> {s.result}
                   </p>
                 </div>
               </div>
@@ -372,21 +385,21 @@ ${finalReminders.map((r) => `- ${r}`).join('\n')}
 
         {/* Section J: Material Gap Mitigation */}
         {gapDefense.length > 0 && (
-          <div className="space-y-3">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 pb-1.5">
+          <div className="space-y-2.5 print-card">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 pb-1 print:border-slate-200 print:text-black">
               Material Gap Defense & Bridge Language
             </h4>
-            <div className="space-y-2.5 text-xs">
+            <div className="space-y-2 text-xs">
               {gapDefense.map((g, idx) => (
-                <div key={idx} className="p-3.5 bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/60 rounded-xl space-y-1.5">
-                  <div className="flex items-center justify-between font-bold text-amber-900 dark:text-amber-200">
+                <div key={idx} className="p-3 bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/60 rounded-xl space-y-1 print:bg-white print:border-slate-300 print:p-2.5 print-card">
+                  <div className="flex items-center justify-between font-bold text-amber-900 dark:text-amber-200 print:text-black">
                     <span>{g.gap}</span>
                   </div>
-                  <p className="text-[11px] text-slate-700 dark:text-slate-300">
-                    <strong>Bridge Strategy:</strong> {g.bridgeStrategy}
+                  <p className="text-[11px] text-slate-700 dark:text-slate-300 print:text-slate-800 print:text-[9pt]">
+                    <strong className="print:text-black">Bridge Strategy:</strong> {g.bridgeStrategy}
                   </p>
                   {g.supportingEvidenceIds && g.supportingEvidenceIds.length > 0 && (
-                    <p className="text-[11px] text-indigo-900 dark:text-indigo-300 italic bg-white dark:bg-slate-900 p-2 rounded border border-amber-100 dark:border-slate-800">
+                    <p className="text-[10px] text-indigo-900 dark:text-indigo-300 italic bg-white dark:bg-slate-900 p-1.5 rounded border border-amber-100 dark:border-slate-800 print:bg-slate-50 print:border-slate-200">
                       Supporting Evidence: {g.supportingEvidenceIds.join(', ')}
                     </p>
                   )}
@@ -397,29 +410,29 @@ ${finalReminders.map((r) => `- ${r}`).join('\n')}
         )}
 
         {/* Section K & N: Questions to Ask & Tone */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-3">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 pb-1.5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 print:gap-3 print-card">
+          <div className="space-y-2">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 pb-1 print:border-slate-200 print:text-black">
               Smart Questions to Ask the Interviewer
             </h4>
-            <ul className="space-y-2 text-xs text-slate-700 dark:text-slate-300">
+            <ul className="space-y-1.5 text-xs text-slate-700 dark:text-slate-300 print:text-[9pt] print:text-slate-800">
               {questionsToAsk.map((q, i) => (
-                <li key={i} className="flex items-start gap-2">
-                  <span className="font-bold text-indigo-600 dark:text-indigo-400 shrink-0">{i + 1}.</span>
+                <li key={i} className="flex items-start gap-1.5">
+                  <span className="font-bold text-indigo-600 dark:text-indigo-400 shrink-0 print:text-black">{i + 1}.</span>
                   <span>{q}</span>
                 </li>
               ))}
             </ul>
           </div>
 
-          <div className="space-y-3">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 pb-1.5">
+          <div className="space-y-2">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 pb-1 print:border-slate-200 print:text-black">
               Tone & Executive Presence Anchors
             </h4>
-            <ul className="space-y-2 text-xs text-slate-700 dark:text-slate-300">
+            <ul className="space-y-1.5 text-xs text-slate-700 dark:text-slate-300 print:text-[9pt] print:text-slate-800">
               {toneReminders.map((r, i) => (
-                <li key={i} className="flex items-start gap-2">
-                  <IconShield className="w-3.5 h-3.5 text-indigo-500 shrink-0 mt-0.5" />
+                <li key={i} className="flex items-start gap-1.5">
+                  <IconShield className="w-3.5 h-3.5 text-indigo-500 shrink-0 mt-0.5 print:hidden" />
                   <span>{r}</span>
                 </li>
               ))}
@@ -428,15 +441,15 @@ ${finalReminders.map((r) => `- ${r}`).join('\n')}
         </div>
 
         {/* Section O: Final 5-Minute Reminders */}
-        <div className="p-4 bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-200/80 dark:border-emerald-900/60 rounded-xl space-y-2 text-xs">
-          <span className="font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300 text-[10px] flex items-center gap-1.5">
-            <IconCheckCircle className="w-3.5 h-3.5" />
+        <div className="p-3.5 bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-200/80 dark:border-emerald-900/60 rounded-xl space-y-1.5 text-xs print:bg-white print:border-slate-300 print:p-2.5 print-card">
+          <span className="font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300 text-[10px] flex items-center gap-1.5 print:text-black">
+            <IconCheckCircle className="w-3.5 h-3.5 print:hidden" />
             <span>Final Pre-Interview Checklist</span>
           </span>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-700 dark:text-slate-300">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-slate-700 dark:text-slate-300 print:text-[9pt] print:text-slate-800">
             {finalReminders.map((rem, i) => (
-              <div key={i} className="flex items-start gap-2 text-[11px]">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 mt-1.5" />
+              <div key={i} className="flex items-start gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 mt-1.5 print:bg-black" />
                 <span>{rem}</span>
               </div>
             ))}
@@ -444,7 +457,7 @@ ${finalReminders.map((r) => `- ${r}`).join('\n')}
         </div>
 
         {/* Footer */}
-        <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[10px] text-slate-400">
+        <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[10px] text-slate-400 print:text-slate-500 print-card">
           <span>Career Command Center V3.3 — Grounded Executive Intelligence</span>
           <span>Confidential Candidate Briefing</span>
         </div>

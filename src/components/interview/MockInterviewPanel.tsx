@@ -66,6 +66,40 @@ const DIFFICULTY_CONFIG: Record<'standard' | 'rigorous' | 'stress_test', { label
   },
 };
 
+function getQuestionPlaceholder(category: string, qText: string, mode: string) {
+  if (mode === 'timed') {
+    return 'Type your concise answer or bulleted speaking points under time pressure...';
+  }
+  const lower = qText.toLowerCase();
+  if (category === 'behavioral' || lower.includes('tell me about') || lower.includes('describe a time') || lower.includes('led a')) {
+    return 'Answer in STAR format (Situation, Task, Action, Result) with concrete metrics and verifiable outcomes...';
+  }
+  if (category === 'strategic' || lower.includes('strategy') || lower.includes('trade-off') || lower.includes('prioritize') || lower.includes('30-60-90')) {
+    return 'Lead with your executive recommendation, then support with 2–3 structured proof points and trade-offs...';
+  }
+  if (category === 'culture' || lower.includes('why') || lower.includes('pitch') || lower.includes('compensation') || lower.includes('transition')) {
+    return 'Connect your executive trajectory, leadership model, and specific strategic motivation for this opportunity...';
+  }
+  return 'State your bottom-line conclusion first, followed by concrete evidence and operational logic...';
+}
+
+function getQuestionGuidanceLabel(category: string, qText: string, mode: string) {
+  if (mode === 'timed') {
+    return 'Your Answer (Concise speaking points or executive summary):';
+  }
+  const lower = qText.toLowerCase();
+  if (category === 'behavioral' || lower.includes('tell me about') || lower.includes('describe a time')) {
+    return 'Your Answer (STAR format recommended):';
+  }
+  if (category === 'strategic' || lower.includes('strategy') || lower.includes('trade-off')) {
+    return 'Your Answer (Recommendation & strategic trade-offs):';
+  }
+  if (category === 'culture' || lower.includes('why') || lower.includes('pitch')) {
+    return 'Your Answer (Executive positioning & alignment):';
+  }
+  return 'Your Answer (Bottom-line first delivery):';
+}
+
 export function MockInterviewPanel({
   opportunity,
   candidate,
@@ -104,13 +138,16 @@ export function MockInterviewPanel({
   // Completed Session Modal or View
   const [completedSession, setCompletedSession] = useState<InterviewSession | null>(null);
   const [viewingPastSession, setViewingPastSession] = useState<InterviewSession | null>(null);
+  const [expandedReviewQuestions, setExpandedReviewQuestions] = useState<Record<number, boolean>>({});
 
-  // Timer effect for Timed Screen mode
+  // Timer effect for tracking answer duration across all modes, and countdown in Timed Screen
   useEffect(() => {
     let timer: NodeJS.Timeout | null = null;
-    if (sessionActive && mode === 'timed' && !currentEvaluation && !isEvaluating) {
+    if (sessionActive && !currentEvaluation && !isEvaluating) {
       timer = setInterval(() => {
-        setTimeRemaining((prev) => prev - 1);
+        if (mode === 'timed') {
+          setTimeRemaining((prev) => prev - 1);
+        }
         setAnswerDuration((prev) => prev + 1);
       }, 1000);
     }
@@ -182,6 +219,7 @@ export function MockInterviewPanel({
     const activeQ = questions[currentIndex];
     if (!activeQ) return;
 
+    const finalDuration = answerDuration;
     setIsEvaluating(true);
     setGenerationElapsed(0);
     try {
@@ -227,8 +265,8 @@ export function MockInterviewPanel({
           coaching: evalResult.coaching,
           evidenceCitations: evalResult.evidenceCitations || [],
           answeredAt: new Date().toISOString(),
-          durationSeconds: mode === 'timed' ? answerDuration : undefined,
-          isOvertime: mode === 'timed' ? answerDuration > TIMED_SCREEN_LIMIT_SECONDS : undefined,
+          durationSeconds: finalDuration,
+          isOvertime: mode === 'timed' ? finalDuration > TIMED_SCREEN_LIMIT_SECONDS : undefined,
           roundName: mode === 'full' ? roundName : undefined,
           roundNumber: mode === 'full' ? roundNumber : undefined,
           totalRounds: mode === 'full' ? 4 : undefined,
@@ -501,7 +539,7 @@ export function MockInterviewPanel({
             <div className="space-y-3">
               <div className="flex items-center justify-between text-xs">
                 <label className="font-semibold text-slate-700 dark:text-slate-300">
-                  Your Answer (type in STAR format or outline key talking points):
+                  {getQuestionGuidanceLabel(currentQ.category, currentQ.question, mode)}
                 </label>
                 {mode === 'timed' && timeRemaining <= 0 && (
                   <span className="text-amber-600 dark:text-amber-400 font-medium">
@@ -512,7 +550,7 @@ export function MockInterviewPanel({
 
               <textarea
                 rows={6}
-                placeholder="Structure your answer with Situation, Task, Action, and quantifiable Result..."
+                placeholder={getQuestionPlaceholder(currentQ.category, currentQ.question, mode)}
                 value={currentAnswer}
                 onChange={(e) => setCurrentAnswer(e.target.value)}
                 className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3.5 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -521,6 +559,7 @@ export function MockInterviewPanel({
               <div className="flex items-center justify-between pt-2">
                 <span className="text-[11px] text-slate-400">
                   {currentAnswer.trim().split(/\s+/).filter(Boolean).length} words
+                  {mode !== 'timed' && ` • Elapsed: ${answerDuration}s`}
                 </span>
 
                 <div className="flex items-center gap-2">
@@ -571,7 +610,7 @@ export function MockInterviewPanel({
                       evidenceSpecificity: 'Evidence Specificity',
                       strategicDepth: 'Strategic Depth',
                       executiveCommunication: 'Executive Comms',
-                      structure: 'STAR Structure',
+                      structure: 'STAR / Structure',
                       concision: 'Concision',
                     };
                     return (
@@ -595,6 +634,22 @@ export function MockInterviewPanel({
                   })}
                 </div>
               </div>
+
+              {/* Stress Test Pressure Probe */}
+              {difficulty === 'stress_test' && (
+                <div className="p-3.5 bg-violet-50/80 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800/80 rounded-xl space-y-1.5 text-xs">
+                  <div className="flex items-center gap-1.5 font-bold text-violet-900 dark:text-violet-200 uppercase text-[10px] tracking-wider">
+                    <IconAlertTriangle className="w-3.5 h-3.5 text-violet-600 dark:text-violet-400" />
+                    <span>Stress Test Pressure Probe (Executive Follow-Up)</span>
+                  </div>
+                  <p className="text-slate-800 dark:text-slate-200 font-semibold leading-relaxed">
+                    &ldquo;What was the single greatest downside risk or operational vulnerability in that decision, and what would you do differently if budget was cut in half?&rdquo;
+                  </p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    In executive loops, interviewers test whether your claims hold up when cross-examined on accountability and macro factors.
+                  </p>
+                </div>
+              )}
 
               {/* Strengths & Improvements */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
@@ -697,8 +752,11 @@ export function MockInterviewPanel({
 
                     <div className="flex items-center gap-1">
                       <button
-                        onClick={() => setViewingPastSession(sess)}
-                        className="px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded text-[11px] font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-200"
+                        onClick={() => {
+                          setExpandedReviewQuestions({ 0: true });
+                          setViewingPastSession(sess);
+                        }}
+                        className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 rounded text-[11px] font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-200"
                       >
                         Review
                       </button>
@@ -727,48 +785,209 @@ export function MockInterviewPanel({
         <Modal
           isOpen={Boolean(viewingPastSession)}
           onClose={() => setViewingPastSession(null)}
-          title={`Mock Session Review (${viewingPastSession.overallScore}%)`}
+          title={`Mock Session Review · ${viewingPastSession.overallScore}% Session Score`}
+          maxWidth="max-w-4xl"
         >
-          <div className="space-y-4 text-xs max-h-[70vh] overflow-y-auto pr-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="px-2 py-0.5 rounded bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-bold text-[10px]">
-                {FORMAT_CONFIG[viewingPastSession.mode]?.label || viewingPastSession.mode}
-              </span>
-              <span className="px-2 py-0.5 rounded bg-violet-100 dark:bg-violet-950 text-violet-700 dark:text-violet-300 font-bold text-[10px]">
-                {DIFFICULTY_CONFIG[viewingPastSession.difficulty as keyof typeof DIFFICULTY_CONFIG]?.label || viewingPastSession.difficulty}
-              </span>
-              {typeof viewingPastSession.averageDurationSeconds === 'number' && (
-                <span className="text-[11px] text-slate-400">
-                  Avg: {viewingPastSession.averageDurationSeconds}s
-                </span>
-              )}
-            </div>
-
-            <p className="text-slate-600 dark:text-slate-400">{viewingPastSession.summary}</p>
-
-            <div className="space-y-4">
-              {viewingPastSession.exchanges.map((ex, i) => (
-                <div key={i} className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl space-y-2 border border-slate-200 dark:border-slate-700">
-                  <div className="flex items-center justify-between">
-                    <strong className="text-slate-900 dark:text-slate-100">
-                      Q{i + 1}: {ex.question}
-                    </strong>
-                    {typeof ex.durationSeconds === 'number' && (
-                      <span className={`text-[10px] font-bold ${ex.isOvertime ? 'text-amber-600' : 'text-slate-400'}`}>
-                        {ex.durationSeconds}s {ex.isOvertime ? '(Overtime)' : ''}
-                      </span>
-                    )}
+          <div className="space-y-5 text-xs max-h-[75vh] overflow-y-auto pr-1">
+            {/* Top Session Score & Config Summary Strip */}
+            <div className="p-4 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <div className="px-3 py-1 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 rounded-lg font-bold text-sm">
+                    {viewingPastSession.overallScore}% Overall Score
                   </div>
-                  <p className="text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 p-2.5 rounded border border-slate-200 dark:border-slate-800 whitespace-pre-wrap">
-                    {ex.candidateAnswer}
-                  </p>
-                  {ex.coaching?.improvedAnswer && (
-                    <div className="text-[11px] text-indigo-700 dark:text-indigo-300 bg-indigo-50/50 dark:bg-indigo-950/40 p-2 rounded">
-                      <strong>Framing Suggestion:</strong> {ex.coaching.improvedAnswer}
-                    </div>
+                  <span className="px-2.5 py-1 rounded-md bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-bold text-[10px] uppercase">
+                    {FORMAT_CONFIG[viewingPastSession.mode]?.label || viewingPastSession.mode}
+                  </span>
+                  <span className="px-2.5 py-1 rounded-md bg-violet-100 dark:bg-violet-950 text-violet-700 dark:text-violet-300 font-bold text-[10px] uppercase">
+                    {DIFFICULTY_CONFIG[viewingPastSession.difficulty as keyof typeof DIFFICULTY_CONFIG]?.label || viewingPastSession.difficulty}
+                  </span>
+                </div>
+
+                <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                  <span>Conducted: {formatShortDate(viewingPastSession.createdAt)}</span>
+                  {typeof viewingPastSession.averageDurationSeconds === 'number' && (
+                    <span> • Avg Response: {viewingPastSession.averageDurationSeconds}s</span>
                   )}
                 </div>
-              ))}
+              </div>
+
+              <p className="text-slate-700 dark:text-slate-300 leading-relaxed font-medium">
+                {viewingPastSession.summary}
+              </p>
+            </div>
+
+            {/* Questions Transcript Accordion */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider text-[11px]">
+                  Question Transcripts & Evaluations ({viewingPastSession.exchanges.length})
+                </h4>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const allExpanded = viewingPastSession.exchanges.every((_, idx) => expandedReviewQuestions[idx]);
+                    if (allExpanded) {
+                      setExpandedReviewQuestions({});
+                    } else {
+                      const next: Record<number, boolean> = {};
+                      viewingPastSession.exchanges.forEach((_, idx) => {
+                        next[idx] = true;
+                      });
+                      setExpandedReviewQuestions(next);
+                    }
+                  }}
+                  className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline"
+                >
+                  {viewingPastSession.exchanges.every((_, idx) => expandedReviewQuestions[idx]) ? 'Collapse All' : 'Expand All'}
+                </button>
+              </div>
+
+              {viewingPastSession.exchanges.map((ex, i) => {
+                const isExpanded = expandedReviewQuestions[i] ?? false;
+                const scoreAvg = ex.score
+                  ? Math.round(
+                      ((ex.score.relevance +
+                        ex.score.evidenceSpecificity +
+                        ex.score.strategicDepth +
+                        ex.score.executiveCommunication +
+                        ex.score.structure +
+                        ex.score.concision) /
+                        30) *
+                        100
+                    )
+                  : undefined;
+
+                return (
+                  <div
+                    key={i}
+                    className="border border-slate-200 dark:border-slate-700/80 rounded-xl overflow-hidden bg-white dark:bg-slate-900 transition-all"
+                  >
+                    {/* Collapsible Header */}
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setExpandedReviewQuestions((prev) => ({ ...prev, [i]: !prev[i] }))}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setExpandedReviewQuestions((prev) => ({ ...prev, [i]: !prev[i] }));
+                        }
+                      }}
+                      className="p-3.5 bg-slate-50/70 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer flex items-center justify-between gap-3 select-none"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="px-2 py-0.5 bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold rounded text-[10px] shrink-0">
+                          Q{i + 1}
+                        </span>
+                        <span className="font-bold text-slate-900 dark:text-slate-100 truncate text-xs">
+                          {ex.question}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2.5 shrink-0">
+                        {scoreAvg !== undefined && (
+                          <span
+                            className={`px-2 py-0.5 rounded font-bold text-[10px] ${
+                              scoreAvg >= 75
+                                ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300'
+                                : scoreAvg >= 50
+                                ? 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300'
+                                : 'bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-300'
+                            }`}
+                          >
+                            {scoreAvg}% Score
+                          </span>
+                        )}
+                        {typeof ex.durationSeconds === 'number' && (
+                          <span className="text-[10px] text-slate-400 font-medium hidden sm:inline">
+                            {ex.durationSeconds}s
+                          </span>
+                        )}
+                        <span className="text-slate-400 text-xs font-mono">
+                          {isExpanded ? '▲' : '▼'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Expandable Content Body */}
+                    {isExpanded && (
+                      <div className="p-4 space-y-4 border-t border-slate-200 dark:border-slate-800 text-xs">
+                        {/* Candidate Answer */}
+                        <div className="space-y-1">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                            Candidate Transcript
+                          </span>
+                          <p className="text-slate-800 dark:text-slate-200 bg-slate-50 dark:bg-slate-800/40 p-3 rounded-lg border border-slate-200 dark:border-slate-800 whitespace-pre-wrap leading-relaxed">
+                            {ex.candidateAnswer}
+                          </p>
+                        </div>
+
+                        {/* Dimension Score Strip */}
+                        {ex.score && (
+                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
+                            {Object.entries(ex.score).map(([dim, scoreVal]) => (
+                              <div key={dim} className="p-2 bg-slate-50 dark:bg-slate-800/60 rounded border border-slate-200 dark:border-slate-700/60 text-center">
+                                <span className="text-[10px] text-slate-500 dark:text-slate-400 block capitalize truncate">
+                                  {dim.replace(/([A-Z])/g, ' $1')}
+                                </span>
+                                <span className="font-bold text-slate-900 dark:text-slate-100 text-xs">
+                                  {scoreVal}/5
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Strengths & Improvements */}
+                        {ex.coaching && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="p-3 bg-emerald-50/40 dark:bg-emerald-950/20 border border-emerald-200/80 dark:border-emerald-800/60 rounded-lg space-y-1">
+                              <span className="font-bold text-emerald-900 dark:text-emerald-300 text-[11px] block">
+                                Strengths
+                              </span>
+                              <ul className="space-y-0.5 text-slate-700 dark:text-slate-300 text-[11px]">
+                                {ex.coaching.strengths.map((s, idx) => (
+                                  <li key={idx} className="flex items-start gap-1">
+                                    <span className="text-emerald-600 font-bold">•</span>
+                                    <span>{s}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+
+                            <div className="p-3 bg-amber-50/40 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-800/60 rounded-lg space-y-1">
+                              <span className="font-bold text-amber-900 dark:text-amber-300 text-[11px] block">
+                                Areas for Executive Refinement
+                              </span>
+                              <ul className="space-y-0.5 text-slate-700 dark:text-slate-300 text-[11px]">
+                                {ex.coaching.improvements.map((imp, idx) => (
+                                  <li key={idx} className="flex items-start gap-1">
+                                    <span className="text-amber-600 font-bold">•</span>
+                                    <span>{imp}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Improved Grounded Answer */}
+                        {ex.coaching?.improvedAnswer && (
+                          <div className="p-3 bg-indigo-50/40 dark:bg-indigo-950/20 border border-indigo-200/80 dark:border-indigo-800/80 rounded-lg space-y-1">
+                            <strong className="text-indigo-800 dark:text-indigo-300 text-[11px] block">
+                              Suggested Grounded Answer Framework:
+                            </strong>
+                            <p className="text-slate-700 dark:text-slate-300 leading-relaxed text-[11px]">
+                              {ex.coaching.improvedAnswer}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </Modal>
@@ -790,6 +1009,7 @@ export function MockInterviewPanel({
             <div className="flex items-center justify-end gap-2 pt-2">
               <button
                 onClick={() => {
+                  setExpandedReviewQuestions({ 0: true });
                   setViewingPastSession(completedSession);
                   setCompletedSession(null);
                 }}

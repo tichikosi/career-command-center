@@ -22,7 +22,7 @@ import {
   IconFlag,
   IconAlertTriangle,
 } from '@/components/icons';
-import { formatShortDate } from '@/lib/dateUtils';
+import { formatActivityTimestamp } from '@/lib/dateUtils';
 import { ScheduledInterviewModal } from './ScheduledInterviewModal';
 import { SearchableContactPicker } from '@/components/network/SearchableContactPicker';
 import { useNetwork } from '@/lib/networkStorage';
@@ -231,24 +231,73 @@ export function ActivityTimeline({
       ) : filteredActivities.length === 0 ? (
         <Card padding="lg" className="text-center py-10 border-dashed">
           <IconTimeline className="w-8 h-8 text-slate-400 dark:text-slate-600 mx-auto mb-3" />
-          <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100">No Recorded Activities</h4>
-          <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto mt-1 mb-4">
-            Activities log forward-only touchpoints as you progress through discussions with {opportunityCompany}.
-          </p>
-          <div className="flex items-center justify-center gap-2">
-            <button
-              onClick={() => setIsScheduleModalOpen(true)}
-              className="px-3.5 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 transition-colors"
-            >
-              Log Interview
-            </button>
-            <button
-              onClick={() => handleOpenAddModal('note')}
-              className="px-3.5 py-1.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-semibold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-            >
-              Add Note
-            </button>
-          </div>
+          {filterType === 'interview' ? (
+            <>
+              <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100">No interviews recorded yet.</h4>
+              <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto mt-1 mb-4">
+                Schedule an upcoming interview or log a past conversation with {opportunityCompany}.
+              </p>
+              <div className="flex items-center justify-center gap-2">
+                <button
+                  onClick={() => setIsScheduleModalOpen(true)}
+                  className="px-3.5 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 transition-colors"
+                >
+                  Schedule / Log Interview
+                </button>
+              </div>
+            </>
+          ) : filterType === 'communication' ? (
+            <>
+              <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100">No outreach or follow-up activities recorded yet.</h4>
+              <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto mt-1 mb-4">
+                Record recruiter touchpoints, follow-up messages, or referral check-ins for {opportunityCompany}.
+              </p>
+              <div className="flex items-center justify-center gap-2">
+                <button
+                  onClick={() => handleOpenAddModal('recruiter_contact')}
+                  className="px-3.5 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 transition-colors"
+                >
+                  Log Outreach / Follow-Up
+                </button>
+              </div>
+            </>
+          ) : filterType === 'notes' ? (
+            <>
+              <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100">No notes recorded yet.</h4>
+              <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto mt-1 mb-4">
+                Capture executive notes, salary expectations, or key takeaways regarding {opportunityCompany}.
+              </p>
+              <div className="flex items-center justify-center gap-2">
+                <button
+                  onClick={() => handleOpenAddModal('note')}
+                  className="px-3.5 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 transition-colors"
+                >
+                  Add Note
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100">No activities recorded yet.</h4>
+              <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto mt-1 mb-4">
+                Activities log forward-only touchpoints as you progress through discussions with {opportunityCompany}.
+              </p>
+              <div className="flex items-center justify-center gap-2">
+                <button
+                  onClick={() => setIsScheduleModalOpen(true)}
+                  className="px-3.5 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 transition-colors"
+                >
+                  Schedule / Log Interview
+                </button>
+                <button
+                  onClick={() => handleOpenAddModal('note')}
+                  className="px-3.5 py-1.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-semibold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                >
+                  Add Note
+                </button>
+              </div>
+            </>
+          )}
         </Card>
       ) : (
         <div className="relative pl-6 space-y-6 before:absolute before:left-2.5 before:top-3 before:bottom-3 before:w-0.5 before:bg-slate-200 dark:before:bg-slate-800">
@@ -291,15 +340,19 @@ export function ActivityTimeline({
                       )}
 
                       <div className="flex items-center gap-3 text-[11px] text-slate-400 dark:text-slate-500 pt-1 flex-wrap">
-                        <span className="flex items-center gap-1">
-                          <IconClock className="w-3 h-3" />
-                          <span>{formatShortDate(act.occurredAt)}</span>
+                        <span className="flex items-center gap-1" title={`Logged: ${act.occurredAt}`}>
+                          <IconClock className="w-3 h-3 text-slate-400" />
+                          <span>
+                            {act.scheduledFor
+                              ? `Logged: ${formatActivityTimestamp(act.occurredAt)}`
+                              : formatActivityTimestamp(act.occurredAt)}
+                          </span>
                         </span>
 
                         {act.scheduledFor && (
-                          <span className="flex items-center gap-1 font-semibold text-amber-700 dark:text-amber-400">
+                          <span className="flex items-center gap-1 font-semibold text-amber-700 dark:text-amber-400" title={`Scheduled for ${act.scheduledFor}`}>
                             <IconCalendar className="w-3 h-3" />
-                            <span>Target: {formatShortDate(act.scheduledFor)}</span>
+                            <span>Scheduled for: {formatActivityTimestamp(act.scheduledFor)}</span>
                           </span>
                         )}
 

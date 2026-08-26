@@ -32,10 +32,11 @@ export default function AnalyzePage() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleAnalyzeSample = async () => {
-    if (!mounted) return;
+  const handleAnalyzeSample = async (sampleIdOverride?: string) => {
+    if (!mounted || isAnalyzing) return;
     setError(null);
-    const sampleOpp = initialOpportunities.find((o) => o.id === selectedSampleId);
+    const targetSampleId = typeof sampleIdOverride === 'string' ? sampleIdOverride : selectedSampleId;
+    const sampleOpp = initialOpportunities.find((o) => o.id === targetSampleId);
     if (!sampleOpp) {
       setError('Selected sample role not found.');
       return;
@@ -270,7 +271,7 @@ export default function AnalyzePage() {
         <Card padding="lg" className="space-y-6">
           <CardHeader
             title="Choose a Sample Opportunity"
-            subtitle="Use a pre-loaded role to test fit analysis against your active candidate profile."
+            subtitle="Use a pre-loaded role to test fit analysis against your active candidate profile. Single-click to select, or double-click to analyze immediately."
           />
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -281,6 +282,19 @@ export default function AnalyzePage() {
                 <div
                   key={opp.id}
                   onClick={() => setSelectedSampleId(opp.id)}
+                  onDoubleClick={() => {
+                    setSelectedSampleId(opp.id);
+                    handleAnalyzeSample(opp.id);
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setSelectedSampleId(opp.id);
+                    }
+                  }}
+                  title="Click to select, double-click to analyze immediately"
                   className={`p-4 rounded-xl border cursor-pointer transition-all ${
                     isSelected
                       ? 'border-slate-900 dark:border-slate-100 bg-slate-50/80 dark:bg-slate-800/80 ring-1 ring-slate-900 dark:ring-slate-100 shadow-xs'
@@ -337,7 +351,7 @@ export default function AnalyzePage() {
 
           <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end">
             <button
-              onClick={handleAnalyzeSample}
+              onClick={() => handleAnalyzeSample()}
               disabled={isAnalyzing || !mounted || isProfileEmpty}
               className="px-6 py-2.5 text-sm font-semibold text-white dark:text-slate-900 bg-slate-900 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-slate-200 disabled:opacity-50 rounded-lg shadow-xs transition-colors flex items-center gap-2"
             >

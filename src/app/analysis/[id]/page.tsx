@@ -391,7 +391,7 @@ export default function AnalysisResultsPage() {
       )}
 
       {/* Executive Header Banner */}
-      <Card padding="lg" className="border-t-4 border-t-slate-900 dark:border-t-slate-100">
+      <Card padding="lg" className="border-t-4 border-t-slate-900 dark:border-t-slate-100 print:hidden">
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
           <div className="space-y-2">
             <div className="flex items-center gap-2 flex-wrap">
@@ -470,33 +470,37 @@ export default function AnalysisResultsPage() {
         </div>
       </Card>
 
-      {/* Tab Navigation */}
-      <div className="flex border-b border-slate-200 dark:border-slate-800 overflow-x-auto scrollbar-none">
-        {(
-          [
-            { key: 'overview', label: 'Executive Overview' },
-            { key: 'qualifications', label: `Qualifications & Gaps (${analysis.qualifications.length})` },
-            { key: 'evidence', label: `Evidence & Objections (${resolvedAchievements.length})` },
-            { key: 'prep', label: 'Interview Preparation' },
-            { key: 'action-plan', label: `Action Plan${pendingVisibleActionCount > 0 ? ` (${pendingVisibleActionCount})` : ''}` },
-            { key: 'timeline', label: `Activity & Timeline${activities.length > 0 ? ` (${activities.length})` : ''}` },
-            { key: 'war-room', label: `Interview War Room${activePrep ? ' (Ready)' : ''}` },
-            { key: 'mock', label: `Mock Interview${sessions.length > 0 ? ` (${sessions.length})` : ''}` },
-            { key: 'follow-up', label: 'Smart Follow-Up' },
-          ] as const
-        ).map(({ key, label }) => (
-          <button
-            key={key}
-            onClick={() => setActiveTab(key)}
-            className={`py-3 px-5 text-sm font-semibold border-b-2 whitespace-nowrap transition-colors ${
-              activeTab === key
-                ? 'border-slate-900 dark:border-slate-100 text-slate-900 dark:text-slate-100'
-                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
+      {/* Tab Navigation (with overflow discoverability) */}
+      <div className="relative print:hidden">
+        <div className="flex border-b border-slate-200 dark:border-slate-800 overflow-x-auto scrollbar-none pb-0.5">
+          {(
+            [
+              { key: 'overview', label: 'Executive Overview' },
+              { key: 'qualifications', label: `Qualifications & Gaps (${analysis.qualifications.length})` },
+              { key: 'evidence', label: `Evidence & Objections (${resolvedAchievements.length})` },
+              { key: 'prep', label: 'Interview Preparation' },
+              { key: 'action-plan', label: `Action Plan${pendingVisibleActionCount > 0 ? ` (${pendingVisibleActionCount})` : ''}` },
+              { key: 'timeline', label: `Activity & Timeline${activities.length > 0 ? ` (${activities.length})` : ''}` },
+              { key: 'war-room', label: `Interview War Room${activePrep ? ' (Ready)' : ''}` },
+              { key: 'mock', label: `Mock Interview${sessions.length > 0 ? ` (${sessions.length})` : ''}` },
+              { key: 'follow-up', label: 'Smart Follow-Up' },
+            ] as const
+          ).map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setActiveTab(key)}
+              className={`py-3 px-5 text-sm font-semibold border-b-2 whitespace-nowrap transition-colors shrink-0 ${
+                activeTab === key
+                  ? 'border-slate-900 dark:border-slate-100 text-slate-900 dark:text-slate-100'
+                  : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {/* Subtle right-edge tab overflow shadow cue */}
+        <div className="pointer-events-none absolute top-0 right-0 bottom-0 w-8 bg-gradient-to-l from-slate-100 dark:from-slate-950 to-transparent hidden sm:block" />
       </div>
 
       {/* Tab 1: Executive Overview */}

@@ -59,6 +59,51 @@ export function formatShortDate(value: string | undefined): string {
 }
 
 /**
+ * Formats an ISO date/timestamp string into a chronological activity audit timestamp (e.g. "Aug 25, 2026 · 6:24 PM").
+ * Handles full ISO timestamps (with time) as well as YYYY-MM-DD date strings.
+ */
+export function formatActivityTimestamp(value: string | undefined): string {
+  if (!value) return '';
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+
+  // If it's pure YYYY-MM-DD
+  if (isValidDateString(trimmed)) {
+    return formatShortDate(trimmed);
+  }
+
+  try {
+    const d = new Date(trimmed);
+    if (isNaN(d.getTime())) return formatShortDate(trimmed.slice(0, 10)) || trimmed;
+
+    const hasTime = trimmed.includes('T') || trimmed.includes(':');
+    if (!hasTime) {
+      return d.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      });
+    }
+
+    const datePart = d.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+
+    const timePart = d.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    });
+
+    return `${datePart} · ${timePart}`;
+  } catch {
+    return formatShortDate(trimmed.slice(0, 10)) || trimmed;
+  }
+}
+
+/**
  * Validate a user-supplied URL string.
  * Accepts only http:// and https:// protocols to prevent javascript: injection.
  * Returns the trimmed URL if valid, otherwise null.

@@ -21,9 +21,14 @@
 
 /* Standard browser print stylesheet for executive reports and interview prep */
 @media print {
+  @page {
+    margin: 12mm 10mm 12mm 10mm;
+    size: auto;
+  }
   body {
     background: #ffffff !important;
     color: #0f172a !important;
+    font-size: 10pt !important;
   }
   header,
   nav,
@@ -38,14 +43,10 @@
     margin: 0 !important;
     max-width: 100% !important;
   }
-  .card,
-  [class*="rounded-xl"],
-  [class*="rounded-2xl"],
-  [class*="border"] {
-    box-shadow: none !important;
-    border-color: #e2e8f0 !important;
-    break-inside: avoid;
-    page-break-inside: avoid;
+  .print-card,
+  .print-break-avoid {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
   }
   a {
     text-decoration: none !important;

@@ -135,7 +135,7 @@ test.describe('V3.3 Interview War Room, Activity Timeline & Application Intellig
     await generateBtn.click();
 
     // Verify War Room sections rendered
-    await expect(page.getByText('Interview Readiness Index')).toBeVisible();
+    await expect(page.getByText('Interview Prep Readiness')).toBeVisible();
     await expect(page.getByText('Executive Interview Cheat Sheet')).toBeVisible();
 
     // Check Strategy Subtab
@@ -219,7 +219,7 @@ test.describe('V3.3 Interview War Room, Activity Timeline & Application Intellig
     await expect(page.getByText(/Describe how you scale engineering teams/i)).toBeVisible();
 
     // Fill answer and submit
-    await page.getByPlaceholder(/Structure your answer with Situation/i).fill(
+    await page.locator('textarea').fill(
       'At my previous company, I scaled the engineering department across multiple pods while maintaining high deployment velocity.'
     );
     await page.getByRole('button', { name: /Submit Answer for AI Score/i }).click();

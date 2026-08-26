@@ -11,6 +11,7 @@ import { ResumeImportModal } from '@/components/candidate/ResumeImportModal';
 import { formatCompensationPreferences } from '@/lib/compensationHelpers';
 import { getWorkAuthorizationLabel } from '@/lib/workAuthHelpers';
 import { IconUpload } from '@/components/icons';
+import { useAuth } from '@/context/AuthContext';
 
 function ProfileQueryHandler({
   children,
@@ -23,6 +24,8 @@ function ProfileQueryHandler({
 }
 
 export default function ProfilePage() {
+  const { user } = useAuth();
+  const isAuthenticated = Boolean(user);
   const {
     profile,
     mounted,
@@ -72,65 +75,70 @@ export default function ProfilePage() {
   return (
     <div className="space-y-8 animate-in fade-in duration-200">
       {/* Candidate Data Mode Header */}
-      <div className="bg-slate-900 dark:bg-slate-900 border border-slate-800 text-white p-6 rounded-xl shadow-xs space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border uppercase tracking-wider ${
-                isSynthetic
-                  ? 'bg-slate-800 text-emerald-300 border-slate-700'
-                  : 'bg-emerald-950 text-emerald-300 border-emerald-800'
-              }`}>
-                {isSynthetic ? 'Synthetic Benchmark Candidate' : 'Active Candidate Evidence Profile'}
-              </span>
-              <span className="text-xs text-slate-400">
-                {isSynthetic ? '100% Synthetic Demo Fixture' : 'User-Configured Data'}
-              </span>
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
-              {profile.name || 'Empty Candidate Profile'}
-            </h1>
-            {profile.headline && (
-              <p className="text-sm text-slate-300 font-medium">{profile.headline}</p>
-            )}
-            {profile.location && (
-              <p className="text-xs text-slate-400 font-normal">{profile.location}</p>
-            )}
+      <div className="bg-slate-900 dark:bg-slate-900 border border-slate-800 text-white p-6 rounded-xl shadow-xs space-y-5">
+        <div className="space-y-3">
+          {/* 1. Compact Status Pill */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border tracking-wider ${
+              isSynthetic
+                ? 'bg-slate-800 text-emerald-300 border-slate-700'
+                : 'bg-emerald-950 text-emerald-300 border-emerald-800'
+            }`}>
+              {isSynthetic ? 'Synthetic Benchmark Candidate' : 'Active Candidate Evidence Profile'}
+            </span>
+            <span className="text-xs text-slate-400">
+              {isSynthetic ? '100% Synthetic Demo Fixture' : isAuthenticated ? 'Authenticated Cloud Profile' : 'User-Configured Data'}
+            </span>
           </div>
 
-          {/* Action Toolbar */}
-          <div className="flex items-center gap-2 flex-wrap shrink-0">
+          {/* 2. Candidate Name on One Line */}
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white truncate">
+            {profile.name || 'Empty Candidate Profile'}
+          </h1>
+
+          {/* 3. Professional Headline on One Line */}
+          {profile.headline && (
+            <p className="text-sm text-slate-300 font-medium truncate">{profile.headline}</p>
+          )}
+
+          {/* 4. Location Beneath */}
+          {profile.location && (
+            <p className="text-xs text-slate-400 font-normal">{profile.location}</p>
+          )}
+
+          {/* 5. Action Buttons on Separate Row Beneath Identity Info */}
+          <div className="pt-2 flex items-center gap-2 flex-wrap">
             <button
               onClick={() => setIsResumeModalOpen(true)}
-              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-xs font-semibold text-white rounded-lg shadow-xs transition-colors flex items-center gap-1.5"
+              className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-xs font-semibold text-white rounded-lg shadow-xs transition-colors flex items-center gap-1.5"
             >
               <IconUpload className="w-3.5 h-3.5" />
               <span>Import Résumé</span>
             </button>
             <button
               onClick={() => setIsEditing(true)}
-              className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-semibold text-slate-900 dark:text-slate-100 rounded-lg border border-slate-300 dark:border-slate-700 transition-colors"
+              className="px-3.5 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-semibold text-slate-900 dark:text-slate-100 rounded-lg border border-slate-300 dark:border-slate-700 transition-colors"
             >
               Edit Candidate Overview
             </button>
             <button
               onClick={exportCandidateData}
               title="Downloads your candidate profile as a JSON file."
-              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white rounded-lg border border-slate-700 transition-colors"
+              className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white rounded-lg border border-slate-700 transition-colors"
             >
               Export Candidate Data
             </button>
             <button
               onClick={resetCandidateDemoData}
               title="Restore the Alex Vance demo candidate? Your current candidate profile will be replaced. Opportunities and workflow data will not be changed."
-              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 rounded-lg border border-slate-700 transition-colors"
+              className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 rounded-lg border border-slate-700 transition-colors"
             >
               Restore Demo Candidate
             </button>
             {!confirmClear ? (
               <button
                 onClick={() => setConfirmClear(true)}
-                className="px-3 py-1.5 bg-rose-950/60 hover:bg-rose-900/80 text-xs font-semibold text-rose-300 rounded-lg border border-rose-800/60 transition-colors"
+                className="px-3.5 py-2 bg-rose-950/60 hover:bg-rose-900/80 text-xs font-semibold text-rose-300 rounded-lg border border-rose-800/60 transition-colors"
               >
                 Clear Data
               </button>
@@ -141,13 +149,13 @@ export default function ProfilePage() {
                     clearCandidateData();
                     setConfirmClear(false);
                   }}
-                  className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-xs font-bold text-white rounded-lg transition-colors"
+                  className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-xs font-bold text-white rounded-lg transition-colors"
                 >
                   Confirm Clear
                 </button>
                 <button
                   onClick={() => setConfirmClear(false)}
-                  className="px-2 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 rounded-lg"
+                  className="px-2.5 py-2 bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 rounded-lg"
                 >
                   Cancel
                 </button>
@@ -156,10 +164,12 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* Local Storage Privacy Banner */}
+        {/* Authenticated / Local Privacy Banner */}
         <div className="pt-3 border-t border-slate-800 text-[11px] text-slate-400 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <span>
-            Candidate data is stored locally in your browser (`ccc_candidate_v1`). No information is transmitted to external servers.
+            {isAuthenticated || profile.dataMode === 'user'
+              ? 'Candidate profile and evidence records are securely persisted in your private Supabase cloud repository with Row Level Security (RLS) isolation.'
+              : 'Candidate data is stored locally in your browser (`ccc_candidate_v1`). No information is transmitted to external servers.'}
           </span>
           <span className="font-mono text-slate-500 shrink-0">
             {profile.evidenceItems.length} Evidence Items | {profile.careerHistory.length} Roles

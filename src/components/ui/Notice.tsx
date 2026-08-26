@@ -34,14 +34,17 @@ export function StorageWarningNotice() {
 
 export function FallbackAnalysisNotice({ text }: { text?: string }) {
   return (
-    <div className="bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-800/80 text-indigo-900 dark:text-indigo-200 px-4 py-3 rounded-xl flex items-start gap-3 text-xs leading-relaxed mb-6">
+    <div className="bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-800/80 text-indigo-900 dark:text-indigo-200 px-4 py-3 rounded-xl flex items-start gap-3 text-xs leading-relaxed mb-6 shadow-xs">
       <IconAlertTriangle className="w-5 h-5 text-indigo-600 dark:text-indigo-400 shrink-0 mt-0.5" />
       <div>
         <span className="font-semibold text-indigo-950 dark:text-indigo-100 block">
           Simplified Heuristic Evaluation
         </span>
-        {text ||
-          'Live AI analysis was unreachable; evaluated using deterministic keyword signal extraction.'}
+        <p className="text-indigo-800 dark:text-indigo-300 mt-0.5">
+          {text && !text.includes('{') && !text.includes('error') && !text.includes('quota')
+            ? text
+            : 'Live AI analysis was unavailable, so Career Command Center used its candidate-grounded deterministic evaluation.'}
+        </p>
       </div>
     </div>
   );

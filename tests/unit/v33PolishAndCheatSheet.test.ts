@@ -4,6 +4,7 @@ import { MockInterviewEngine } from '@/lib/server/mockInterviewEngine';
 import { MockQuestionsRequestSchema } from '@/lib/server/schemas';
 import { JobOpportunity } from '@/types/opportunity';
 import { OpportunityActivity } from '@/types/interview';
+import { CandidateProfile } from '@/types/candidate';
 
 import { createTestCandidate, createTestOpportunity } from '../fixtures/v33TestFixtures';
 

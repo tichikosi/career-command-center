@@ -180,7 +180,7 @@ export function InterviewWarRoom({
           <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-7 gap-3">
             <Card padding="md" className="sm:col-span-3 lg:col-span-2 border-indigo-200 dark:border-indigo-900/60 bg-indigo-50/40 dark:bg-indigo-950/20">
               <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-400 block mb-1">
-                Interview Readiness Index
+                Interview Prep Readiness
               </span>
               <div className="flex items-baseline gap-2">
                 <span className="text-3xl font-extrabold text-slate-900 dark:text-slate-100">
@@ -194,6 +194,9 @@ export function InterviewWarRoom({
                     : 'Requires Preparation'}
                 </span>
               </div>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1.5 leading-snug">
+                Measures how complete and interview-ready your preparation materials are across role context, positioning, stories, gaps, company intelligence, and Q&A.
+              </p>
             </Card>
 
             {Object.entries(activePrep.readinessScore.dimensions).map(([dim, score]) => {
