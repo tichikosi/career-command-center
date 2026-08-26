@@ -96,7 +96,7 @@ export const VoiceAnswerCapture: React.FC<VoiceAnswerCaptureProps> = ({
   const [isPlayingBack, setIsPlayingBack] = useState<boolean>(false);
   const [playbackAudioUrl, setPlaybackAudioUrl] = useState<string | null>(null);
 
-  // References for resource cleanup and decoupled transcript session state
+  // References for resource cleanup, decoupled transcript session state, and playback lifecycle
   const streamRef = useRef<MediaStream | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -110,6 +110,7 @@ export const VoiceAnswerCapture: React.FC<VoiceAnswerCaptureProps> = ({
   const lastVoiceActivityTimeRef = useRef<number>(0);
   const currentPauseStartRef = useRef<number | null>(null);
   const audioPlaybackRef = useRef<HTMLAudioElement | null>(null);
+  const playbackAudioUrlRef = useRef<string | null>(null);
 
   // Decoupled transcript state across recognition restarts
   const sessionCommittedTranscriptRef = useRef<string>('');
@@ -117,23 +118,57 @@ export const VoiceAnswerCapture: React.FC<VoiceAnswerCaptureProps> = ({
   const isRecordingRef = useRef<boolean>(false);
   const initRecognitionRef = useRef<(() => IWindowSpeechRecognition | null) | null>(null);
 
+  // Central idempotent audio playback teardown
+  const stopPlayback = useCallback(() => {
+    if (audioPlaybackRef.current) {
+      try {
+        audioPlaybackRef.current.pause();
+        audioPlaybackRef.current.currentTime = 0;
+        audioPlaybackRef.current.onended = null;
+        audioPlaybackRef.current.onerror = null;
+        audioPlaybackRef.current.src = '';
+      } catch {
+        // Safe ignore
+      }
+      audioPlaybackRef.current = null;
+    }
+    setIsPlayingBack(false);
+  }, []);
+
+  // Complete disposal of audio playback element and temporary Object URL
+  const disposePlaybackAudio = useCallback(() => {
+    stopPlayback();
+    if (playbackAudioUrlRef.current) {
+      try {
+        URL.revokeObjectURL(playbackAudioUrlRef.current);
+      } catch {
+        // Safe ignore
+      }
+      playbackAudioUrlRef.current = null;
+      setPlaybackAudioUrl(null);
+    }
+  }, [stopPlayback]);
+
   // Full cleanup of all microphone and audio hardware resources
   const cleanupResources = useCallback(() => {
     isRecordingRef.current = false;
 
-    // 1. Stop timer
+    // 1. Immediately pause and dispose any active playback
+    disposePlaybackAudio();
+
+    // 2. Stop timer
     if (timerIntervalRef.current) {
       clearInterval(timerIntervalRef.current);
       timerIntervalRef.current = null;
     }
 
-    // 2. Cancel animation frame
+    // 3. Cancel animation frame
     if (animFrameRef.current) {
       cancelAnimationFrame(animFrameRef.current);
       animFrameRef.current = null;
     }
 
-    // 3. Stop speech recognition
+    // 4. Stop speech recognition
     if (recognitionRef.current) {
       try {
         recognitionRef.current.onresult = null;
@@ -146,7 +181,7 @@ export const VoiceAnswerCapture: React.FC<VoiceAnswerCaptureProps> = ({
       recognitionRef.current = null;
     }
 
-    // 4. Stop MediaRecorder
+    // 5. Stop MediaRecorder
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       try {
         mediaRecorderRef.current.stop();
@@ -156,13 +191,13 @@ export const VoiceAnswerCapture: React.FC<VoiceAnswerCaptureProps> = ({
       mediaRecorderRef.current = null;
     }
 
-    // 5. Stop all MediaStream tracks (releases microphone indicator in browser)
+    // 6. Stop all MediaStream tracks (releases microphone indicator in browser)
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     }
 
-    // 6. Close AudioContext
+    // 7. Close AudioContext
     if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
       try {
         audioContextRef.current.close();
@@ -171,15 +206,9 @@ export const VoiceAnswerCapture: React.FC<VoiceAnswerCaptureProps> = ({
       }
       audioContextRef.current = null;
     }
+  }, [disposePlaybackAudio]);
 
-    // 7. Revoke temporary playback URL
-    if (playbackAudioUrl) {
-      URL.revokeObjectURL(playbackAudioUrl);
-      setPlaybackAudioUrl(null);
-    }
-  }, [playbackAudioUrl]);
-
-  // Clean up on component unmount
+  // Clean up on component unmount (route change, tab switch, mode switch)
   useEffect(() => {
     return () => {
       cleanupResources();
@@ -293,8 +322,11 @@ export const VoiceAnswerCapture: React.FC<VoiceAnswerCaptureProps> = ({
     initRecognitionRef.current = initRecognition;
   }, [initRecognition]);
 
-  // Start recording answer
+  // Start recording answer (enforces mutual exclusion by stopping any active replay)
   const startRecording = () => {
+    // 0. Ensure all replay playback is stopped immediately
+    disposePlaybackAudio();
+
     if (!streamRef.current) {
       requestMicrophoneAccess();
       return;
@@ -446,8 +478,16 @@ export const VoiceAnswerCapture: React.FC<VoiceAnswerCaptureProps> = ({
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.onstop = () => {
         if (audioChunksRef.current.length > 0) {
+          if (playbackAudioUrlRef.current) {
+            try {
+              URL.revokeObjectURL(playbackAudioUrlRef.current);
+            } catch {
+              // Safe ignore
+            }
+          }
           const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
           const url = URL.createObjectURL(blob);
+          playbackAudioUrlRef.current = url;
           setPlaybackAudioUrl(url);
         }
       };
@@ -481,12 +521,9 @@ export const VoiceAnswerCapture: React.FC<VoiceAnswerCaptureProps> = ({
     setTranscriptSource('manual_edit');
   };
 
-  // Retry answer (cleans up and resets to ready)
+  // Retry answer (stops audio, cleans up playback URL, and resets to ready)
   const handleRetry = () => {
-    if (playbackAudioUrl) {
-      URL.revokeObjectURL(playbackAudioUrl);
-      setPlaybackAudioUrl(null);
-    }
+    disposePlaybackAudio();
     sessionCommittedTranscriptRef.current = '';
     currentInstanceFinalRef.current = '';
     isRecordingRef.current = false;
@@ -496,23 +533,35 @@ export const VoiceAnswerCapture: React.FC<VoiceAnswerCaptureProps> = ({
     setCaptureState('ready');
   };
 
-  // In-memory ephemeral audio playback
+  // In-memory ephemeral audio playback with explicit lifecycle management
   const togglePlayback = () => {
-    if (!playbackAudioUrl) return;
+    const activeUrl = playbackAudioUrlRef.current || playbackAudioUrl;
+    if (!activeUrl) return;
 
     if (isPlayingBack) {
-      if (audioPlaybackRef.current) {
-        audioPlaybackRef.current.pause();
-        audioPlaybackRef.current.currentTime = 0;
-      }
-      setIsPlayingBack(false);
+      stopPlayback();
     } else {
-      const audio = new Audio(playbackAudioUrl);
-      audioPlaybackRef.current = audio;
-      audio.onended = () => setIsPlayingBack(false);
-      audio.onerror = () => setIsPlayingBack(false);
-      audio.play().catch(() => setIsPlayingBack(false));
-      setIsPlayingBack(true);
+      stopPlayback();
+      try {
+        const audio = new Audio(activeUrl);
+        audioPlaybackRef.current = audio;
+        audio.onended = () => {
+          setIsPlayingBack(false);
+          audioPlaybackRef.current = null;
+        };
+        audio.onerror = () => {
+          setIsPlayingBack(false);
+          audioPlaybackRef.current = null;
+        };
+        audio.play().catch(() => {
+          setIsPlayingBack(false);
+          audioPlaybackRef.current = null;
+        });
+        setIsPlayingBack(true);
+      } catch {
+        setIsPlayingBack(false);
+        audioPlaybackRef.current = null;
+      }
     }
   };
 
@@ -532,7 +581,7 @@ export const VoiceAnswerCapture: React.FC<VoiceAnswerCaptureProps> = ({
       pauseData
     );
 
-    // Completely release and cleanup all audio tracks & ephemeral blobs
+    // Completely release and cleanup all audio tracks, active playback & ephemeral blobs
     cleanupResources();
 
     // Emit reviewed canonical transcript and recalculated metrics to parent
@@ -790,7 +839,11 @@ export const VoiceAnswerCapture: React.FC<VoiceAnswerCaptureProps> = ({
                 <button
                   type="button"
                   onClick={togglePlayback}
-                  className="inline-flex items-center space-x-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-300 hover:bg-slate-700"
+                  className={`inline-flex items-center space-x-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                    isPlayingBack
+                      ? 'border-indigo-500 bg-indigo-950/80 text-indigo-200'
+                      : 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700'
+                  }`}
                 >
                   <Volume2 className="h-3.5 w-3.5 text-indigo-400" />
                   <span>{isPlayingBack ? 'Stop Playback' : 'Listen Again'}</span>
