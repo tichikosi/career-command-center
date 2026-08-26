@@ -20,6 +20,8 @@ import {
 } from '@/types/interview';
 import {
   calculateDeliveryMetrics,
+  combineTranscripts,
+  cleanTranscriptDuplicates,
   RawPauseEvent,
 } from '@/lib/voiceDeliveryEngine';
 
@@ -47,16 +49,18 @@ type CaptureState =
   | 'permission_denied'
   | 'unsupported';
 
+interface SpeechRecognitionResultItem {
+  isFinal: boolean;
+  [index: number]: {
+    transcript: string;
+  };
+}
+
 interface SpeechRecognitionEvent {
   resultIndex: number;
   results: {
     length: number;
-    [index: number]: {
-      isFinal: boolean;
-      [index: number]: {
-        transcript: string;
-      };
-    };
+    [index: number]: SpeechRecognitionResultItem;
   };
 }
 
@@ -92,7 +96,7 @@ export const VoiceAnswerCapture: React.FC<VoiceAnswerCaptureProps> = ({
   const [isPlayingBack, setIsPlayingBack] = useState<boolean>(false);
   const [playbackAudioUrl, setPlaybackAudioUrl] = useState<string | null>(null);
 
-  // References for resource cleanup
+  // References for resource cleanup and decoupled transcript session state
   const streamRef = useRef<MediaStream | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -107,8 +111,16 @@ export const VoiceAnswerCapture: React.FC<VoiceAnswerCaptureProps> = ({
   const currentPauseStartRef = useRef<number | null>(null);
   const audioPlaybackRef = useRef<HTMLAudioElement | null>(null);
 
+  // Decoupled transcript state across recognition restarts
+  const sessionCommittedTranscriptRef = useRef<string>('');
+  const currentInstanceFinalRef = useRef<string>('');
+  const isRecordingRef = useRef<boolean>(false);
+  const initRecognitionRef = useRef<(() => IWindowSpeechRecognition | null) | null>(null);
+
   // Full cleanup of all microphone and audio hardware resources
   const cleanupResources = useCallback(() => {
+    isRecordingRef.current = false;
+
     // 1. Stop timer
     if (timerIntervalRef.current) {
       clearInterval(timerIntervalRef.current);
@@ -203,6 +215,84 @@ export const VoiceAnswerCapture: React.FC<VoiceAnswerCaptureProps> = ({
     }
   };
 
+  // Helper to initialize and bind a SpeechRecognition instance
+  const initRecognition = useCallback(() => {
+    const SpeechRec =
+      (window as unknown as { SpeechRecognition?: new () => IWindowSpeechRecognition }).SpeechRecognition ||
+      (window as unknown as { webkitSpeechRecognition?: new () => IWindowSpeechRecognition }).webkitSpeechRecognition;
+
+    if (!SpeechRec) return null;
+
+    try {
+      const recognition = new SpeechRec();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+
+      recognition.onresult = (event: SpeechRecognitionEvent) => {
+        let instanceFinal = '';
+        let instanceInterim = '';
+
+        for (let i = 0; i < event.results.length; i++) {
+          const item = event.results[i];
+          if (item.isFinal) {
+            instanceFinal += item[0].transcript + ' ';
+          } else {
+            instanceInterim += item[0].transcript;
+          }
+        }
+
+        currentInstanceFinalRef.current = instanceFinal.trim();
+
+        const combinedFinal = combineTranscripts(
+          sessionCommittedTranscriptRef.current,
+          currentInstanceFinalRef.current
+        );
+
+        setTranscript(combinedFinal);
+        setInterimText(instanceInterim.trim());
+      };
+
+      recognition.onerror = (event: unknown) => {
+        console.warn('[VoiceAnswerCapture] SpeechRecognition notice:', event);
+      };
+
+      recognition.onend = () => {
+        // Continuous restart handling: commit current instance's final text before restarting
+        if (isRecordingRef.current) {
+          if (currentInstanceFinalRef.current) {
+            sessionCommittedTranscriptRef.current = combineTranscripts(
+              sessionCommittedTranscriptRef.current,
+              currentInstanceFinalRef.current
+            );
+            currentInstanceFinalRef.current = '';
+          }
+          setInterimText('');
+
+          // Safely restart recognition instance
+          try {
+            const nextRec = initRecognitionRef.current ? initRecognitionRef.current() : null;
+            if (nextRec) {
+              nextRec.start();
+              recognitionRef.current = nextRec;
+            }
+          } catch (e) {
+            console.warn('[VoiceAnswerCapture] SpeechRecognition restart notice:', e);
+          }
+        }
+      };
+
+      return recognition;
+    } catch (e) {
+      console.warn('[VoiceAnswerCapture] Web Speech API initialization notice:', e);
+      return null;
+    }
+  }, []);
+
+  useEffect(() => {
+    initRecognitionRef.current = initRecognition;
+  }, [initRecognition]);
+
   // Start recording answer
   const startRecording = () => {
     if (!streamRef.current) {
@@ -219,6 +309,11 @@ export const VoiceAnswerCapture: React.FC<VoiceAnswerCaptureProps> = ({
     lastVoiceActivityTimeRef.current = Date.now();
     currentPauseStartRef.current = null;
     recordingStartTimeRef.current = Date.now();
+
+    // Reset decoupled transcript state
+    sessionCommittedTranscriptRef.current = '';
+    currentInstanceFinalRef.current = '';
+    isRecordingRef.current = true;
 
     // 1. Setup AudioContext and Analyser for live volume meter & silence detection
     try {
@@ -285,60 +380,15 @@ export const VoiceAnswerCapture: React.FC<VoiceAnswerCaptureProps> = ({
       console.warn('[VoiceAnswerCapture] MediaRecorder failed:', e);
     }
 
-    // 3. Setup Web Speech Recognition for live preview transcript
-    try {
-      const SpeechRec =
-        (window as unknown as { SpeechRecognition?: new () => IWindowSpeechRecognition }).SpeechRecognition ||
-        (window as unknown as { webkitSpeechRecognition?: new () => IWindowSpeechRecognition }).webkitSpeechRecognition;
-
-      if (SpeechRec) {
-        const recognition = new SpeechRec();
-        recognition.continuous = true;
-        recognition.interimResults = true;
-        recognition.lang = 'en-US';
-
-        recognition.onresult = (event: SpeechRecognitionEvent) => {
-          let currentFinal = '';
-          let currentInterim = '';
-
-          for (let i = 0; i < event.results.length; i++) {
-            const item = event.results[i];
-            if (item.isFinal) {
-              currentFinal += item[0].transcript + ' ';
-            } else {
-              currentInterim += item[0].transcript;
-            }
-          }
-
-          if (currentFinal.trim()) {
-            setTranscript((prev) => {
-              const combined = (prev + ' ' + currentFinal).trim();
-              return combined;
-            });
-          }
-          setInterimText(currentInterim);
-        };
-
-        recognition.onerror = (event: unknown) => {
-          console.warn('[VoiceAnswerCapture] SpeechRecognition notice:', event);
-        };
-
-        recognition.onend = () => {
-          // Restart if still in recording state
-          if (captureState === 'recording' && recognitionRef.current) {
-            try {
-              recognitionRef.current.start();
-            } catch {
-              // Ignore
-            }
-          }
-        };
-
+    // 3. Setup Web Speech Recognition
+    const recognition = initRecognition();
+    if (recognition) {
+      try {
         recognition.start();
         recognitionRef.current = recognition;
+      } catch (e) {
+        console.warn('[VoiceAnswerCapture] Recognition start failed:', e);
       }
-    } catch (e) {
-      console.warn('[VoiceAnswerCapture] Web Speech API initialization notice:', e);
     }
 
     // 4. Start timer
@@ -357,6 +407,8 @@ export const VoiceAnswerCapture: React.FC<VoiceAnswerCaptureProps> = ({
 
   // Stop recording and transition to review & edit mode
   const stopRecording = () => {
+    isRecordingRef.current = false;
+
     // Check if a pause was active at the end
     if (currentPauseStartRef.current !== null) {
       const duration = (Date.now() - currentPauseStartRef.current) / 1000;
@@ -406,11 +458,16 @@ export const VoiceAnswerCapture: React.FC<VoiceAnswerCaptureProps> = ({
       }
     }
 
-    // Combine interim text if any
-    setTranscript((prev) => {
-      const full = (prev + (interimText ? ' ' + interimText : '')).trim();
-      return full;
-    });
+    // Commit all final text and any trailing interim text into canonical transcript
+    const finalCommitted = combineTranscripts(
+      sessionCommittedTranscriptRef.current,
+      currentInstanceFinalRef.current
+    );
+    const complete = interimText ? combineTranscripts(finalCommitted, interimText) : finalCommitted;
+
+    sessionCommittedTranscriptRef.current = complete;
+    currentInstanceFinalRef.current = '';
+    setTranscript(complete);
     setInterimText('');
 
     setCaptureState('reviewing');
@@ -418,7 +475,9 @@ export const VoiceAnswerCapture: React.FC<VoiceAnswerCaptureProps> = ({
 
   // User manual edits to transcript
   const handleTranscriptChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setTranscript(e.target.value);
+    const nextVal = e.target.value;
+    setTranscript(nextVal);
+    sessionCommittedTranscriptRef.current = nextVal;
     setTranscriptSource('manual_edit');
   };
 
@@ -428,6 +487,9 @@ export const VoiceAnswerCapture: React.FC<VoiceAnswerCaptureProps> = ({
       URL.revokeObjectURL(playbackAudioUrl);
       setPlaybackAudioUrl(null);
     }
+    sessionCommittedTranscriptRef.current = '';
+    currentInstanceFinalRef.current = '';
+    isRecordingRef.current = false;
     setTranscript('');
     setInterimText('');
     setElapsedSeconds(0);
@@ -456,13 +518,13 @@ export const VoiceAnswerCapture: React.FC<VoiceAnswerCaptureProps> = ({
 
   // Submit canonical reviewed transcript for AI evaluation
   const handleSubmitAnswer = () => {
-    const finalTranscript = transcript.trim();
+    const finalTranscript = cleanTranscriptDuplicates(transcript.trim());
     if (!finalTranscript) {
       setErrorMessage('Please provide a spoken or written response before submitting.');
       return;
     }
 
-    // Calculate deterministic metrics from final transcript and elapsed duration
+    // Calculate deterministic metrics from final canonical transcript and actual elapsed duration
     const pauseData = pausesRef.current.length > 0 ? { pauses: pausesRef.current } : undefined;
     const metrics = calculateDeliveryMetrics(
       finalTranscript,
@@ -473,13 +535,15 @@ export const VoiceAnswerCapture: React.FC<VoiceAnswerCaptureProps> = ({
     // Completely release and cleanup all audio tracks & ephemeral blobs
     cleanupResources();
 
-    // Emit reviewed canonical transcript and metrics to parent
+    // Emit reviewed canonical transcript and recalculated metrics to parent
     onTranscriptReady(finalTranscript, metrics, transcriptSource);
   };
 
-  // Live estimated WPM
-  const wordsCount = (transcript + (interimText ? ' ' + interimText : '')).trim().split(/\s+/).filter(Boolean).length;
+  // Live estimated word count and WPM derived from current canonical text
+  const currentRenderedText = (transcript + (interimText ? (transcript ? ' ' : '') + interimText : '')).trim();
+  const wordsCount = currentRenderedText.split(/\s+/).filter(Boolean).length;
   const liveWpm = elapsedSeconds > 0 ? Math.round((wordsCount / elapsedSeconds) * 60) : 0;
+  const isPlausibilityViolation = liveWpm > 400;
 
   // Format seconds to MM:SS
   const formatTime = (secs: number) => {
@@ -524,7 +588,7 @@ export const VoiceAnswerCapture: React.FC<VoiceAnswerCaptureProps> = ({
               )}
             </div>
 
-            <div className="rounded bg-slate-800 px-2 py-1 font-mono text-slate-300">
+            <div className={`rounded px-2 py-1 font-mono ${isPlausibilityViolation ? 'bg-amber-950/80 text-amber-300 border border-amber-800' : 'bg-slate-800 text-slate-300'}`}>
               {liveWpm} <span className="text-slate-500">WPM</span>
             </div>
           </div>
@@ -536,6 +600,19 @@ export const VoiceAnswerCapture: React.FC<VoiceAnswerCaptureProps> = ({
         <div className="flex items-center space-x-2 rounded-lg border border-red-500/30 bg-red-950/40 p-3 text-xs text-red-300">
           <AlertCircle className="h-4 w-4 shrink-0 text-red-400" />
           <span>{errorMessage}</span>
+        </div>
+      )}
+
+      {/* Plausibility Warning Banner */}
+      {isPlausibilityViolation && captureState === 'reviewing' && (
+        <div className="flex items-start space-x-2 rounded-lg border border-amber-500/40 bg-amber-950/40 p-3 text-xs text-amber-200">
+          <AlertCircle className="h-4 w-4 shrink-0 text-amber-400 mt-0.5" />
+          <div>
+            <strong>Pacing Anomaly Detected ({liveWpm} WPM): </strong>
+            <span>
+              Speech metrics could not be calculated reliably for this answer. Please review and edit your transcript below, or click &quot;Retry Spoken Answer&quot; before submitting.
+            </span>
+          </div>
         </div>
       )}
 
@@ -640,7 +717,7 @@ export const VoiceAnswerCapture: React.FC<VoiceAnswerCaptureProps> = ({
           </div>
 
           {/* Real-time Streaming Transcript Preview */}
-          <div className="min-h-[100px] rounded-lg border border-slate-800 bg-slate-950/80 p-3.5 text-xs">
+          <div className="min-h-[100px] max-h-[180px] overflow-y-auto rounded-lg border border-slate-800 bg-slate-950/80 p-3.5 text-xs">
             <div className="flex items-center justify-between pb-1.5 text-slate-400">
               <span className="flex items-center space-x-1 text-[11px] uppercase font-semibold tracking-wider">
                 <span className="h-1.5 w-1.5 animate-ping rounded-full bg-red-400" />
@@ -648,11 +725,16 @@ export const VoiceAnswerCapture: React.FC<VoiceAnswerCaptureProps> = ({
               </span>
               <span className="text-[11px] text-slate-500">{wordsCount} words</span>
             </div>
-            <p className="text-slate-200 leading-relaxed">
+            <p className="text-slate-200 leading-relaxed font-sans">
               {transcript || interimText ? (
                 <>
                   <span>{transcript}</span>
-                  {interimText && <span className="text-slate-400 italic"> {interimText}</span>}
+                  {interimText && (
+                    <span className="text-indigo-300 italic">
+                      {transcript ? ' ' : ''}
+                      {interimText}
+                    </span>
+                  )}
                 </>
               ) : (
                 <span className="text-slate-500 italic">

@@ -179,6 +179,27 @@ async function runVerification() {
   });
   assertCheck('ConversationalTurnRequestSchema validates turn-taking request', validTurnSchema.success);
 
+  // 10. Transcript Deduplication & Plausibility Guardrails
+  console.log('\n10. Verifying Transcript Deduplication & Plausibility Guardrails...');
+  const { combineTranscripts, cleanTranscriptDuplicates } = await import('../src/lib/voiceDeliveryEngine');
+  const baseT = 'At Google I led quarterly reviews';
+  const duplicateT = 'At Google I led quarterly reviews';
+  const mergedExact = combineTranscripts(baseT, duplicateT);
+  assertCheck('Exact duplicate speech segments rejected without duplication', mergedExact === baseT);
+
+  const cumulativeT = 'At Google I led quarterly reviews with channel partners';
+  const mergedCumulative = combineTranscripts(baseT, cumulativeT);
+  assertCheck('Cumulative SpeechRecognition expansions merged cleanly', mergedCumulative === cumulativeT);
+
+  const glitchySpeech = 'We launched the product on schedule. We launched the product on schedule. Next phase began.';
+  const cleanedSpeech = cleanTranscriptDuplicates(glitchySpeech);
+  assertCheck('Repeated multi-word glitch blocks deduplicated', cleanedSpeech === 'We launched the product on schedule. Next phase began.');
+
+  const extremeDensitySpeech = Array.from({ length: 500 }, (_, i) => `metric${i}`).join(' ');
+  const extremeWpmMetrics = calculateDeliveryMetrics(extremeDensitySpeech, 20);
+  assertCheck('Physiologically implausible WPM (>400 WPM) flagged as invalid_transcript_or_timing', extremeWpmMetrics.deliveryMetricsStatus === 'invalid_transcript_or_timing');
+  assertCheck('User-safe notice provided when metrics implausible', Boolean(extremeWpmMetrics.metricsNotice));
+
   console.log('\n================================================================');
   console.log(`V3.4 VERIFICATION SUMMARY: ${passedChecks}/${totalChecks} CHECKS PASSED`);
   console.log('================================================================\n');

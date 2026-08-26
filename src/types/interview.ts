@@ -223,6 +223,8 @@ export interface PauseAnalysisResult {
   reason?: string;
 }
 
+export type DeliveryMetricsStatus = 'valid' | 'invalid_transcript_or_timing';
+
 export interface VoiceDeliveryMetrics {
   durationSeconds: number;
   wordCount: number;
@@ -232,6 +234,8 @@ export interface VoiceDeliveryMetrics {
   topFillerWords: TopFillerWord[];
   pauseAnalysis: PauseAnalysisResult;
   verbosity: 'too_brief' | 'appropriate' | 'potentially_overlong';
+  deliveryMetricsStatus?: DeliveryMetricsStatus;
+  metricsNotice?: string;
 }
 
 export interface MockVoiceCoaching {

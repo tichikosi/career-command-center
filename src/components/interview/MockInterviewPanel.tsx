@@ -859,12 +859,20 @@ export function MockInterviewPanel({
 
                 {currentEvaluation.metrics && (
                   <div className="flex items-center space-x-3 text-xs">
-                    <div className="rounded bg-slate-800 px-2.5 py-1 font-mono text-slate-300">
-                      {currentEvaluation.metrics.wordsPerMinute} <span className="text-slate-500">WPM</span>
-                    </div>
-                    <div className="rounded bg-slate-800 px-2.5 py-1 font-mono text-slate-300">
-                      {currentEvaluation.metrics.fillerRatePerMinute} <span className="text-slate-500">fillers/m</span>
-                    </div>
+                    {currentEvaluation.metrics.deliveryMetricsStatus === 'invalid_transcript_or_timing' ? (
+                      <div className="rounded bg-amber-950/80 border border-amber-800 px-2.5 py-1 text-[11px] text-amber-300 font-mono">
+                        Metrics Uncalibrated
+                      </div>
+                    ) : (
+                      <>
+                        <div className="rounded bg-slate-800 px-2.5 py-1 font-mono text-slate-300">
+                          {currentEvaluation.metrics.wordsPerMinute} <span className="text-slate-500">WPM</span>
+                        </div>
+                        <div className="rounded bg-slate-800 px-2.5 py-1 font-mono text-slate-300">
+                          {currentEvaluation.metrics.fillerRatePerMinute} <span className="text-slate-500">fillers/m</span>
+                        </div>
+                      </>
+                    )}
                     <div className="rounded bg-slate-800 px-2.5 py-1 font-mono text-slate-300">
                       {currentEvaluation.metrics.durationSeconds}s
                     </div>

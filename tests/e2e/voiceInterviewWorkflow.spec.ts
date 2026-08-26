@@ -114,6 +114,21 @@ test.describe('V3.4 Voice Interview Intelligence & Performance Analytics E2E', (
     // Check Voice Capture is rendered
     await expect(page.getByText('Voice Interview Practice')).toBeVisible();
     await expect(page.getByText(/Audio is evaluated strictly in-memory/i)).toBeVisible();
+    await expect(page.getByRole('button', { name: /Enable Microphone & Practice/i })).toBeVisible();
+
+    // Switch back to Type mode to ensure seamless toggle
+    await page.getByRole('button', { name: 'Type' }).first().click();
+    const textarea = page.locator('textarea');
+    await expect(textarea).toBeVisible();
+
+    // Fill typed response and verify submit
+    await textarea.fill('At Nexus Global, I led the cross-functional AI platform rollout across five business units.');
+    await page.getByRole('button', { name: /Submit Answer/i }).click();
+
+    // Verify scorecard rendering
+    await expect(page.getByText('Overall Response Score')).toBeVisible();
+    await expect(page.getByText('88%')).toBeVisible();
+    await expect(page.getByText('Content Performance (1-5 Scale)')).toBeVisible();
   });
 
   test('Performance Analytics & Comparison modal renders historical metrics', async ({ page }) => {
