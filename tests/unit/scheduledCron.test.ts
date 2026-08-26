@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { NextRequest } from 'next/server';
 import { GET } from '@/app/api/discovery/cron/route';
 
 describe('V3.2 Scheduled Discovery Cron Route', () => {
@@ -16,7 +15,7 @@ describe('V3.2 Scheduled Discovery Cron Route', () => {
   it('rejects unauthorized requests when CRON_SECRET is configured', async () => {
     process.env.CRON_SECRET = 'super-secret-cron-token-12345';
 
-    const req = new NextRequest('http://localhost:3000/api/discovery/cron', {
+    const req = new Request('http://localhost:3000/api/discovery/cron', {
       method: 'GET',
       headers: {
         authorization: 'Bearer wrong-token',
@@ -32,7 +31,7 @@ describe('V3.2 Scheduled Discovery Cron Route', () => {
   it('accepts valid Bearer token authorization matching CRON_SECRET', async () => {
     process.env.CRON_SECRET = 'valid-token-xyz';
 
-    const req = new NextRequest('http://localhost:3000/api/discovery/cron', {
+    const req = new Request('http://localhost:3000/api/discovery/cron', {
       method: 'GET',
       headers: {
         authorization: 'Bearer valid-token-xyz',
@@ -48,7 +47,7 @@ describe('V3.2 Scheduled Discovery Cron Route', () => {
   it('accepts x-cron-secret header matching CRON_SECRET', async () => {
     process.env.CRON_SECRET = 'valid-token-xyz';
 
-    const req = new NextRequest('http://localhost:3000/api/discovery/cron', {
+    const req = new Request('http://localhost:3000/api/discovery/cron', {
       method: 'GET',
       headers: {
         'x-cron-secret': 'valid-token-xyz',
@@ -65,7 +64,7 @@ describe('V3.2 Scheduled Discovery Cron Route', () => {
     delete process.env.CRON_SECRET;
     (process.env as { NODE_ENV?: string }).NODE_ENV = 'production';
 
-    const req = new NextRequest('http://localhost:3000/api/discovery/cron', {
+    const req = new Request('http://localhost:3000/api/discovery/cron', {
       method: 'GET',
     });
 

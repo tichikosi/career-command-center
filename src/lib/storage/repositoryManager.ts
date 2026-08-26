@@ -52,3 +52,24 @@ export function getNetworkRepository() {
 export function getDiscoveryRepository() {
   return getActiveStorageAdapter().discovery;
 }
+
+/**
+ * Explicit helper to retrieve activity repository.
+ */
+export function getActivityRepository() {
+  return getActiveStorageAdapter().activities;
+}
+
+/**
+ * Explicit helper to retrieve interview prep repository.
+ */
+export function getInterviewPrepRepository() {
+  return getActiveStorageAdapter().interviewPrep;
+}
+
+/**
+ * Explicit helper to retrieve interview session repository.
+ */
+export function getInterviewSessionRepository() {
+  return getActiveStorageAdapter().interviewSessions;
+}

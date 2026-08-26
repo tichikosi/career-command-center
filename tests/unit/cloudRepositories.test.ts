@@ -4,6 +4,7 @@ import { CandidateProfile } from '@/types/candidate';
 import { JobOpportunity } from '@/types/opportunity';
 import { NetworkContact } from '@/types/network';
 import { DiscoveredJob } from '@/types/discovery';
+import { createTestOpportunity } from '../fixtures/v33TestFixtures';
 
 describe('V3.2 Cloud Repositories & Multi-User Isolation', () => {
   let adapter: MockCloudStorageAdapter;
@@ -58,17 +59,17 @@ describe('V3.2 Cloud Repositories & Multi-User Isolation', () => {
       const loadedA = await adapter.candidates.getProfile('user-a');
       const loadedB = await adapter.candidates.getProfile('user-b');
 
-      expect(loadedA.name).toBe('Alice User');
-      expect(loadedA.targetRoles).toContain('VP Strategy');
+      expect(loadedA?.name).toBe('Alice User');
+      expect(loadedA?.targetRoles).toContain('VP Strategy');
 
-      expect(loadedB.name).toBe('Bob User');
-      expect(loadedB.targetRoles).toContain('Chief of Staff');
+      expect(loadedB?.name).toBe('Bob User');
+      expect(loadedB?.targetRoles).toContain('Chief of Staff');
     });
   });
 
   describe('Opportunity Repository Multi-User Storage', () => {
     it('stores and retrieves opportunities scoped strictly by user_id', async () => {
-      const oppA: JobOpportunity = {
+      const oppA: JobOpportunity = createTestOpportunity({
         id: 'opp-1',
         company: 'Alpha Corp',
         title: 'VP Strategy',
@@ -76,11 +77,9 @@ describe('V3.2 Cloud Repositories & Multi-User Isolation', () => {
         stage: 'Identified',
         priority: 'High',
         notes: 'User A note',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
+      });
 
-      const oppB: JobOpportunity = {
+      const oppB: JobOpportunity = createTestOpportunity({
         id: 'opp-2',
         company: 'Beta Corp',
         title: 'COO',
@@ -88,9 +87,7 @@ describe('V3.2 Cloud Repositories & Multi-User Isolation', () => {
         stage: 'Applied',
         priority: 'Medium',
         notes: 'User B note',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
+      });
 
       await adapter.opportunities.save(oppA, 'user-a');
       await adapter.opportunities.save(oppB, 'user-b');
@@ -106,7 +103,7 @@ describe('V3.2 Cloud Repositories & Multi-User Isolation', () => {
     });
 
     it('updates pipeline stage seamlessly within user scope', async () => {
-      const opp: JobOpportunity = {
+      const opp: JobOpportunity = createTestOpportunity({
         id: 'opp-stage-test',
         company: 'Stripe',
         title: 'Head of Operations',
@@ -114,9 +111,7 @@ describe('V3.2 Cloud Repositories & Multi-User Isolation', () => {
         stage: 'Identified',
         priority: 'High',
         notes: '',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
+      });
 
       await adapter.opportunities.save(opp, 'user-123');
       const updated = await adapter.opportunities.updateStage('opp-stage-test', 'Screening', 'user-123');
@@ -134,11 +129,13 @@ describe('V3.2 Cloud Repositories & Multi-User Isolation', () => {
       for (let i = 0; i < 3500; i++) {
         largeBatch.push({
           id: `contact-${i}`,
-          name: `Executive Contact ${i}`,
+          fullName: `Executive Contact ${i}`,
           company: i % 2 === 0 ? 'Google' : 'Anthropic',
-          title: 'Senior Director',
+          position: 'Senior Director',
           email: `contact${i}@example.com`,
           notes: 'Alumni network',
+          source: 'manual',
+          importedAt: new Date().toISOString(),
         });
       }
 
@@ -150,10 +147,10 @@ describe('V3.2 Cloud Repositories & Multi-User Isolation', () => {
       // Verify contact update
       const updated = await adapter.network.updateContact(
         'contact-100',
-        { title: 'VP Engineering' },
+        { position: 'VP Engineering' },
         'user-scale'
       );
-      expect(updated?.title).toBe('VP Engineering');
+      expect(updated?.position).toBe('VP Engineering');
     });
   });
 
@@ -170,7 +167,7 @@ describe('V3.2 Cloud Repositories & Multi-User Isolation', () => {
           discoveredAt: new Date().toISOString(),
           status: 'new',
           relevanceScore: 92,
-          relevanceLevel: 'High',
+          relevanceLevel: 'High Potential',
           relevanceReasons: ['Matches VP Operations target role'],
           matchedPreferences: ['VP Operations'],
           provider: 'gemini',

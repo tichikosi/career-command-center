@@ -98,7 +98,7 @@ export class GeminiFitAnalysisEngine {
 
       return this.runFallback(
         input,
-        `Live Gemini analysis unavailable (${sanitizedError}). Displaying deterministic fallback.`,
+        'Live AI analysis was unavailable, so Career Command Center used its candidate-grounded deterministic evaluation.',
         primaryModel,
         3,
         true,

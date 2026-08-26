@@ -351,7 +351,7 @@ describe('V3.2 Cloud Candidate Read-Path & Source of Truth', () => {
     expect(saved.name).toBe('Tanaka Ian Chikosi');
     expect(onConflictTarget).toBe('user_id');
     expect(upsertedPayload).not.toBeNull();
-    expect((upsertedPayload as Record<string, unknown>).user_id).toBe(authUserId);
+    expect((upsertedPayload as unknown as Record<string, unknown>).user_id).toBe(authUserId);
   });
 
   it('repeated saves and migration retries update the canonical profile under the same user_id', async () => {

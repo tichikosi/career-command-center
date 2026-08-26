@@ -7,15 +7,18 @@ import { DiscoveredJob } from '@/types/discovery';
 import { deduplicateDiscoveredJobs } from '@/lib/discoveryStorage';
 import { isGeminiConfigured } from '@/lib/server/geminiConfig';
 
-export async function GET(req: NextRequest) {
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
+export async function GET(req: Request | NextRequest) {
   return handleCron(req);
 }
 
-export async function POST(req: NextRequest) {
+export async function POST(req: Request | NextRequest) {
   return handleCron(req);
 }
 
-async function handleCron(req: NextRequest) {
+async function handleCron(req: Request | NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
   const authHeader = req.headers.get('authorization');
   const customHeader = req.headers.get('x-cron-secret');

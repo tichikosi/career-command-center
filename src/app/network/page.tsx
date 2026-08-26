@@ -116,7 +116,7 @@ function NetworkContent() {
   }, [searchFiltered, sortOption, effectiveTargetCompany, effectiveTargetTitle]);
 
   const clearOpportunityContext = () => {
-    router.push('/network');
+    router.replace('/network');
   };
 
   if (!mounted) {
@@ -234,7 +234,9 @@ function NetworkContent() {
           </div>
 
           <button
-            onClick={clearOpportunityContext}
+            onClick={() => {
+              window.location.href = '/network';
+            }}
             className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg shrink-0 transition-colors shadow-xs"
           >
             View All Network Contacts

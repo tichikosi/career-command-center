@@ -4,6 +4,9 @@ import {
   INetworkRepository,
   IDiscoveryRepository,
   IPreferencesRepository,
+  IActivityRepository,
+  IInterviewPrepRepository,
+  IInterviewSessionRepository,
   IStorageAdapter,
 } from './interfaces';
 import { CandidateProfile } from '@/types/candidate';
@@ -11,6 +14,7 @@ import { JobOpportunity, PipelineStage, OpportunityAction, FitAnalysisReport } f
 import { NetworkContact } from '@/types/network';
 import { DiscoveredJob, DiscoveredJobStatus, DiscoveryHistoryItem } from '@/types/discovery';
 import { UserPreferences } from '@/types/auth';
+import { OpportunityActivity, InterviewPreparation, InterviewSession } from '@/types/interview';
 
 /**
  * Deterministic In-Memory Cloud Storage Adapter for Unit Testing & Isolation.
@@ -24,12 +28,18 @@ export class MockCloudStorageAdapter implements IStorageAdapter {
   public discoveryHistoryMap = new Map<string, DiscoveryHistoryItem[]>();
   public userPreferences = new Map<string, UserPreferences>();
   public actions = new Map<string, (OpportunityAction & { opportunityId: string; userId: string })[]>();
+  public activitiesMap = new Map<string, OpportunityActivity[]>();
+  public interviewPrepMap = new Map<string, InterviewPreparation[]>();
+  public interviewSessionsMap = new Map<string, InterviewSession[]>();
 
   public candidates: ICandidateRepository;
   public opportunities: IOpportunityRepository;
   public network: INetworkRepository;
   public discovery: IDiscoveryRepository;
   public preferences: IPreferencesRepository;
+  public activities: IActivityRepository;
+  public interviewPrep: IInterviewPrepRepository;
+  public interviewSessions: IInterviewSessionRepository;
 
   constructor() {
     this.candidates = {
@@ -262,6 +272,107 @@ export class MockCloudStorageAdapter implements IStorageAdapter {
         };
         this.userPreferences.set(userId, updated);
         return JSON.parse(JSON.stringify(updated));
+      },
+    };
+
+    // V3.3 Repositories
+    this.activities = {
+      getActivities: async (opportunityId: string, userId = 'default-user'): Promise<OpportunityActivity[]> => {
+        const key = `${userId}:${opportunityId}`;
+        return JSON.parse(JSON.stringify(this.activitiesMap.get(key) || []));
+      },
+      getAllActivities: async (userId = 'default-user'): Promise<OpportunityActivity[]> => {
+        const result: OpportunityActivity[] = [];
+        for (const [key, acts] of this.activitiesMap.entries()) {
+          if (key.startsWith(`${userId}:`)) result.push(...acts);
+        }
+        return JSON.parse(JSON.stringify(result.sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime())));
+      },
+      recordActivity: async (activity: Omit<OpportunityActivity, 'id' | 'createdAt' | 'updatedAt'>, userId = 'default-user'): Promise<OpportunityActivity> => {
+        const now = new Date().toISOString();
+        const entry: OpportunityActivity = {
+          ...activity,
+          id: `act-mock-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          createdAt: now,
+          updatedAt: now,
+        };
+        const key = `${userId}:${activity.opportunityId}`;
+        const existing = this.activitiesMap.get(key) || [];
+        existing.unshift(entry);
+        this.activitiesMap.set(key, existing);
+        return JSON.parse(JSON.stringify(entry));
+      },
+      updateActivity: async (id: string, updates: Partial<OpportunityActivity>, userId = 'default-user'): Promise<OpportunityActivity | null> => {
+        for (const [key, acts] of this.activitiesMap.entries()) {
+          if (!key.startsWith(`${userId}:`)) continue;
+          const idx = acts.findIndex((a) => a.id === id);
+          if (idx >= 0) {
+            acts[idx] = { ...acts[idx], ...updates, updatedAt: new Date().toISOString() };
+            return JSON.parse(JSON.stringify(acts[idx]));
+          }
+        }
+        return null;
+      },
+      deleteActivity: async (id: string, userId = 'default-user'): Promise<void> => {
+        for (const [key, acts] of this.activitiesMap.entries()) {
+          if (!key.startsWith(`${userId}:`)) continue;
+          const idx = acts.findIndex((a) => a.id === id);
+          if (idx >= 0) {
+            acts.splice(idx, 1);
+            return;
+          }
+        }
+      },
+    };
+
+    this.interviewPrep = {
+      getActivePrep: async (opportunityId: string, userId = 'default-user'): Promise<InterviewPreparation | null> => {
+        const key = `${userId}:${opportunityId}`;
+        const preps = this.interviewPrepMap.get(key) || [];
+        const active = preps.find((p) => p.isActive);
+        return active ? JSON.parse(JSON.stringify(active)) : null;
+      },
+      savePrep: async (prep: InterviewPreparation, userId = 'default-user'): Promise<InterviewPreparation> => {
+        const key = `${userId}:${prep.opportunityId}`;
+        const existing = this.interviewPrepMap.get(key) || [];
+        existing.forEach((p) => { p.isActive = false; });
+        existing.unshift({ ...prep, isActive: true });
+        this.interviewPrepMap.set(key, existing);
+        return JSON.parse(JSON.stringify(prep));
+      },
+      getHistory: async (opportunityId: string, userId = 'default-user'): Promise<InterviewPreparation[]> => {
+        const key = `${userId}:${opportunityId}`;
+        return JSON.parse(JSON.stringify(this.interviewPrepMap.get(key) || []));
+      },
+      deletePrep: async (id: string, userId = 'default-user'): Promise<void> => {
+        for (const [key, preps] of this.interviewPrepMap.entries()) {
+          if (!key.startsWith(`${userId}:`)) continue;
+          const idx = preps.findIndex((p) => p.id === id);
+          if (idx >= 0) { preps.splice(idx, 1); return; }
+        }
+      },
+    };
+
+    this.interviewSessions = {
+      getSessions: async (opportunityId: string, userId = 'default-user'): Promise<InterviewSession[]> => {
+        const key = `${userId}:${opportunityId}`;
+        return JSON.parse(JSON.stringify(this.interviewSessionsMap.get(key) || []));
+      },
+      saveSession: async (session: InterviewSession, userId = 'default-user'): Promise<InterviewSession> => {
+        const key = `${userId}:${session.opportunityId}`;
+        const existing = this.interviewSessionsMap.get(key) || [];
+        const idx = existing.findIndex((s) => s.id === session.id);
+        if (idx >= 0) existing[idx] = session;
+        else existing.unshift(session);
+        this.interviewSessionsMap.set(key, existing);
+        return JSON.parse(JSON.stringify(session));
+      },
+      deleteSession: async (id: string, userId = 'default-user'): Promise<void> => {
+        for (const [key, sessions] of this.interviewSessionsMap.entries()) {
+          if (!key.startsWith(`${userId}:`)) continue;
+          const idx = sessions.findIndex((s) => s.id === id);
+          if (idx >= 0) { sessions.splice(idx, 1); return; }
+        }
       },
     };
   }

@@ -7,6 +7,8 @@ import {
 import { DiscoveredJob } from '@/types/discovery';
 import { JobOpportunity } from '@/types/opportunity';
 
+import { createTestOpportunity } from '../fixtures/v33TestFixtures';
+
 describe('Discovery Deduplication V2 Unit Tests', () => {
   it('1. normalizes URLs by stripping tracking parameters', () => {
     const rawUrl1 = 'https://boards.greenhouse.io/anthropic/jobs/12345?utm_source=linkedin&utm_medium=job_post&gh_src=custom#apply';
@@ -89,7 +91,7 @@ describe('Discovery Deduplication V2 Unit Tests', () => {
 
   it('4. deduplicates against active opportunities already in pipeline', () => {
     const activeOpps: JobOpportunity[] = [
-      {
+      createTestOpportunity({
         id: 'opp-1',
         title: 'Director AI Strategy',
         company: 'Anthropic',
@@ -97,10 +99,7 @@ describe('Discovery Deduplication V2 Unit Tests', () => {
         sourceUrl: 'https://boards.greenhouse.io/anthropic/jobs/12345',
         stage: 'Identified',
         priority: 'High',
-        actionPlan: [],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      },
+      }),
     ];
 
     const incoming: DiscoveredJob[] = [

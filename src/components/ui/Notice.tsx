@@ -7,11 +7,11 @@ export function SyntheticDisclaimerBanner() {
       <div className="flex items-center gap-2 max-w-7xl mx-auto w-full">
         <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
         <span className="font-medium tracking-wide text-slate-100 uppercase text-[10px]">
-          Public Demonstration
+          Career Command Center V3.3
         </span>
         <span className="text-slate-400">|</span>
         <span className="text-slate-300">
-          100% Synthetic Data & Client-Side Processing (Version 1.1B)
+          Public Synthetic Demo Isolation (Alex Vance) • Authenticated Cloud Persistence
         </span>
       </div>
     </div>
@@ -34,14 +34,17 @@ export function StorageWarningNotice() {
 
 export function FallbackAnalysisNotice({ text }: { text?: string }) {
   return (
-    <div className="bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-800/80 text-indigo-900 dark:text-indigo-200 px-4 py-3 rounded-xl flex items-start gap-3 text-xs leading-relaxed mb-6">
+    <div className="bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-800/80 text-indigo-900 dark:text-indigo-200 px-4 py-3 rounded-xl flex items-start gap-3 text-xs leading-relaxed mb-6 shadow-xs">
       <IconAlertTriangle className="w-5 h-5 text-indigo-600 dark:text-indigo-400 shrink-0 mt-0.5" />
       <div>
         <span className="font-semibold text-indigo-950 dark:text-indigo-100 block">
-          Version 1 Simplified Heuristic Analysis
+          Simplified Heuristic Evaluation
         </span>
-        {text ||
-          'This output uses lightweight keyword signal extraction. Live semantic AI analysis is planned for Version 2.'}
+        <p className="text-indigo-800 dark:text-indigo-300 mt-0.5">
+          {text && !text.includes('{') && !text.includes('error') && !text.includes('quota')
+            ? text
+            : 'Live AI analysis was unavailable, so Career Command Center used its candidate-grounded deterministic evaluation.'}
+        </p>
       </div>
     </div>
   );

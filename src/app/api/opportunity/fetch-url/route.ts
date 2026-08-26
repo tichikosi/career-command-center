@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 /**
  * SSRF-Safe URL Fetcher for Job Descriptions.
  * Rejects private/loopback IP ranges and non-HTTP protocols.

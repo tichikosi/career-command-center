@@ -27,10 +27,13 @@ import { PipelineStage } from '@/types/opportunity';
 import { resetDemoData, toggleActionCompleted } from '@/lib/storage';
 import { countPendingActions } from '@/lib/stageActions';
 import { useOpportunities } from '@/lib/useOpportunities';
+import { useActivities } from '@/lib/useActivities';
+import { ApplicationIntelligenceSection } from '@/components/dashboard/ApplicationIntelligenceSection';
 import { classifyFollowUpDate, formatShortDate } from '@/lib/dateUtils';
 
 export default function DashboardPage() {
   const opportunities = useOpportunities();
+  const { activities } = useActivities();
   const { profile, mounted } = useCandidateProfile();
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
 
@@ -177,6 +180,11 @@ export default function DashboardPage() {
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Across all active roles</p>
         </Card>
       </div>
+
+      {/* V3.3 Application Intelligence Section */}
+      {totalCount > 0 && (
+        <ApplicationIntelligenceSection opportunities={opportunities} activities={activities} />
+      )}
 
       {/* Empty State vs Content */}
       {totalCount === 0 ? (

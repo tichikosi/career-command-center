@@ -14,6 +14,7 @@ import {
   IconTrash,
   IconExternalLink,
   IconPrinter,
+  IconCheckCircle,
 } from '@/components/icons';
 import { PipelineStage } from '@/types/opportunity';
 import { useCandidateProfile } from '@/lib/useCandidate';
@@ -29,13 +30,25 @@ import {
   saveOpportunity,
 } from '@/lib/storage';
 import { useOpportunity } from '@/lib/useOpportunities';
+import { useActivities } from '@/lib/useActivities';
+import { useInterviewData } from '@/lib/useInterviewData';
+import { useNetwork } from '@/lib/networkStorage';
+import { findMatchingContacts } from '@/lib/networkMatcher';
 import { countPendingActions, mergeActionsForStage } from '@/lib/stageActions';
 import { validateUrl } from '@/lib/dateUtils';
 import { getAnalysisEngine } from '@/lib/engine';
+import { ActivityTimeline } from '@/components/interview/ActivityTimeline';
+import { InterviewWarRoom } from '@/components/interview/InterviewWarRoom';
+import { MockInterviewPanel } from '@/components/interview/MockInterviewPanel';
+import { FollowUpEngineView } from '@/components/interview/FollowUpEngineView';
+
+import { useAuth } from '@/context/AuthContext';
+import { getActiveStorageAdapter } from '@/lib/storage/repositoryManager';
 
 export default function AnalysisResultsPage() {
   const router = useRouter();
   const params = useParams();
+  const { user } = useAuth();
   const { profile, mounted } = useCandidateProfile();
   const idFromPath =
     typeof params?.id === 'string'
@@ -45,12 +58,35 @@ export default function AnalysisResultsPage() {
       : null;
 
   const opportunity = useOpportunity(idFromPath);
+  const { contacts } = useNetwork();
+  const matchingContacts = opportunity ? findMatchingContacts(opportunity.company, contacts) : [];
+
+  const {
+    activities,
+    isLoading: activitiesLoading,
+    addActivity,
+    editActivity,
+    removeActivity,
+  } = useActivities(opportunity?.id);
+
+  const {
+    activePrep,
+    prepHistory,
+    sessions,
+    savePrep,
+    saveSession,
+    deleteSession,
+  } = useInterviewData(opportunity?.id || '');
 
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'qualifications' | 'evidence' | 'prep' | 'action-plan'
+    'overview' | 'qualifications' | 'evidence' | 'prep' | 'action-plan' | 'timeline' | 'war-room' | 'mock' | 'follow-up'
   >('overview');
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isReanalyzing, setIsReanalyzing] = useState(false);
+  const [reanalyzeStatus, setReanalyzeStatus] = useState<string | null>(null);
+  const [reanalyzeError, setReanalyzeError] = useState<string | null>(null);
+  const [reanalyzeSuccess, setReanalyzeSuccess] = useState<string | null>(null);
+  const [isGeneratingPrep, setIsGeneratingPrep] = useState(false);
 
   if (!opportunity) {
     return (
@@ -87,8 +123,67 @@ export default function AnalysisResultsPage() {
   );
   const resolvedAchievements = mounted ? resolveEvidenceForReportCitations(analysis, profile, uniqueCitationIds) : [];
 
-  const handleStageChange = (newStage: PipelineStage) => {
+  const handleStageChange = async (newStage: PipelineStage) => {
+    const oldStage = opportunity.stage;
     updateOpportunityStage(opportunity.id, newStage);
+
+    if (oldStage !== newStage) {
+      await addActivity({
+        opportunityId: opportunity.id,
+        activityType: 'stage_change',
+        title: `Pipeline Stage Changed to ${newStage}`,
+        notes: `Advanced opportunity status from ${oldStage} to ${newStage}.`,
+        occurredAt: new Date().toISOString(),
+        source: 'user',
+        metadata: { oldStage, newStage },
+      });
+    }
+  };
+
+  const handleGeneratePrep = async () => {
+    if (!opportunity || isGeneratingPrep) return;
+    setIsGeneratingPrep(true);
+    try {
+      const res = await fetch('/api/interview/prep', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          opportunity: {
+            id: opportunity.id,
+            title: opportunity.title,
+            company: opportunity.company,
+            location: opportunity.location,
+            compensation: opportunity.compensation,
+            rawJobDescription: opportunity.rawJobDescription,
+            stage: opportunity.stage,
+            updatedAt: opportunity.updatedAt,
+          },
+          candidateSnapshot: profile,
+          analysisReport: opportunity.analysis,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success && data.prep) {
+        const prepToSave = {
+          ...data.prep,
+          opportunityId: opportunity.id,
+        };
+        await savePrep(prepToSave);
+        await addActivity({
+          opportunityId: opportunity.id,
+          activityType: 'prep_generated',
+          title: 'Interview War Room Briefing Generated',
+          notes: `Synthesized executive positioning, ${data.prep.questions?.length || 0} questions, and ${data.prep.storyBank?.length || 0} grounded STAR stories. Readiness: ${data.prep.readinessScore?.overall || 0}%.`,
+          occurredAt: new Date().toISOString(),
+          source: 'user',
+        });
+      }
+    } catch (err) {
+      console.error('[AnalysisResultsPage] Generate prep error:', err);
+    } finally {
+      setIsGeneratingPrep(false);
+    }
   };
 
   const handleDelete = () => {
@@ -99,7 +194,12 @@ export default function AnalysisResultsPage() {
   const handleReanalyze = async () => {
     if (!opportunity || isReanalyzing) return;
     setIsReanalyzing(true);
+    setReanalyzeError(null);
+    setReanalyzeSuccess(null);
+    setReanalyzeStatus('Re-analyzing role against active candidate profile...');
+
     try {
+      setReanalyzeStatus('Extracting key requirements & matching candidate evidence...');
       const engine = getAnalysisEngine('gemini');
       const freshReport = await engine.analyzeRole(
         {
@@ -114,6 +214,7 @@ export default function AnalysisResultsPage() {
         toAnalysisCandidate(profile)
       );
 
+      setReanalyzeStatus('Synthesizing executive positioning and updating action plan...');
       const updatedActions = mergeActionsForStage(
         opportunity.id,
         opportunity.stage,
@@ -128,11 +229,36 @@ export default function AnalysisResultsPage() {
         updatedAt: new Date().toISOString(),
       };
 
+      // 1. Save to local storage & memory
       saveOpportunity(updatedOpportunity);
-      window.location.reload();
-    } catch (err) {
+
+      // 2. Save to cloud if authenticated
+      if (user?.id && user.id !== 'local-executive-user') {
+        try {
+          const adapter = getActiveStorageAdapter();
+          await adapter.opportunities.save(updatedOpportunity, user.id);
+        } catch (cloudErr) {
+          console.warn('[AnalysisResultsPage] Cloud sync notice:', cloudErr);
+        }
+      }
+
+      // 3. Add activity timeline entry
+      await addActivity({
+        opportunityId: opportunity.id,
+        activityType: 'analysis_run',
+        title: `Role Re-Analyzed for ${profile.name || 'Active Candidate'}`,
+        notes: `Updated fit analysis score: ${freshReport.overallFitScore}%. Recommendation: ${freshReport.recommendation}.`,
+        occurredAt: new Date().toISOString(),
+        source: 'user',
+      });
+
+      setReanalyzeSuccess(`Role successfully re-analyzed for ${profile.name || 'active candidate'}!`);
+    } catch (err: unknown) {
       console.error('Failed to re-analyze opportunity:', err);
+      setReanalyzeError(err instanceof Error ? err.message : 'Failed to re-analyze role. Please check connection and retry.');
+    } finally {
       setIsReanalyzing(false);
+      setReanalyzeStatus(null);
     }
   };
 
@@ -177,8 +303,53 @@ export default function AnalysisResultsPage() {
         <FallbackAnalysisNotice text={analysis.analysisNotice} />
       )}
 
+      {/* Re-analyze Feedback Banners */}
+      {reanalyzeStatus && (
+        <div className="bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 text-indigo-900 dark:text-indigo-200 p-4 rounded-xl text-xs flex items-center gap-3 shadow-xs animate-pulse">
+          <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin shrink-0" />
+          <div>
+            <span className="font-bold block text-sm">Evaluating Role Match</span>
+            <p className="text-indigo-700 dark:text-indigo-300">{reanalyzeStatus}</p>
+          </div>
+        </div>
+      )}
+
+      {reanalyzeSuccess && (
+        <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 p-4 rounded-xl text-xs flex items-center justify-between gap-3 shadow-xs animate-in fade-in duration-200">
+          <div className="flex items-center gap-2">
+            <IconCheckCircle className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+            <span className="font-semibold">{reanalyzeSuccess}</span>
+          </div>
+          <button
+            onClick={() => setReanalyzeSuccess(null)}
+            className="text-xs text-emerald-700 hover:text-emerald-900 font-medium"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {reanalyzeError && (
+        <div className="bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-900 dark:text-rose-200 p-4 rounded-xl text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+          <div className="space-y-1">
+            <span className="font-bold flex items-center gap-1.5 text-sm">
+              <IconAlertTriangle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />
+              Re-Analysis Failed
+            </span>
+            <p className="text-rose-800 dark:text-rose-300">{reanalyzeError}</p>
+          </div>
+          <button
+            onClick={handleReanalyze}
+            disabled={isReanalyzing}
+            className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-lg text-xs shrink-0 w-fit transition-colors"
+          >
+            Retry Re-Analysis
+          </button>
+        </div>
+      )}
+
       {/* Historical Provenance & Freshness Warning Banners */}
-      {mounted && freshness === 'stale' && (
+      {mounted && freshness === 'stale' && !reanalyzeSuccess && (
         <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200 p-4 rounded-xl text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
           <div className="space-y-1">
             <span className="font-bold flex items-center gap-1.5 text-sm">
@@ -220,7 +391,7 @@ export default function AnalysisResultsPage() {
       )}
 
       {/* Executive Header Banner */}
-      <Card padding="lg" className="border-t-4 border-t-slate-900 dark:border-t-slate-100">
+      <Card padding="lg" className="border-t-4 border-t-slate-900 dark:border-t-slate-100 print:hidden">
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
           <div className="space-y-2">
             <div className="flex items-center gap-2 flex-wrap">
@@ -299,29 +470,37 @@ export default function AnalysisResultsPage() {
         </div>
       </Card>
 
-      {/* Tab Navigation */}
-      <div className="flex border-b border-slate-200 dark:border-slate-800 overflow-x-auto scrollbar-none">
-        {(
-          [
-            { key: 'overview', label: 'Executive Overview' },
-            { key: 'qualifications', label: `Qualifications & Gaps (${analysis.qualifications.length})` },
-            { key: 'evidence', label: `Evidence & Objections (${resolvedAchievements.length})` },
-            { key: 'prep', label: 'Interview Preparation' },
-            { key: 'action-plan', label: `Action Plan${pendingVisibleActionCount > 0 ? ` (${pendingVisibleActionCount})` : ''}` },
-          ] as const
-        ).map(({ key, label }) => (
-          <button
-            key={key}
-            onClick={() => setActiveTab(key)}
-            className={`py-3 px-5 text-sm font-semibold border-b-2 whitespace-nowrap transition-colors ${
-              activeTab === key
-                ? 'border-slate-900 dark:border-slate-100 text-slate-900 dark:text-slate-100'
-                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
+      {/* Tab Navigation (with overflow discoverability) */}
+      <div className="relative print:hidden">
+        <div className="flex border-b border-slate-200 dark:border-slate-800 overflow-x-auto scrollbar-none pb-0.5">
+          {(
+            [
+              { key: 'overview', label: 'Executive Overview' },
+              { key: 'qualifications', label: `Qualifications & Gaps (${analysis.qualifications.length})` },
+              { key: 'evidence', label: `Evidence & Objections (${resolvedAchievements.length})` },
+              { key: 'prep', label: 'Interview Preparation' },
+              { key: 'action-plan', label: `Action Plan${pendingVisibleActionCount > 0 ? ` (${pendingVisibleActionCount})` : ''}` },
+              { key: 'timeline', label: `Activity & Timeline${activities.length > 0 ? ` (${activities.length})` : ''}` },
+              { key: 'war-room', label: `Interview War Room${activePrep ? ' (Ready)' : ''}` },
+              { key: 'mock', label: `Mock Interview${sessions.length > 0 ? ` (${sessions.length})` : ''}` },
+              { key: 'follow-up', label: 'Smart Follow-Up' },
+            ] as const
+          ).map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setActiveTab(key)}
+              className={`py-3 px-5 text-sm font-semibold border-b-2 whitespace-nowrap transition-colors shrink-0 ${
+                activeTab === key
+                  ? 'border-slate-900 dark:border-slate-100 text-slate-900 dark:text-slate-100'
+                  : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {/* Subtle right-edge tab overflow shadow cue */}
+        <div className="pointer-events-none absolute top-0 right-0 bottom-0 w-8 bg-gradient-to-l from-slate-100 dark:from-slate-950 to-transparent hidden sm:block" />
       </div>
 
       {/* Tab 1: Executive Overview */}
@@ -666,6 +845,57 @@ export default function AnalysisResultsPage() {
         <OpportunityDetailsForm
           opportunity={opportunity}
           onSave={() => {}}
+        />
+      )}
+
+      {/* Tab 6: Activity & Timeline */}
+      {activeTab === 'timeline' && (
+        <ActivityTimeline
+          opportunityId={opportunity.id}
+          opportunityCompany={opportunity.company}
+          activities={activities}
+          matchingContacts={matchingContacts}
+          onAddActivity={addActivity}
+          onEditActivity={editActivity}
+          onDeleteActivity={removeActivity}
+          isLoading={activitiesLoading}
+        />
+      )}
+
+      {/* Tab 7: Interview War Room */}
+      {activeTab === 'war-room' && (
+        <InterviewWarRoom
+          opportunity={opportunity}
+          candidate={profile}
+          analysisReport={opportunity.analysis}
+          activePrep={activePrep}
+          prepHistory={prepHistory}
+          onGeneratePrep={handleGeneratePrep}
+          onSelectHistoricalPrep={(selected) => savePrep(selected)}
+          isGenerating={isGeneratingPrep}
+        />
+      )}
+
+      {/* Tab 8: Mock Interview */}
+      {activeTab === 'mock' && (
+        <MockInterviewPanel
+          opportunity={opportunity}
+          candidate={profile}
+          activePrep={activePrep}
+          sessions={sessions}
+          onSaveSession={saveSession}
+          onDeleteSession={deleteSession}
+          onRecordActivity={addActivity}
+        />
+      )}
+
+      {/* Tab 9: Smart Follow-Up */}
+      {activeTab === 'follow-up' && (
+        <FollowUpEngineView
+          opportunity={opportunity}
+          candidate={profile}
+          activities={activities}
+          onRecordActivity={addActivity}
         />
       )}
 
