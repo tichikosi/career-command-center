@@ -65,4 +65,45 @@ test.describe('Pipeline & Opportunity Workflow E2E', () => {
     await expect(page.getByRole('heading', { name: 'Career Command Center' })).toBeVisible();
     await expect(page.getByText('Active Opportunities', { exact: true })).toBeVisible();
   });
+
+  test('Opportunities Pipeline table supports horizontal chevron navigation and preserves interaction', async ({ page }) => {
+    // 1. Visit Opportunities page
+    await page.goto('/opportunities');
+    await expect(page.locator('h1')).toContainText('Opportunities Pipeline');
+
+    // 2. Verify table exists with min-w-[960px]
+    const table = page.locator('table');
+    await expect(table).toBeVisible();
+
+    // 3. Set a viewport to ensure horizontal overflow on standard screen
+    await page.setViewportSize({ width: 800, height: 700 });
+    await page.waitForTimeout(300);
+
+    // 4. Verify More Columns affordance and right chevron are visible
+    const moreColsBtn = page.getByRole('button', { name: /Scroll pipeline to more columns/i });
+    const rightChevron = page.locator('button[aria-label="Scroll pipeline right"]');
+
+    await expect(moreColsBtn).toBeVisible();
+    await expect(rightChevron.first()).toBeVisible();
+
+    // 5. Click right chevron to scroll horizontally
+    await rightChevron.first().click();
+    await page.waitForTimeout(400);
+
+    // 6. Left chevron should now be visible and enabled
+    const leftChevron = page.locator('button[aria-label="Scroll pipeline left"]');
+    await expect(leftChevron.first()).toBeVisible();
+
+    // 7. Click left chevron to scroll back
+    await leftChevron.first().click();
+    await page.waitForTimeout(400);
+
+    // 8. Verify table sorting still works while navigation controls are present
+    const fitSortHeader = page.getByRole('button', { name: /Fit/i });
+    if (await fitSortHeader.isVisible()) {
+      await fitSortHeader.click();
+      await page.waitForTimeout(200);
+      await expect(table).toBeVisible();
+    }
+  });
 });

@@ -109,7 +109,7 @@ export default function AboutPage() {
 
       {/* 4. End-to-End Lifecycle Workflow */}
       <Card padding="lg" className="space-y-4">
-        <CardHeader title="4. End-to-End V3.3 Lifecycle Workflow" />
+        <CardHeader title="4. End-to-End Career Lifecycle Workflow" />
         <div className="p-3 bg-slate-900 text-indigo-300 dark:bg-slate-950 font-mono text-xs rounded-xl overflow-x-auto text-center font-bold tracking-wider">
           DISCOVER &rarr; ANALYZE &rarr; NETWORK &rarr; APPLY &rarr; PREPARE &rarr; INTERVIEW &rarr; FOLLOW UP &rarr; TRACK OUTCOME &rarr; LEARN
         </div>
@@ -151,7 +151,7 @@ export default function AboutPage() {
           <div className="p-3.5 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-800">
             <h4 className="font-bold text-slate-900 dark:text-slate-100 text-xs uppercase tracking-wider mb-1">AI & Intelligence Layer</h4>
             <p className="text-xs text-slate-600 dark:text-slate-400">
-              Official Google Gen AI SDK (<code className="text-[11px] bg-slate-200 dark:bg-slate-700 px-1 py-0.5 rounded">@google/genai</code>) &bull; Primary model <code className="text-[11px] bg-slate-200 dark:bg-slate-700 px-1 py-0.5 rounded">gemini-3.7-flash</code> &bull; Resilient failover to <code className="text-[11px] bg-slate-200 dark:bg-slate-700 px-1 py-0.5 rounded">gemini-3.6-flash</code> &bull; Strict Zod structured validation &bull; Grounded web search &bull; Labeled deterministic fallback (<code className="text-[11px] bg-slate-200 dark:bg-slate-700 px-1 py-0.5 rounded">Simplified Interview Coaching</code>) &bull; Execution metadata auditing
+              Official Google Gen AI SDK (<code className="text-[11px] bg-slate-200 dark:bg-slate-700 px-1 py-0.5 rounded">@google/genai</code>) &bull; Primary model <code className="text-[11px] bg-slate-200 dark:bg-slate-700 px-1 py-0.5 rounded">gemini-3.8-flash</code> &bull; Resilient failover to <code className="text-[11px] bg-slate-200 dark:bg-slate-700 px-1 py-0.5 rounded">gemini-3.7-flash</code> &bull; Strict Zod structured validation &bull; Grounded web search &bull; Labeled deterministic fallback (<code className="text-[11px] bg-slate-200 dark:bg-slate-700 px-1 py-0.5 rounded">Simplified Interview Coaching</code>) &bull; Execution metadata auditing
             </p>
           </div>
           <div className="p-3.5 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-800">
@@ -244,7 +244,7 @@ export default function AboutPage() {
           <strong>Deterministic Follow-Up Priority:</strong> Core urgency is governed by deterministic rules (overdue explicit follow-up date, post-interview thank-you required, application silence, recruiter silence, referral nudge) with suppressed triggers for closed/rejected states. AI assists with draft composition across professional, warm, and assertive tones.
         </p>
         <p className="text-xs text-amber-700 dark:text-amber-400 font-medium">
-          Important: No automated email or LinkedIn sending occurs in V3.3. All outreach is manually reviewed, copied, and recorded by the user.
+          Important: No automated email or LinkedIn sending occurs in this application. All outreach is manually reviewed, copied, and recorded by the user.
         </p>
       </Card>
 

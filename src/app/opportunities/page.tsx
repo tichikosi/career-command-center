@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, useRef, useCallback, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Card } from '@/components/ui/Card';
@@ -29,6 +29,8 @@ import {
   IconKanban,
   IconNetwork,
   IconPlus,
+  IconChevronLeft,
+  IconChevronRight,
 } from '@/components/icons';
 import { AddOpportunityModal } from '@/components/opportunities/AddOpportunityModal';
 import {
@@ -195,6 +197,53 @@ function OpportunitiesContent() {
   const [notesDraft, setNotesDraft] = useState('');
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   const [isAddOpportunityModalOpen, setIsAddOpportunityModalOpen] = useState(false);
+
+  // Table horizontal overflow & scroll navigation
+  const tableContainerRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+  const [hasOverflow, setHasOverflow] = useState(false);
+
+  const checkTableScroll = useCallback(() => {
+    const el = tableContainerRef.current;
+    if (!el) return;
+    const overflow = el.scrollWidth > el.clientWidth + 2;
+    setHasOverflow(overflow);
+    setCanScrollLeft(el.scrollLeft > 4);
+    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 4);
+  }, []);
+
+  useEffect(() => {
+    const el = tableContainerRef.current;
+    if (!el) return;
+
+    checkTableScroll();
+
+    const handleScroll = () => checkTableScroll();
+    el.addEventListener('scroll', handleScroll, { passive: true });
+
+    let resizeObserver: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => checkTableScroll());
+      resizeObserver.observe(el);
+    }
+
+    const handleResize = () => checkTableScroll();
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      el.removeEventListener('scroll', handleScroll);
+      if (resizeObserver) resizeObserver.disconnect();
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [checkTableScroll, viewMode, opportunities.length]);
+
+  const scrollTable = (direction: 'left' | 'right') => {
+    const el = tableContainerRef.current;
+    if (!el) return;
+    const scrollAmount = direction === 'left' ? -280 : 280;
+    el.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+  };
 
   useEffect(() => {
     saveUISettings({
@@ -421,21 +470,81 @@ function OpportunitiesContent() {
         />
       ) : (
         <Card padding="none" className="overflow-hidden relative">
-          {/* Horizontal Scroll Cue */}
-          <div className="px-4 py-2 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-[11px] font-medium text-slate-600 dark:text-slate-300 flex items-center justify-between">
-            <span className="flex items-center gap-1.5">
-              <span className="font-semibold text-slate-800 dark:text-slate-200">Pipeline Directory</span>
+          {/* Horizontal Scroll Cue with Navigation Controls */}
+          <div className="px-4 py-2 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-[11px] font-medium text-slate-600 dark:text-slate-300 flex items-center justify-between gap-3">
+            <span className="flex items-center gap-1.5 min-w-0 truncate">
+              <span className="font-semibold text-slate-800 dark:text-slate-200 shrink-0">Pipeline Directory</span>
               <span className="text-slate-400 dark:text-slate-500">•</span>
-              <span className="text-slate-500 dark:text-slate-400">Scroll horizontally for stage actions & timeline details</span>
+              <span className="text-slate-500 dark:text-slate-400 truncate">Scroll horizontally for stage actions & timeline details</span>
             </span>
-            <span className="text-indigo-600 dark:text-indigo-400 font-semibold flex items-center gap-1 text-[10px] uppercase tracking-wider">
-              <span>More Columns</span>
-              <span aria-hidden="true">&rarr;</span>
-            </span>
+
+            <div className="flex items-center gap-2 shrink-0 print:hidden">
+              <button
+                type="button"
+                onClick={() => scrollTable('right')}
+                disabled={!canScrollRight}
+                aria-label="Scroll pipeline to more columns"
+                className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-semibold flex items-center gap-1 text-[10px] uppercase tracking-wider disabled:opacity-40 disabled:cursor-not-allowed transition-opacity cursor-pointer"
+              >
+                <span>More Columns</span>
+                <span aria-hidden="true">&rarr;</span>
+              </button>
+
+              {hasOverflow && (
+                <div className="flex items-center gap-1 pl-2 border-l border-slate-200 dark:border-slate-700">
+                  <button
+                    type="button"
+                    onClick={() => scrollTable('left')}
+                    disabled={!canScrollLeft}
+                    aria-label="Scroll pipeline left"
+                    className="p-1 rounded-md bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer shadow-xs focus:outline-none focus:ring-1 focus:ring-slate-900 dark:focus:ring-slate-400"
+                  >
+                    <IconChevronLeft className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => scrollTable('right')}
+                    disabled={!canScrollRight}
+                    aria-label="Scroll pipeline right"
+                    className="p-1 rounded-md bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer shadow-xs focus:outline-none focus:ring-1 focus:ring-slate-900 dark:focus:ring-slate-400"
+                  >
+                    <IconChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="relative">
-            <div className="overflow-x-auto">
+            {/* Left Edge Floating Chevron Indicator */}
+            {hasOverflow && canScrollLeft && (
+              <div className="absolute left-2 top-1/2 -translate-y-1/2 z-30 print:hidden transition-opacity duration-200">
+                <button
+                  type="button"
+                  onClick={() => scrollTable('left')}
+                  aria-label="Scroll pipeline left"
+                  className="p-2 rounded-full bg-white dark:bg-slate-800 shadow-md border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-700 transition-all focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 cursor-pointer"
+                >
+                  <IconChevronLeft className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
+            {/* Right Edge Floating Chevron Indicator with Gradient Fade */}
+            {hasOverflow && canScrollRight && (
+              <div className="absolute right-0 top-0 bottom-0 z-30 flex items-center pr-3 pl-6 bg-gradient-to-l from-white via-white/95 to-transparent dark:from-slate-900 dark:via-slate-900/95 dark:to-transparent pointer-events-none print:hidden transition-opacity duration-200">
+                <button
+                  type="button"
+                  onClick={() => scrollTable('right')}
+                  aria-label="Scroll pipeline right"
+                  className="p-2 rounded-full bg-white dark:bg-slate-800 shadow-md border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-700 transition-all focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 cursor-pointer pointer-events-auto"
+                >
+                  <IconChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
+            <div ref={tableContainerRef} className="overflow-x-auto">
               <table className="w-full text-left text-xs text-slate-700 dark:text-slate-300 min-w-[960px]">
             <thead className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800">
               <tr>

@@ -4,9 +4,16 @@ import './globals.css';
 import { AppShell } from '@/components/layout/AppShell';
 
 export const metadata: Metadata = {
-  title: 'Career Command Center — Executive Role Evaluation & Opportunities',
+  title: 'Career Command Center — Voice Interview Intelligence & Executive CRM',
   description:
-    'Executive-grade, evidence-backed career opportunity evaluation system for senior strategy and operations leaders.',
+    'Executive-grade career operating system combining voice interview delivery metrics, grounded brief preparation, recruiter timeline tracking, and AI opportunity evaluation.',
+  openGraph: {
+    title: 'Career Command Center — Voice Interview Intelligence & Executive CRM',
+    description:
+      'Executive-grade career operating system combining voice interview delivery metrics, grounded brief preparation, recruiter timeline tracking, and AI opportunity evaluation.',
+    type: 'website',
+    siteName: 'Career Command Center',
+  },
 };
 
 export default function RootLayout({

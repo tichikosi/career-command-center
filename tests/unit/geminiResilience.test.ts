@@ -13,16 +13,16 @@ describe('Gemini Resilience & Retry Policy Unit Tests', () => {
     const mockFn = vi.fn().mockResolvedValue({ status: 'ok', data: 'report-content' });
 
     const result = await executeWithResilience(
+      'gemini-3.8-flash',
       'gemini-3.7-flash',
-      'gemini-3.6-flash',
       mockFn,
       { sleepFn: instantSleep, maxAttemptsPerModel: 3 }
     );
 
     expect(mockFn).toHaveBeenCalledTimes(1);
-    expect(mockFn).toHaveBeenCalledWith('gemini-3.7-flash');
-    expect(result.actualModel).toBe('gemini-3.7-flash');
-    expect(result.requestedModel).toBe('gemini-3.7-flash');
+    expect(mockFn).toHaveBeenCalledWith('gemini-3.8-flash');
+    expect(result.actualModel).toBe('gemini-3.8-flash');
+    expect(result.requestedModel).toBe('gemini-3.8-flash');
     expect(result.attemptCount).toBe(1);
     expect(result.failoverOccurred).toBe(false);
     expect(result.result).toEqual({ status: 'ok', data: 'report-content' });
@@ -40,49 +40,49 @@ describe('Gemini Resilience & Retry Policy Unit Tests', () => {
       .mockResolvedValueOnce({ status: 'ok', data: 'recovered' });
 
     const result = await executeWithResilience(
+      'gemini-3.8-flash',
       'gemini-3.7-flash',
-      'gemini-3.6-flash',
       mockFn,
       { sleepFn: instantSleep, maxAttemptsPerModel: 3 }
     );
 
     expect(mockFn).toHaveBeenCalledTimes(2);
-    expect(mockFn).toHaveBeenNthCalledWith(1, 'gemini-3.7-flash');
-    expect(mockFn).toHaveBeenNthCalledWith(2, 'gemini-3.7-flash');
+    expect(mockFn).toHaveBeenNthCalledWith(1, 'gemini-3.8-flash');
+    expect(mockFn).toHaveBeenNthCalledWith(2, 'gemini-3.8-flash');
     expect(instantSleep).toHaveBeenCalledTimes(1);
-    expect(result.actualModel).toBe('gemini-3.7-flash');
+    expect(result.actualModel).toBe('gemini-3.8-flash');
     expect(result.attemptCount).toBe(2);
     expect(result.failoverOccurred).toBe(false);
   });
 
-  it('3. fails over to gemini-3.6-flash when gemini-3.7-flash repeatedly returns 503', async () => {
+  it('3. fails over to gemini-3.7-flash when gemini-3.8-flash repeatedly returns 503', async () => {
     const error503 = new Error(JSON.stringify({
       error: { code: 503, message: 'This model is currently experiencing high demand.', status: 'UNAVAILABLE' }
     }));
     (error503 as unknown as { status: number }).status = 503;
 
     const mockFn = vi.fn()
-      // Primary 3.7 fails 3 times
+      // Primary 3.8 fails 3 times
       .mockRejectedValueOnce(error503)
       .mockRejectedValueOnce(error503)
       .mockRejectedValueOnce(error503)
-      // Failover 3.6 succeeds on first attempt
-      .mockResolvedValueOnce({ status: 'ok', data: '3.6-success' });
+      // Failover 3.7 succeeds on first attempt
+      .mockResolvedValueOnce({ status: 'ok', data: '3.7-success' });
 
     const result = await executeWithResilience(
+      'gemini-3.8-flash',
       'gemini-3.7-flash',
-      'gemini-3.6-flash',
       mockFn,
       { sleepFn: instantSleep, maxAttemptsPerModel: 3 }
     );
 
     expect(mockFn).toHaveBeenCalledTimes(4); // 3 primary + 1 failover
-    expect(mockFn).toHaveBeenNthCalledWith(1, 'gemini-3.7-flash');
-    expect(mockFn).toHaveBeenNthCalledWith(2, 'gemini-3.7-flash');
-    expect(mockFn).toHaveBeenNthCalledWith(3, 'gemini-3.7-flash');
-    expect(mockFn).toHaveBeenNthCalledWith(4, 'gemini-3.6-flash');
-    expect(result.actualModel).toBe('gemini-3.6-flash');
-    expect(result.requestedModel).toBe('gemini-3.7-flash');
+    expect(mockFn).toHaveBeenNthCalledWith(1, 'gemini-3.8-flash');
+    expect(mockFn).toHaveBeenNthCalledWith(2, 'gemini-3.8-flash');
+    expect(mockFn).toHaveBeenNthCalledWith(3, 'gemini-3.8-flash');
+    expect(mockFn).toHaveBeenNthCalledWith(4, 'gemini-3.7-flash');
+    expect(result.actualModel).toBe('gemini-3.7-flash');
+    expect(result.requestedModel).toBe('gemini-3.8-flash');
     expect(result.failoverOccurred).toBe(true);
     expect(result.attemptCount).toBe(4);
   });
@@ -97,14 +97,14 @@ describe('Gemini Resilience & Retry Policy Unit Tests', () => {
 
     await expect(
       executeWithResilience(
+        'gemini-3.8-flash',
         'gemini-3.7-flash',
-        'gemini-3.6-flash',
         mockFn,
         { sleepFn: instantSleep, maxAttemptsPerModel: 3 }
       )
     ).rejects.toThrow();
 
-    // 3 attempts on 3.7 + 3 attempts on 3.6 = 6 total
+    // 3 attempts on 3.8 + 3 attempts on 3.7 = 6 total
     expect(mockFn).toHaveBeenCalledTimes(6);
   });
 
@@ -118,8 +118,8 @@ describe('Gemini Resilience & Retry Policy Unit Tests', () => {
 
     await expect(
       executeWithResilience(
+        'gemini-3.8-flash',
         'gemini-3.7-flash',
-        'gemini-3.6-flash',
         mockFn,
         { sleepFn: instantSleep, maxAttemptsPerModel: 3 }
       )
@@ -137,8 +137,8 @@ describe('Gemini Resilience & Retry Policy Unit Tests', () => {
 
     await expect(
       executeWithResilience(
+        'gemini-3.8-flash',
         'gemini-3.7-flash',
-        'gemini-3.6-flash',
         mockFn,
         { sleepFn: instantSleep, maxAttemptsPerModel: 3 }
       )
@@ -184,8 +184,8 @@ describe('Gemini Resilience & Retry Policy Unit Tests', () => {
       recommendedStarStories: [],
       nextActions: ['Action 1'],
       // Resilience fields
-      requestedModel: 'gemini-3.7-flash',
-      actualModel: 'gemini-3.6-flash',
+      requestedModel: 'gemini-3.8-flash',
+      actualModel: 'gemini-3.7-flash',
       engineType: 'gemini' as const,
       attemptCount: 4,
       failoverOccurred: true,

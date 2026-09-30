@@ -7,7 +7,7 @@
 
 ## 🌟 Executive Overview
 
-Career Command Center transforms fragmented career searches into an evidence-based, structured intelligence workflow. It couples a live **Gemini 3.7 / 3.6 Flash** evaluation engine with official **Google Search Grounding (`tools: [{ googleSearch: {} }]`)**, server-side SSRF URL validation, deterministic ATS listing verification, **Supabase PostgreSQL cloud persistence with Row Level Security (RLS)**, multi-device cloud authentication, structured résumé ingestion, professional network intelligence, and an accessible Kanban CRM.
+Career Command Center transforms fragmented career searches into an evidence-based, structured intelligence workflow. It couples a live **Gemini 3.8 / 3.7 Flash** evaluation engine with official **Google Search Grounding (`tools: [{ googleSearch: {} }]`)**, server-side SSRF URL validation, deterministic ATS listing verification, **Supabase PostgreSQL cloud persistence with Row Level Security (RLS)**, multi-device cloud authentication, structured résumé ingestion, professional network intelligence, and an accessible Kanban CRM.
 
 In **V3.4**, Career Command Center elevates the interview simulator into a full **Voice Interview Intelligence** system featuring **in-browser microphone capture**, **real-time speech-to-text preview**, **editable canonical transcript buffers**, **deterministic speech delivery metrics (WPM, filler rate, pause analysis)**, **dual Content (6 dimensions) vs Delivery (6 dimensions) scoring**, **Interviewer Personas**, **historical performance analytics**, and **ephemeral raw audio privacy by default**.
 
@@ -69,9 +69,9 @@ In **V3.4**, Career Command Center elevates the interview simulator into a full 
 - **Framework**: Next.js 16 (App Router & Turbopack)
 - **UI & Interaction**: React 19, Tailwind CSS v4, `@dnd-kit/core`, `@dnd-kit/sortable`
 - **Database & Auth**: Supabase PostgreSQL with RLS, Supabase Auth SSR SDK (`@supabase/ssr`, `@supabase/supabase-js`)
-- **AI & Grounding**: Google Gemini 3.7 Flash & 3.6 Flash (`@google/genai` official SDK) with Google Search Grounding (`googleSearch`)
+- **AI & Grounding**: Google Gemini 3.8 Flash & 3.7 Flash (`@google/genai` official SDK) with Google Search Grounding (`googleSearch`)
 - **Validation & Security**: Zod 4 Schemas, SSRF Safe Validator, Deterministic Listing Verifier
-- **Testing & Quality Gate**: Vitest 4 (411 Unit Tests across 43 suites), Playwright 1.62 (35 E2E Tests across 7 specs), ESLint 9
+- **Testing & Quality Gate**: Vitest 4 (411 Unit Tests across 43 suites), Playwright 1.62 (36 E2E Tests across 7 specs), ESLint 9
 
 ---
 
@@ -98,8 +98,8 @@ cp .env.example .env.local
 ```bash
 # 1. Google Gemini AI Engine
 GEMINI_API_KEY="your-gemini-api-key-here"
-GEMINI_MODEL="gemini-3.7-flash"
-GEMINI_FAILOVER_MODEL="gemini-3.6-flash"
+GEMINI_MODEL="gemini-3.8-flash"
+GEMINI_FAILOVER_MODEL="gemini-3.7-flash"
 
 # 2. Supabase Cloud Persistence (Optional, defaults to local-first browser storage)
 NEXT_PUBLIC_SUPABASE_URL="https://your-project-ref.supabase.co"
@@ -128,7 +128,7 @@ npm run qa
 # Unit tests only (411 tests across 43 test suites)
 npm run test:unit
 
-# Playwright E2E tests only (35 tests across 7 specs)
+# Playwright E2E tests only (36 tests across 7 specs)
 npm run test:e2e
 
 # AI Evaluation & Governance Benchmark
