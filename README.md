@@ -27,7 +27,8 @@ In **V3.4**, Career Command Center elevates the interview simulator into a full 
   - Content Score (6 dimensions: Relevance, Evidence Specificity, Strategic Depth, Executive Comms, Structure, Concision).
   - Delivery Score (6 dimensions: Pace, Verbal Concision, Filler Control, Pausing, Clarity, Executive Delivery).
   - Question-aware weighting (e.g., Behavioral 75/25, Strategic 70/30, Culture 60/40, Text 100/0).
-- **Interviewer Personas**: Recruiter, Hiring Manager, Executive / VP, Behavioral Coach, Peer / Tech Lead.
+- **Interviewer Personas & Question Sets**: Recruiter, Hiring Manager, Executive / VP, Behavioral Coach, Peer / Tech Lead (~33% shared anchor questions, ~67% persona-specific questions).
+- **Adaptive Live Simulation (Preview)**: Server-mediated conversational interview mode that evaluates candidate responses and dynamically generates contextual follow-ups probing metrics, personal ownership, strategic trade-offs, and stakeholder alignment according to the active persona.
 - **Performance Analytics & Comparison**: Historical trend visualization across sessions and two-session comparison with metric deltas.
 - **Ephemeral Audio Privacy by Default**: Raw microphone audio is held strictly in-memory during recording and never persisted to Supabase, localStorage, Vercel, or logs.
 
@@ -70,7 +71,7 @@ In **V3.4**, Career Command Center elevates the interview simulator into a full 
 - **Database & Auth**: Supabase PostgreSQL with RLS, Supabase Auth SSR SDK (`@supabase/ssr`, `@supabase/supabase-js`)
 - **AI & Grounding**: Google Gemini 3.7 Flash & 3.6 Flash (`@google/genai` official SDK) with Google Search Grounding (`googleSearch`)
 - **Validation & Security**: Zod 4 Schemas, SSRF Safe Validator, Deterministic Listing Verifier
-- **Testing & Quality Gate**: Vitest 4 (339 Unit Tests), Playwright 1.62 (30 E2E Tests), ESLint 9
+- **Testing & Quality Gate**: Vitest 4 (411 Unit Tests across 43 suites), Playwright 1.62 (35 E2E Tests across 7 specs), ESLint 9
 
 ---
 
@@ -124,10 +125,10 @@ npm run start
 # Full automated QA gate (Lint + Unit Tests + Next.js Build + Playwright E2E + Git Diff Check)
 npm run qa
 
-# Unit tests only (339 tests across 37 test suites)
+# Unit tests only (411 tests across 43 test suites)
 npm run test:unit
 
-# Playwright E2E tests only (30 tests across 7 specs)
+# Playwright E2E tests only (35 tests across 7 specs)
 npm run test:e2e
 
 # AI Evaluation & Governance Benchmark

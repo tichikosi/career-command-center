@@ -47,7 +47,55 @@ describe('V3.4 Mock Interview Voice & Persona Engine', () => {
       });
 
       expect(res.questions.length).toBeGreaterThan(0);
-      expect(res.questions.some((q) => q.question.toLowerCase().includes('trade-off') || q.question.toLowerCase().includes('blind spot') || q.question.toLowerCase().includes('resistance'))).toBe(true);
+      expect(res.questions.some((q) => q.question.toLowerCase().includes('budget') || q.question.toLowerCase().includes('blind spot') || q.question.toLowerCase().includes('cut') || q.question.toLowerCase().includes('failure'))).toBe(true);
+    });
+
+    it('differentiates questions across personas while maintaining shared anchor questions', async () => {
+      const execResult = await engine.generateQuestions({
+        opportunity: testOpportunity,
+        candidate: testCandidate,
+        difficulty: 'standard',
+        mode: 'practice',
+        persona: 'executive',
+      });
+
+      const recruiterResult = await engine.generateQuestions({
+        opportunity: testOpportunity,
+        candidate: testCandidate,
+        difficulty: 'standard',
+        mode: 'practice',
+        persona: 'recruiter',
+      });
+
+      const peerResult = await engine.generateQuestions({
+        opportunity: testOpportunity,
+        candidate: testCandidate,
+        difficulty: 'standard',
+        mode: 'practice',
+        persona: 'peer',
+      });
+
+      // Both should have 6 questions total
+      expect(execResult.questions.length).toBe(6);
+      expect(recruiterResult.questions.length).toBe(6);
+
+      // First 2 questions are shared anchors (~33%)
+      expect(execResult.questions[0].question).toBe(recruiterResult.questions[0].question);
+      expect(execResult.questions[1].question).toBe(recruiterResult.questions[1].question);
+
+      // Remaining 4 questions are persona-specific (~67%)
+      const execTail = execResult.questions.slice(2).map((q) => q.question);
+      const recruiterTail = recruiterResult.questions.slice(2).map((q) => q.question);
+      const peerTail = peerResult.questions.slice(2).map((q) => q.question);
+
+      // Ensure no overlap in persona-specific questions
+      const sharedTail = execTail.filter((q) => recruiterTail.includes(q));
+      expect(sharedTail.length).toBe(0);
+
+      // Verify persona keywords
+      expect(execTail.some((q) => q.toLowerCase().includes('budget') || q.toLowerCase().includes('board') || q.toLowerCase().includes('risk'))).toBe(true);
+      expect(recruiterTail.some((q) => q.toLowerCase().includes('compensation') || q.toLowerCase().includes('trajectory'))).toBe(true);
+      expect(peerTail.some((q) => q.toLowerCase().includes('architecture') || q.toLowerCase().includes('technical'))).toBe(true);
     });
   });
 
@@ -133,9 +181,95 @@ describe('V3.4 Mock Interview Voice & Persona Engine', () => {
       });
 
       expect(res.followUpQuestion).toBeDefined();
-      expect(res.followUpQuestion.length).toBeGreaterThan(10);
+      expect(res.followUpQuestion).toContain('40%');
       expect(res.probeIntent).toBeDefined();
       expect(res.suggestedApproach).toBeDefined();
+      expect(res.executionMode).toBe('deterministic');
+    });
+
+    it('probes vague ownership when candidate uses "we" without personal ownership', async () => {
+      const res = await engine.generateDynamicFollowUp({
+        question: 'Tell me about a successful rollout.',
+        candidateAnswer: 'We built a new platform and we launched it globally, and the team delivered great results.',
+        conversationHistory: [],
+        persona: 'behavioral',
+        difficulty: 'standard',
+        opportunity: testOpportunity,
+        candidate: testCandidate,
+      });
+
+      expect(res.followUpQuestion.toLowerCase()).toContain('personal');
+      expect(res.probeIntent.toLowerCase()).toContain('individual');
+    });
+
+    it('probes executive disagreement and concessions when friction is mentioned', async () => {
+      const res = await engine.generateDynamicFollowUp({
+        question: 'How do you handle conflict?',
+        candidateAnswer: 'There was significant pushback and disagreement from the CFO regarding the budget allocation.',
+        conversationHistory: [],
+        persona: 'executive',
+        difficulty: 'standard',
+        opportunity: testOpportunity,
+        candidate: testCandidate,
+      });
+
+      expect(res.followUpQuestion.toLowerCase()).toContain('concession');
+      expect(res.probeIntent.toLowerCase()).toContain('alignment');
+    });
+
+    it('probes short or evasive answers with depth requirement tailored by persona', async () => {
+      const res = await engine.generateDynamicFollowUp({
+        question: 'Walk me through your strategy.',
+        candidateAnswer: 'I aligned with department leaders and completed the initiative.',
+        conversationHistory: [],
+        persona: 'hiring_manager',
+        difficulty: 'standard',
+        opportunity: testOpportunity,
+        candidate: testCandidate,
+      });
+
+      expect(res.followUpQuestion.toLowerCase()).toContain('operating cadence');
+      expect(res.probeIntent.toLowerCase()).toContain('depth');
+    });
+
+    it('differentiates follow-up probes by persona for the exact same candidate answer', async () => {
+      const sharedAnswer = 'I redesigned our global operating model to improve scalability and reduce overhead.';
+
+      const recruiterTurn = await engine.generateDynamicFollowUp({
+        question: 'What did you accomplish?',
+        candidateAnswer: sharedAnswer,
+        conversationHistory: [],
+        persona: 'recruiter',
+        difficulty: 'standard',
+        opportunity: testOpportunity,
+        candidate: testCandidate,
+      });
+
+      const executiveTurn = await engine.generateDynamicFollowUp({
+        question: 'What did you accomplish?',
+        candidateAnswer: sharedAnswer,
+        conversationHistory: [],
+        persona: 'executive',
+        difficulty: 'standard',
+        opportunity: testOpportunity,
+        candidate: testCandidate,
+      });
+
+      const peerTurn = await engine.generateDynamicFollowUp({
+        question: 'What did you accomplish?',
+        candidateAnswer: sharedAnswer,
+        conversationHistory: [],
+        persona: 'peer',
+        difficulty: 'standard',
+        opportunity: testOpportunity,
+        candidate: testCandidate,
+      });
+
+      expect(recruiterTurn.followUpQuestion).not.toBe(executiveTurn.followUpQuestion);
+      expect(executiveTurn.followUpQuestion).not.toBe(peerTurn.followUpQuestion);
+      expect(recruiterTurn.probeIntent.toLowerCase()).toContain('career');
+      expect(executiveTurn.probeIntent.toLowerCase()).toContain('executive');
+      expect(peerTurn.probeIntent.toLowerCase()).toContain('technical');
     });
 
     it('generates high-stakes trade-off probes in stress test mode', async () => {
@@ -150,6 +284,26 @@ describe('V3.4 Mock Interview Voice & Persona Engine', () => {
       });
 
       expect(res.followUpQuestion.toLowerCase()).toContain('sacrifice');
+    });
+
+    it('preserves conversation history in dynamic follow-up prompt execution', async () => {
+      const history = [
+        { speaker: 'interviewer' as const, text: 'Tell me about yourself.' },
+        { speaker: 'candidate' as const, text: 'I am an executive with 15 years experience.' },
+      ];
+
+      const res = await engine.generateDynamicFollowUp({
+        question: 'What was your biggest operational win?',
+        candidateAnswer: 'We achieved $20M in cost reduction by streamlining supply chain operations.',
+        conversationHistory: history,
+        persona: 'executive',
+        difficulty: 'standard',
+        opportunity: testOpportunity,
+        candidate: testCandidate,
+      });
+
+      expect(res.followUpQuestion).toBeDefined();
+      expect(res.followUpQuestion).toContain('$20M');
     });
   });
 

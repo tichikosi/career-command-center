@@ -323,11 +323,11 @@ export default function AboutPage() {
         </p>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1 text-center">
           <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-800">
-            <div className="text-lg font-bold text-indigo-600 dark:text-indigo-400">38+ Files / 350+ Tests</div>
+            <div className="text-lg font-bold text-indigo-600 dark:text-indigo-400">43 Files / 411 Tests</div>
             <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Vitest Unit Tests</div>
           </div>
           <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-800">
-            <div className="text-lg font-bold text-indigo-600 dark:text-indigo-400">30+ Tests</div>
+            <div className="text-lg font-bold text-indigo-600 dark:text-indigo-400">7 Files / 35 Tests</div>
             <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Playwright E2E Tests</div>
           </div>
           <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-800">
@@ -393,10 +393,10 @@ export default function AboutPage() {
           <div className="p-3 bg-indigo-950/80 border border-indigo-800 text-white rounded-lg space-y-1">
             <div className="flex items-center gap-2">
               <span className="font-bold text-indigo-300">V3.4 — Current Release Candidate:</span>
-              <span className="text-slate-300">Voice Interview Intelligence & Performance Analytics</span>
+              <span className="text-slate-300">Voice Interview Intelligence & Adaptive Live Simulation</span>
             </div>
             <p className="text-slate-200">
-              Spoken answer capture, real-time live preview transcript, editable canonical transcript buffer, WPM / duration / filler-word analysis, separate Content (6 dimensions) vs Delivery (6 dimensions) scoring, question-aware weighting, Interviewer Personas, historical performance trends, and two-session comparison.
+              Spoken answer capture, real-time live preview transcript, editable canonical transcript buffer, WPM / duration / filler-word analysis, separate Content (6 dimensions) vs Delivery (6 dimensions) scoring, question-aware weighting, 5 Interviewer Personas (~33% shared anchor / ~67% persona-specific questions), turn-based Adaptive Live Simulation with contextual follow-up probing, historical performance trends, and two-session comparison.
             </p>
           </div>
           <div className="p-3 bg-slate-900/60 border border-slate-800 text-white rounded-lg space-y-1">

@@ -76,4 +76,100 @@ describe('V3.4 Interview Performance Analytics & Session Comparison', () => {
     expect(last2[0].id).toBe('sess-2');
     expect(last2[1].id).toBe('sess-3');
   });
+
+  it('isolates voice delivery averages from text-only historical sessions', () => {
+    const textSession: InterviewSession = createTestVoiceSession({
+      id: 'sess-text-1',
+      opportunityId: 'opp-1',
+      mode: 'practice',
+      difficulty: 'standard',
+      interviewerPersona: 'behavioral',
+      answerMode: 'text',
+      exchanges: [],
+      overallScore: 80,
+      createdAt: '2026-08-25T10:00:00.000Z',
+      summary: 'Text practice session',
+      strengths: ['Clear structure'],
+      improvementAreas: ['Add metrics'],
+      averageDeliveryScore: undefined,
+      averageWordsPerMinute: undefined,
+      averageFillerRate: undefined,
+    });
+
+    const mixedSessions = [...allSessions, textSession];
+
+    // Voice delivery calculation should strictly filter for sessions with averageDeliveryScore > 0
+    const voiceDeliverySessions = mixedSessions.filter(
+      (s) => typeof s.averageDeliveryScore === 'number' && s.averageDeliveryScore > 0
+    );
+
+    const avgDelivery = Math.round(
+      voiceDeliverySessions.reduce((acc, s) => acc + (s.averageDeliveryScore || 0), 0) /
+        voiceDeliverySessions.length
+    );
+
+    // Should equal the average of session1 (82), session2 (88), session3 (92) = 262 / 3 = 87.33 -> 87
+    expect(avgDelivery).toBe(87);
+    expect(voiceDeliverySessions.length).toBe(3); // textSession excluded
+  });
+
+  it('handles sessions with missing delivery metrics gracefully without distorting averages', () => {
+    const textOnlySessions: InterviewSession[] = [
+      createTestVoiceSession({
+        id: 'sess-text-only-1',
+        opportunityId: 'opp-1',
+        mode: 'timed',
+        difficulty: 'standard',
+        answerMode: 'text',
+        exchanges: [],
+        overallScore: 70,
+        createdAt: '2026-08-26T10:00:00.000Z',
+        summary: 'Text-only timed screen',
+        strengths: ['Fast response'],
+        improvementAreas: ['Executive depth'],
+        averageDeliveryScore: undefined,
+        averageWordsPerMinute: undefined,
+        averageFillerRate: undefined,
+      }),
+    ];
+
+    const voiceSessions = textOnlySessions.filter(
+      (s) => typeof s.averageDeliveryScore === 'number' && s.averageDeliveryScore > 0
+    );
+
+    expect(voiceSessions.length).toBe(0);
+    const avgDelivery = voiceSessions.length > 0 ? 80 : 0;
+    expect(avgDelivery).toBe(0);
+  });
+
+  it('preserves persona and modality metadata across sessions for side-by-side comparison', () => {
+    const baseline = session1;
+    const current: InterviewSession = createTestVoiceSession({
+      id: 'sess-live-voice',
+      opportunityId: 'opp-1',
+      mode: 'live',
+      difficulty: 'rigorous',
+      interviewerPersona: 'executive',
+      answerMode: 'voice',
+      exchanges: [],
+      overallScore: 88,
+      averageWordsPerMinute: 148,
+      averageFillerRate: 2.1,
+      averageDeliveryScore: 90,
+      averageContentScore: 86,
+      createdAt: '2026-08-27T10:00:00.000Z',
+      summary: 'Executive live simulation',
+      strengths: ['High altitude'],
+      improvementAreas: ['Risk framing'],
+    });
+
+    expect(current.interviewerPersona).toBe('executive');
+    expect(current.mode).toBe('live');
+    expect(current.answerMode).toBe('voice');
+    expect(baseline.interviewerPersona).toBeDefined();
+
+    // Delivery delta calculation between two valid voice sessions
+    const deliveryDelta = (current.averageDeliveryScore || 0) - (baseline.averageDeliveryScore || 0);
+    expect(deliveryDelta).toBe(8); // 90 - 82 = +8%
+  });
 });

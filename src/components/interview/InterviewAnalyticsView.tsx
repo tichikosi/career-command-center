@@ -39,9 +39,14 @@ export const InterviewAnalyticsView: React.FC<InterviewAnalyticsViewProps> = ({
     return sorted;
   }, [sessions, filterCount]);
 
-  // Aggregate stats
+  // Aggregate stats: strictly isolate sessions with valid voice delivery metrics
   const totalSessions = sessions.length;
-  const voiceSessions = sessions.filter((s) => s.answerMode === 'voice' || s.averageWordsPerMinute);
+  const voiceDeliverySessions = sessions.filter(
+    (s) => typeof s.averageDeliveryScore === 'number' && s.averageDeliveryScore > 0
+  );
+  const voicePaceSessions = sessions.filter(
+    (s) => typeof s.averageWordsPerMinute === 'number' && s.averageWordsPerMinute > 0
+  );
 
   const avgContentScore = totalSessions > 0
     ? Math.round(
@@ -50,24 +55,24 @@ export const InterviewAnalyticsView: React.FC<InterviewAnalyticsViewProps> = ({
       )
     : 0;
 
-  const avgDeliveryScore = voiceSessions.length > 0
+  const avgDeliveryScore = voiceDeliverySessions.length > 0
     ? Math.round(
-        voiceSessions.reduce((acc, s) => acc + (s.averageDeliveryScore ?? s.overallScore), 0) /
-          voiceSessions.length
+        voiceDeliverySessions.reduce((acc, s) => acc + (s.averageDeliveryScore || 0), 0) /
+          voiceDeliverySessions.length
       )
     : 0;
 
-  const avgWpm = voiceSessions.length > 0
+  const avgWpm = voicePaceSessions.length > 0
     ? Math.round(
-        voiceSessions.reduce((acc, s) => acc + (s.averageWordsPerMinute || 0), 0) /
-          voiceSessions.length
+        voicePaceSessions.reduce((acc, s) => acc + (s.averageWordsPerMinute || 0), 0) /
+          voicePaceSessions.length
       )
     : 0;
 
-  const avgFillerRate = voiceSessions.length > 0
+  const avgFillerRate = voicePaceSessions.length > 0
     ? Math.round(
-        (voiceSessions.reduce((acc, s) => acc + (s.averageFillerRate || 0), 0) /
-          voiceSessions.length) *
+        (voicePaceSessions.reduce((acc, s) => acc + (s.averageFillerRate || 0), 0) /
+          voicePaceSessions.length) *
           10
       ) / 10
     : 0;
@@ -324,65 +329,153 @@ export const InterviewAnalyticsView: React.FC<InterviewAnalyticsViewProps> = ({
           </div>
 
           {/* Comparison Delta Table */}
-          {sessionA && sessionB && (
-            <div className="rounded-lg border border-slate-800 bg-slate-950 overflow-hidden text-xs">
-              <div className="grid grid-cols-3 bg-slate-900/80 p-2.5 font-semibold text-slate-300 border-b border-slate-800">
-                <div>Metric</div>
-                <div className="text-center">Session A</div>
-                <div className="text-center">Session B (Delta)</div>
-              </div>
+          {sessionA && sessionB && (() => {
+            const hasVoiceA = sessionA.answerMode === 'voice' || sessionA.answerMode === 'hybrid' || (typeof sessionA.averageWordsPerMinute === 'number' && sessionA.averageWordsPerMinute > 0);
+            const hasVoiceB = sessionB.answerMode === 'voice' || sessionB.answerMode === 'hybrid' || (typeof sessionB.averageWordsPerMinute === 'number' && sessionB.averageWordsPerMinute > 0);
 
-              {/* Overall Score */}
-              <div className="grid grid-cols-3 p-2.5 border-b border-slate-800/60 items-center">
-                <span className="font-medium text-slate-300">Overall Score</span>
-                <span className="text-center text-slate-200">{sessionA.overallScore}%</span>
-                <span className="text-center">
-                  <span className="font-bold text-slate-100">{sessionB.overallScore}% </span>
-                  {sessionB.overallScore !== sessionA.overallScore && (
-                    <span
-                      className={`text-[11px] font-medium ${
-                        sessionB.overallScore > sessionA.overallScore
-                          ? 'text-emerald-400'
-                          : 'text-amber-400'
-                      }`}
-                    >
-                      ({sessionB.overallScore > sessionA.overallScore ? '+' : ''}
-                      {sessionB.overallScore - sessionA.overallScore}%)
+            const personaLabels: Record<string, string> = {
+              recruiter: 'Recruiter',
+              hiring_manager: 'Hiring Manager',
+              executive: 'Executive / VP',
+              behavioral: 'Behavioral Coach',
+              peer: 'Peer / Tech Lead',
+            };
+
+            const formatLabels: Record<string, string> = {
+              practice: 'Practice Mode',
+              timed: 'Timed Screen',
+              full: 'Full Loop',
+              live: 'Live Simulation',
+            };
+
+            const modalityA = sessionA.answerMode === 'voice' ? 'Voice' : sessionA.answerMode === 'hybrid' ? 'Mixed' : hasVoiceA ? 'Voice' : 'Text';
+            const modalityB = sessionB.answerMode === 'voice' ? 'Voice' : sessionB.answerMode === 'hybrid' ? 'Mixed' : hasVoiceB ? 'Voice' : 'Text';
+
+            return (
+              <div className="rounded-lg border border-slate-800 bg-slate-950 overflow-hidden text-xs">
+                <div className="grid grid-cols-3 bg-slate-900/80 p-2.5 font-semibold text-slate-300 border-b border-slate-800">
+                  <div>Metric / Configuration</div>
+                  <div className="text-center">Session A</div>
+                  <div className="text-center">Session B (Delta)</div>
+                </div>
+
+                {/* Format / Mode */}
+                <div className="grid grid-cols-3 p-2.5 border-b border-slate-800/60 items-center">
+                  <span className="font-medium text-slate-300">Format</span>
+                  <span className="text-center text-slate-400 capitalize">{formatLabels[sessionA.mode] || sessionA.mode}</span>
+                  <span className="text-center text-slate-200 capitalize">{formatLabels[sessionB.mode] || sessionB.mode}</span>
+                </div>
+
+                {/* Interviewer Persona */}
+                <div className="grid grid-cols-3 p-2.5 border-b border-slate-800/60 items-center">
+                  <span className="font-medium text-slate-300">Interviewer Persona</span>
+                  <span className="text-center text-slate-400">{sessionA.interviewerPersona ? personaLabels[sessionA.interviewerPersona] || sessionA.interviewerPersona : 'General'}</span>
+                  <span className="text-center text-slate-200">{sessionB.interviewerPersona ? personaLabels[sessionB.interviewerPersona] || sessionB.interviewerPersona : 'General'}</span>
+                </div>
+
+                {/* Modality */}
+                <div className="grid grid-cols-3 p-2.5 border-b border-slate-800/60 items-center">
+                  <span className="font-medium text-slate-300">Modality</span>
+                  <span className="text-center text-slate-400">{modalityA}</span>
+                  <span className="text-center text-slate-200">{modalityB}</span>
+                </div>
+
+                {/* Overall Score */}
+                <div className="grid grid-cols-3 p-2.5 border-b border-slate-800/60 items-center">
+                  <span className="font-medium text-slate-300">Overall Score</span>
+                  <span className="text-center text-slate-200">{sessionA.overallScore}%</span>
+                  <span className="text-center">
+                    <span className="font-bold text-slate-100">{sessionB.overallScore}% </span>
+                    {sessionB.overallScore !== sessionA.overallScore && (
+                      <span
+                        className={`text-[11px] font-medium ${
+                          sessionB.overallScore > sessionA.overallScore
+                            ? 'text-emerald-400'
+                            : 'text-amber-400'
+                        }`}
+                      >
+                        ({sessionB.overallScore > sessionA.overallScore ? '+' : ''}
+                        {sessionB.overallScore - sessionA.overallScore}%)
+                      </span>
+                    )}
+                  </span>
+                </div>
+
+                {/* Content Score */}
+                {(sessionA.averageContentScore || sessionB.averageContentScore) && (
+                  <div className="grid grid-cols-3 p-2.5 border-b border-slate-800/60 items-center">
+                    <span className="font-medium text-slate-300">Content Performance</span>
+                    <span className="text-center text-slate-400">
+                      {sessionA.averageContentScore ? `${sessionA.averageContentScore}%` : 'N/A'}
                     </span>
-                  )}
-                </span>
-              </div>
+                    <span className="text-center text-slate-200">
+                      {sessionB.averageContentScore ? `${sessionB.averageContentScore}%` : 'N/A'}
+                    </span>
+                  </div>
+                )}
 
-              {/* Speaking Pace (WPM) */}
-              <div className="grid grid-cols-3 p-2.5 border-b border-slate-800/60 items-center">
-                <span className="font-medium text-slate-300">Speaking Pace</span>
-                <span className="text-center text-slate-400">
-                  {sessionA.averageWordsPerMinute ? `${sessionA.averageWordsPerMinute} WPM` : 'N/A'}
-                </span>
-                <span className="text-center text-slate-200">
-                  {sessionB.averageWordsPerMinute ? `${sessionB.averageWordsPerMinute} WPM` : 'N/A'}
-                </span>
-              </div>
+                {/* Voice Delivery Score */}
+                <div className="grid grid-cols-3 p-2.5 border-b border-slate-800/60 items-center">
+                  <span className="font-medium text-slate-300">Voice Delivery Score</span>
+                  <span className="text-center text-slate-400">
+                    {hasVoiceA && typeof sessionA.averageDeliveryScore === 'number'
+                      ? `${sessionA.averageDeliveryScore}%`
+                      : 'N/A (Text-only)'}
+                  </span>
+                  <span className="text-center text-slate-200">
+                    {hasVoiceB && typeof sessionB.averageDeliveryScore === 'number' ? (
+                      <>
+                        <span className="font-bold text-slate-100">{sessionB.averageDeliveryScore}% </span>
+                        {hasVoiceA && typeof sessionA.averageDeliveryScore === 'number' && sessionB.averageDeliveryScore !== sessionA.averageDeliveryScore && (
+                          <span
+                            className={`text-[11px] font-medium ${
+                              sessionB.averageDeliveryScore > sessionA.averageDeliveryScore
+                                ? 'text-emerald-400'
+                                : 'text-amber-400'
+                            }`}
+                          >
+                            ({sessionB.averageDeliveryScore > sessionA.averageDeliveryScore ? '+' : ''}
+                            {sessionB.averageDeliveryScore - sessionA.averageDeliveryScore}%)
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      'N/A (Text-only)'
+                    )}
+                  </span>
+                </div>
 
-              {/* Filler Rate */}
-              <div className="grid grid-cols-3 p-2.5 border-b border-slate-800/60 items-center">
-                <span className="font-medium text-slate-300">Filler Rate</span>
-                <span className="text-center text-slate-400">
-                  {sessionA.averageFillerRate ? `${sessionA.averageFillerRate}/min` : 'N/A'}
-                </span>
-                <span className="text-center text-slate-200">
-                  {sessionB.averageFillerRate ? `${sessionB.averageFillerRate}/min` : 'N/A'}
-                </span>
-              </div>
+                {/* Speaking Pace (WPM) */}
+                <div className="grid grid-cols-3 p-2.5 border-b border-slate-800/60 items-center">
+                  <span className="font-medium text-slate-300">Speaking Pace</span>
+                  <span className="text-center text-slate-400">
+                    {hasVoiceA && sessionA.averageWordsPerMinute ? `${sessionA.averageWordsPerMinute} WPM` : 'N/A (Text-only)'}
+                  </span>
+                  <span className="text-center text-slate-200">
+                    {hasVoiceB && sessionB.averageWordsPerMinute ? `${sessionB.averageWordsPerMinute} WPM` : 'N/A (Text-only)'}
+                  </span>
+                </div>
 
-              {/* Questions Answered */}
-              <div className="grid grid-cols-3 p-2.5 items-center">
-                <span className="font-medium text-slate-300">Questions Answered</span>
-                <span className="text-center text-slate-400">{sessionA.exchanges.length}</span>
-                <span className="text-center text-slate-200">{sessionB.exchanges.length}</span>
+                {/* Filler Rate */}
+                <div className="grid grid-cols-3 p-2.5 border-b border-slate-800/60 items-center">
+                  <span className="font-medium text-slate-300">Filler Rate</span>
+                  <span className="text-center text-slate-400">
+                    {hasVoiceA && sessionA.averageFillerRate !== undefined ? `${sessionA.averageFillerRate}/min` : 'N/A (Text-only)'}
+                  </span>
+                  <span className="text-center text-slate-200">
+                    {hasVoiceB && sessionB.averageFillerRate !== undefined ? `${sessionB.averageFillerRate}/min` : 'N/A (Text-only)'}
+                  </span>
+                </div>
+
+                {/* Questions Answered */}
+                <div className="grid grid-cols-3 p-2.5 items-center">
+                  <span className="font-medium text-slate-300">Questions Answered</span>
+                  <span className="text-center text-slate-400">{sessionA.exchanges.length}</span>
+                  <span className="text-center text-slate-200">{sessionB.exchanges.length}</span>
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
         </div>
       )}
     </div>

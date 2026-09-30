@@ -60,8 +60,8 @@ const FORMAT_CONFIG: Record<'practice' | 'timed' | 'full' | 'live', { label: str
     desc: 'Multi-round simulation: Recruiter Screen, Hiring Manager, Leadership, and Executive Strategy.',
   },
   live: {
-    label: 'Live Simulation (Preview)',
-    desc: 'Spoken conversational turn-taking with dynamic interviewer follow-ups and probes.',
+    label: 'Live Simulation (Adaptive Preview)',
+    desc: 'Adaptive, turn-based conversational interviewing. Your interviewer adapts follow-up questions based on your answers and selected persona.',
   },
 };
 
@@ -182,6 +182,15 @@ export function MockInterviewPanel({
     transcriptSource?: TranscriptSource;
   } | null>(null);
 
+  // Live Simulation dynamic conversational turn state
+  const [liveFollowUp, setLiveFollowUp] = useState<{
+    followUpQuestion: string;
+    probeIntent: string;
+    suggestedApproach: string;
+    executionMode: 'gemini' | 'deterministic';
+  } | null>(null);
+  const [isFormulatingFollowUp, setIsFormulatingFollowUp] = useState(false);
+
   // Completed Session Modal & Review View
   const [completedSession, setCompletedSession] = useState<InterviewSession | null>(null);
   const [viewingPastSession, setViewingPastSession] = useState<InterviewSession | null>(null);
@@ -248,6 +257,7 @@ export function MockInterviewPanel({
         setExchanges([]);
         setCurrentAnswer('');
         setCurrentEvaluation(null);
+        setLiveFollowUp(null);
         setTimeRemaining(TIMED_SCREEN_LIMIT_SECONDS);
         setAnswerDuration(0);
         setSessionActive(true);
@@ -362,6 +372,55 @@ export function MockInterviewPanel({
         };
 
         setExchanges((prev) => [...prev, newExchange]);
+
+        // In Live Simulation mode, generate dynamic conversational follow-up turn
+        if (mode === 'live') {
+          setIsFormulatingFollowUp(true);
+          try {
+            const history = [
+              ...exchanges.flatMap((ex) => [
+                { speaker: 'interviewer' as const, text: ex.question },
+                { speaker: 'candidate' as const, text: ex.candidateAnswer },
+              ]),
+              { speaker: 'interviewer' as const, text: activeQ.question },
+              { speaker: 'candidate' as const, text: answerText },
+            ];
+
+            const turnRes = await fetch('/api/interview/mock', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                action: 'conversational_turn',
+                question: activeQ.question,
+                candidateAnswer: answerText,
+                conversationHistory: history,
+                persona,
+                difficulty,
+                opportunity: {
+                  id: opportunity.id,
+                  title: opportunity.title,
+                  company: opportunity.company,
+                  rawJobDescription: opportunity.rawJobDescription,
+                },
+                candidateSnapshot: candidate,
+              }),
+            });
+
+            const turnData = await turnRes.json();
+            if (turnData.success && turnData.followUpQuestion) {
+              setLiveFollowUp({
+                followUpQuestion: turnData.followUpQuestion,
+                probeIntent: turnData.probeIntent || 'Probing candidate ownership and trade-offs',
+                suggestedApproach: turnData.suggestedApproach || 'State your bottom-line trade-off first',
+                executionMode: turnData.executionMode || 'deterministic',
+              });
+            }
+          } catch (turnErr) {
+            console.error('[MockInterviewPanel] Conversational turn error:', turnErr);
+          } finally {
+            setIsFormulatingFollowUp(false);
+          }
+        }
       }
     } catch (err) {
       console.error('[MockInterviewPanel] Evaluate error:', err);
@@ -372,6 +431,27 @@ export function MockInterviewPanel({
 
   // Next Question or Finish Session
   const handleNextQuestion = async () => {
+    // If in Live Simulation and an adaptive follow-up was generated, insert it into the session queue
+    if (mode === 'live' && liveFollowUp) {
+      const followUpTurn = {
+        id: `mq-followup-${Date.now()}`,
+        question: liveFollowUp.followUpQuestion,
+        category: 'situational',
+      };
+      setQuestions((prev) => {
+        const copy = [...prev];
+        copy.splice(currentIndex + 1, 0, followUpTurn);
+        return copy;
+      });
+      setLiveFollowUp(null);
+      setCurrentIndex((prev) => prev + 1);
+      setCurrentAnswer('');
+      setCurrentEvaluation(null);
+      setTimeRemaining(TIMED_SCREEN_LIMIT_SECONDS);
+      setAnswerDuration(0);
+      return;
+    }
+
     if (currentIndex < questions.length - 1) {
       setCurrentIndex((prev) => prev + 1);
       setCurrentAnswer('');
@@ -1038,14 +1118,59 @@ export function MockInterviewPanel({
                 </div>
               )}
 
+              {/* Live Simulation: Formulating Follow-Up Status */}
+              {mode === 'live' && isFormulatingFollowUp && (
+                <div className="p-3.5 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 text-indigo-900 dark:text-indigo-200 text-xs rounded-xl flex items-center gap-2.5 animate-pulse">
+                  <div className="w-3.5 h-3.5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin shrink-0" />
+                  <span>Interviewer ({PERSONA_CONFIG[persona]?.label}) is preparing an adaptive follow-up probe based on your answer...</span>
+                </div>
+              )}
+
+              {/* Live Simulation: Adaptive Follow-Up Probe Card */}
+              {mode === 'live' && liveFollowUp && (
+                <div className="p-4 bg-indigo-50/70 dark:bg-indigo-950/40 border-2 border-indigo-500/50 rounded-xl space-y-2.5 text-xs animate-in fade-in duration-200">
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 font-bold text-indigo-700 dark:text-indigo-300 uppercase tracking-wider text-[11px]">
+                      <IconSparkles className="w-3.5 h-3.5 text-indigo-500" />
+                      <span>Adaptive Follow-Up Probe Ready</span>
+                    </span>
+                    <span className="px-2 py-0.5 rounded bg-indigo-100 dark:bg-indigo-900 text-indigo-800 dark:text-indigo-200 font-semibold text-[10px]">
+                      {PERSONA_CONFIG[persona]?.label} Persona
+                    </span>
+                  </div>
+
+                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 bg-white/70 dark:bg-slate-900/70 p-3 rounded-lg border border-indigo-200/60 dark:border-indigo-800/60 leading-relaxed">
+                    &ldquo;{liveFollowUp.followUpQuestion}&rdquo;
+                  </p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                    <div className="p-2 rounded bg-white/50 dark:bg-slate-900/50 border border-indigo-100 dark:border-indigo-900/40">
+                      <strong className="text-indigo-900 dark:text-indigo-300 block mb-0.5">Probe Intent:</strong>
+                      <span className="text-slate-700 dark:text-slate-300">{liveFollowUp.probeIntent}</span>
+                    </div>
+                    <div className="p-2 rounded bg-white/50 dark:bg-slate-900/50 border border-indigo-100 dark:border-indigo-900/40">
+                      <strong className="text-indigo-900 dark:text-indigo-300 block mb-0.5">Suggested Approach:</strong>
+                      <span className="text-slate-700 dark:text-slate-300">{liveFollowUp.suggestedApproach}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Next Question / Finish Button */}
               <div className="flex justify-end pt-2">
                 <button
                   type="button"
                   onClick={handleNextQuestion}
-                  className="px-5 py-2.5 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 rounded-xl text-xs font-bold hover:opacity-90 transition-opacity flex items-center gap-1.5 shadow-sm"
+                  disabled={mode === 'live' && isFormulatingFollowUp}
+                  className="px-5 py-2.5 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 rounded-xl text-xs font-bold hover:opacity-90 transition-opacity flex items-center gap-1.5 shadow-sm disabled:opacity-50"
                 >
-                  <span>{currentIndex < questions.length - 1 ? 'Next Question' : 'Finish Mock Session'}</span>
+                  <span>
+                    {mode === 'live' && liveFollowUp
+                      ? 'Continue to Adaptive Follow-Up'
+                      : currentIndex < questions.length - 1
+                      ? 'Next Question'
+                      : 'Finish Mock Session'}
+                  </span>
                   <IconArrowRight className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -1081,7 +1206,19 @@ export function MockInterviewPanel({
             {sessions.map((sess) => {
               const formatLabel = FORMAT_CONFIG[sess.mode]?.label || sess.mode;
               const diffLabel = DIFFICULTY_CONFIG[sess.difficulty as keyof typeof DIFFICULTY_CONFIG]?.label || sess.difficulty;
-              const isVoice = sess.answerMode === 'voice' || sess.averageWordsPerMinute;
+              const personaLabel = sess.interviewerPersona
+                ? PERSONA_CONFIG[sess.interviewerPersona]?.label || sess.interviewerPersona
+                : 'General / Legacy';
+              const modalityLabel = sess.answerMode === 'voice'
+                ? 'Voice'
+                : sess.answerMode === 'hybrid'
+                ? 'Mixed'
+                : sess.answerMode === 'text'
+                ? 'Text'
+                : sess.averageWordsPerMinute
+                ? 'Voice'
+                : 'Text';
+              const isVoice = modalityLabel === 'Voice' || modalityLabel === 'Mixed';
 
               return (
                 <Card
@@ -1091,7 +1228,7 @@ export function MockInterviewPanel({
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <div className="flex items-center gap-2 flex-wrap">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="text-sm font-bold text-slate-900 dark:text-slate-100">
                           Score: {sess.overallScore}%
                         </span>
@@ -1101,9 +1238,16 @@ export function MockInterviewPanel({
                         <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300">
                           {diffLabel}
                         </span>
-                        {isVoice && (
+                        <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded bg-slate-200 text-slate-800 dark:bg-slate-800 dark:text-slate-200">
+                          {personaLabel}
+                        </span>
+                        {isVoice ? (
                           <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-800/40 flex items-center gap-1">
-                            <Mic className="h-2.5 w-2.5" /> Voice
+                            <Mic className="h-2.5 w-2.5" /> {modalityLabel}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                            Text
                           </span>
                         )}
                       </div>
@@ -1153,7 +1297,7 @@ export function MockInterviewPanel({
             {/* Top Summary Card */}
             <div className="p-4 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl space-y-3">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div className="flex items-center gap-2.5 flex-wrap">
+                <div className="flex items-center gap-2 flex-wrap">
                   <div className="px-3 py-1 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 rounded-lg font-bold text-sm">
                     {viewingPastSession.overallScore}% Overall Score
                   </div>
@@ -1163,9 +1307,22 @@ export function MockInterviewPanel({
                   <span className="px-2.5 py-1 rounded-md bg-violet-100 dark:bg-violet-950 text-violet-700 dark:text-violet-300 font-bold text-[10px] uppercase">
                     {DIFFICULTY_CONFIG[viewingPastSession.difficulty as keyof typeof DIFFICULTY_CONFIG]?.label || viewingPastSession.difficulty}
                   </span>
-                  {viewingPastSession.answerMode === 'voice' && (
-                    <span className="px-2.5 py-1 rounded-md bg-indigo-950 text-indigo-300 font-bold text-[10px] uppercase border border-indigo-800/40">
-                      Voice Practice
+                  <span className="px-2.5 py-1 rounded-md bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-[10px] uppercase">
+                    {viewingPastSession.interviewerPersona
+                      ? PERSONA_CONFIG[viewingPastSession.interviewerPersona]?.label || viewingPastSession.interviewerPersona
+                      : 'General Interviewer'}
+                  </span>
+                  {viewingPastSession.answerMode === 'voice' || viewingPastSession.averageWordsPerMinute ? (
+                    <span className="px-2.5 py-1 rounded-md bg-indigo-950 text-indigo-300 font-bold text-[10px] uppercase border border-indigo-800/40 flex items-center gap-1">
+                      <Mic className="h-3 w-3" /> Voice
+                    </span>
+                  ) : viewingPastSession.answerMode === 'hybrid' ? (
+                    <span className="px-2.5 py-1 rounded-md bg-indigo-950 text-indigo-300 font-bold text-[10px] uppercase border border-indigo-800/40 flex items-center gap-1">
+                      <Mic className="h-3 w-3" /> Mixed Modality
+                    </span>
+                  ) : (
+                    <span className="px-2.5 py-1 rounded-md bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-[10px] uppercase">
+                      Text
                     </span>
                   )}
                 </div>
@@ -1278,9 +1435,14 @@ export function MockInterviewPanel({
                     {isExpanded && (
                       <div className="p-4 space-y-4 border-t border-slate-200 dark:border-slate-800 text-xs">
                         <div className="space-y-1">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-                            Candidate Transcript {ex.answerMode === 'voice' && '(Spoken)'}
-                          </span>
+                          <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                            <span>
+                              Candidate Transcript ({ex.answerMode === 'voice' || ex.deliveryMetrics ? 'Spoken' : 'Typed'})
+                            </span>
+                            {typeof ex.durationSeconds === 'number' && (
+                              <span>Duration: {ex.durationSeconds}s</span>
+                            )}
+                          </div>
                           <p className="text-slate-800 dark:text-slate-200 bg-slate-50 dark:bg-slate-800/40 p-3 rounded-lg border border-slate-200 dark:border-slate-800 whitespace-pre-wrap leading-relaxed">
                             {ex.candidateAnswer}
                           </p>

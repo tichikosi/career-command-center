@@ -138,6 +138,27 @@ async function runVerification() {
   });
   assertCheck('Dynamic follow-up generated contextual probe', dynamicFollowUp.followUpQuestion.length > 10);
   assertCheck('Dynamic follow-up identified probe intent', Boolean(dynamicFollowUp.probeIntent));
+  assertCheck('Dynamic follow-up contextually references candidate metric (40%)', dynamicFollowUp.followUpQuestion.includes('40%'));
+
+  const recruiterResult = await engine.generateQuestions({
+    opportunity: testOpportunity,
+    candidate: testCandidate,
+    difficulty: 'standard',
+    mode: 'practice',
+    persona: 'recruiter',
+  });
+  const execResult = await engine.generateQuestions({
+    opportunity: testOpportunity,
+    candidate: testCandidate,
+    difficulty: 'standard',
+    mode: 'practice',
+    persona: 'executive',
+  });
+  const sharedQuestions = recruiterResult.questions.filter((q) =>
+    execResult.questions.some((eq) => eq.question === q.question)
+  );
+  assertCheck('Personas share exactly 2 anchor questions (~33%)', sharedQuestions.length === 2);
+  assertCheck('Personas provide 4 distinct questions (~67%)', recruiterResult.questions.length === 6 && execResult.questions.length === 6);
 
   // 8. Ephemeral Audio Privacy Invariants
   console.log('\n8. Verifying Ephemeral Audio Privacy Invariants...');
