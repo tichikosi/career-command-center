@@ -7,11 +7,11 @@ export function SyntheticDisclaimerBanner() {
       <div className="flex items-center gap-2 max-w-7xl mx-auto w-full">
         <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
         <span className="font-medium tracking-wide text-slate-100 uppercase text-[10px]">
-          Career Command Center V3.3
+          Career Command Center V3.4 Release Candidate
         </span>
         <span className="text-slate-400">|</span>
         <span className="text-slate-300">
-          Public Synthetic Demo Isolation (Alex Vance) • Authenticated Cloud Persistence
+          Voice Interview Intelligence • Public Synthetic Demo (Alex Vance) • Authenticated Cloud Persistence
         </span>
       </div>
     </div>

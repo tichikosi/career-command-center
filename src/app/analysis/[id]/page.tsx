@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { Card, CardHeader } from '@/components/ui/Card';
@@ -15,6 +15,8 @@ import {
   IconExternalLink,
   IconPrinter,
   IconCheckCircle,
+  IconChevronLeft,
+  IconChevronRight,
 } from '@/components/icons';
 import { PipelineStage } from '@/types/opportunity';
 import { useCandidateProfile } from '@/lib/useCandidate';
@@ -87,6 +89,79 @@ export default function AnalysisResultsPage() {
   const [reanalyzeError, setReanalyzeError] = useState<string | null>(null);
   const [reanalyzeSuccess, setReanalyzeSuccess] = useState<string | null>(null);
   const [isGeneratingPrep, setIsGeneratingPrep] = useState(false);
+
+  // Tab horizontal overflow & scroll navigation
+  const tabContainerRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+  const [hasOverflow, setHasOverflow] = useState(false);
+
+  const checkTabScroll = useCallback(() => {
+    const el = tabContainerRef.current;
+    if (!el) return;
+    const overflow = el.scrollWidth > el.clientWidth + 2;
+    setHasOverflow(overflow);
+    setCanScrollLeft(el.scrollLeft > 4);
+    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 4);
+  }, []);
+
+  useEffect(() => {
+    const el = tabContainerRef.current;
+    if (!el) return;
+
+    checkTabScroll();
+
+    const handleScroll = () => checkTabScroll();
+    el.addEventListener('scroll', handleScroll, { passive: true });
+
+    let resizeObserver: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => checkTabScroll());
+      resizeObserver.observe(el);
+    }
+
+    const handleResize = () => checkTabScroll();
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      el.removeEventListener('scroll', handleScroll);
+      if (resizeObserver) resizeObserver.disconnect();
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [checkTabScroll]);
+
+  // Active tab automatically scrolls into view when selected
+  useEffect(() => {
+    const el = tabContainerRef.current;
+    if (!el) return;
+    const activeBtn = el.querySelector<HTMLButtonElement>(`[data-tab-key="${activeTab}"]`);
+    if (activeBtn) {
+      activeBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+    }
+  }, [activeTab]);
+
+  const scrollTabs = (direction: 'left' | 'right') => {
+    const el = tabContainerRef.current;
+    if (!el) return;
+    const scrollAmount = direction === 'left' ? -260 : 260;
+    el.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+  };
+
+  const handleTabKeyDown = (e: React.KeyboardEvent, index: number, tabKeys: string[]) => {
+    let nextIndex = -1;
+    if (e.key === 'ArrowRight') {
+      nextIndex = (index + 1) % tabKeys.length;
+    } else if (e.key === 'ArrowLeft') {
+      nextIndex = (index - 1 + tabKeys.length) % tabKeys.length;
+    }
+    if (nextIndex !== -1) {
+      e.preventDefault();
+      const nextKey = tabKeys[nextIndex] as typeof activeTab;
+      setActiveTab(nextKey);
+      const nextBtn = tabContainerRef.current?.querySelector<HTMLButtonElement>(`[data-tab-key="${nextKey}"]`);
+      nextBtn?.focus();
+    }
+  };
 
   if (!opportunity) {
     return (
@@ -470,9 +545,28 @@ export default function AnalysisResultsPage() {
         </div>
       </Card>
 
-      {/* Tab Navigation (with overflow discoverability) */}
-      <div className="relative print:hidden">
-        <div className="flex border-b border-slate-200 dark:border-slate-800 overflow-x-auto scrollbar-none pb-0.5">
+      {/* Tab Navigation (with accessible overflow discoverability) */}
+      <div className="relative print:hidden group my-2">
+        {/* Left Fade Indicator & Left Chevron */}
+        {hasOverflow && canScrollLeft && (
+          <div className="absolute left-0 top-0 bottom-0 z-20 flex items-center pr-3 bg-gradient-to-r from-slate-50 via-slate-50/95 to-transparent dark:from-slate-950 dark:via-slate-950/95 dark:to-transparent transition-opacity duration-200">
+            <button
+              type="button"
+              onClick={() => scrollTabs('left')}
+              aria-label="Scroll tabs left"
+              className="p-1.5 rounded-full bg-white dark:bg-slate-800 shadow-md border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700 transition-all focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 cursor-pointer"
+            >
+              <IconChevronLeft className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {/* Scrollable Tab Strip */}
+        <div
+          ref={tabContainerRef}
+          aria-label="Opportunity navigation tabs"
+          className="flex border-b border-slate-200 dark:border-slate-800 overflow-x-auto scrollbar-none pb-0.5 scroll-smooth px-1"
+        >
           {(
             [
               { key: 'overview', label: 'Executive Overview' },
@@ -485,11 +579,15 @@ export default function AnalysisResultsPage() {
               { key: 'mock', label: `Mock Interview${sessions.length > 0 ? ` (${sessions.length})` : ''}` },
               { key: 'follow-up', label: 'Smart Follow-Up' },
             ] as const
-          ).map(({ key, label }) => (
+          ).map(({ key, label }, idx, arr) => (
             <button
               key={key}
+              type="button"
+              data-tab-key={key}
+              aria-pressed={activeTab === key}
               onClick={() => setActiveTab(key)}
-              className={`py-3 px-5 text-sm font-semibold border-b-2 whitespace-nowrap transition-colors shrink-0 ${
+              onKeyDown={(e) => handleTabKeyDown(e, idx, arr.map(t => t.key))}
+              className={`py-3 px-5 text-sm font-semibold border-b-2 whitespace-nowrap transition-colors shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 dark:focus-visible:ring-slate-300 ${
                 activeTab === key
                   ? 'border-slate-900 dark:border-slate-100 text-slate-900 dark:text-slate-100'
                   : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
@@ -499,8 +597,20 @@ export default function AnalysisResultsPage() {
             </button>
           ))}
         </div>
-        {/* Subtle right-edge tab overflow shadow cue */}
-        <div className="pointer-events-none absolute top-0 right-0 bottom-0 w-8 bg-gradient-to-l from-slate-100 dark:from-slate-950 to-transparent hidden sm:block" />
+
+        {/* Right Fade Indicator & Right Chevron */}
+        {hasOverflow && canScrollRight && (
+          <div className="absolute right-0 top-0 bottom-0 z-20 flex items-center pl-3 bg-gradient-to-l from-slate-50 via-slate-50/95 to-transparent dark:from-slate-950 dark:via-slate-950/95 dark:to-transparent transition-opacity duration-200">
+            <button
+              type="button"
+              onClick={() => scrollTabs('right')}
+              aria-label="Scroll tabs right"
+              className="p-1.5 rounded-full bg-white dark:bg-slate-800 shadow-md border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700 transition-all focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 cursor-pointer"
+            >
+              <IconChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Tab 1: Executive Overview */}

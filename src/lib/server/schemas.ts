@@ -218,7 +218,25 @@ export const MockQuestionsRequestSchema = z.object({
   }),
   candidateSnapshot: CandidateProfileSnapshotSchema,
   difficulty: z.enum(['standard', 'rigorous', 'stress_test', 'challenging', 'executive', 'adversarial']).default('standard'),
-  mode: z.enum(['practice', 'timed', 'full']).default('practice'),
+  mode: z.enum(['practice', 'timed', 'full', 'live']).default('practice'),
+  persona: z.enum(['recruiter', 'hiring_manager', 'executive', 'behavioral', 'peer']).optional(),
+});
+
+export const VoiceDeliveryMetricsSchema = z.object({
+  durationSeconds: z.number(),
+  wordCount: z.number(),
+  wordsPerMinute: z.number(),
+  fillerWordsCount: z.number(),
+  fillerRatePerMinute: z.number(),
+  topFillerWords: z.array(z.object({ word: z.string(), count: z.number() })).default([]),
+  pauseAnalysis: z.object({
+    available: z.boolean(),
+    pauseCount: z.number(),
+    averagePauseSeconds: z.number(),
+    longestPauseSeconds: z.number(),
+    reason: z.string().optional(),
+  }).optional(),
+  verbosity: z.enum(['too_brief', 'appropriate', 'potentially_overlong']).default('appropriate'),
 });
 
 export const MockEvaluationRequestSchema = z.object({
@@ -233,6 +251,30 @@ export const MockEvaluationRequestSchema = z.object({
   }),
   candidateSnapshot: CandidateProfileSnapshotSchema,
   difficulty: z.enum(['standard', 'rigorous', 'stress_test', 'challenging', 'executive', 'adversarial']).default('standard'),
+  answerMode: z.enum(['text', 'voice']).optional().default('text'),
+  transcriptSource: z.enum(['browser_stt', 'gemini_audio', 'server_transcription', 'manual_edit', 'text_typed']).optional(),
+  deliveryMetrics: VoiceDeliveryMetricsSchema.optional(),
+  persona: z.enum(['recruiter', 'hiring_manager', 'executive', 'behavioral', 'peer']).optional(),
+});
+
+export const ConversationalTurnRequestSchema = z.object({
+  question: z.string().min(1),
+  candidateAnswer: z.string().min(1),
+  conversationHistory: z.array(
+    z.object({
+      speaker: z.enum(['interviewer', 'candidate']),
+      text: z.string(),
+    })
+  ).default([]),
+  persona: z.enum(['recruiter', 'hiring_manager', 'executive', 'behavioral', 'peer']).default('hiring_manager'),
+  difficulty: z.enum(['standard', 'rigorous', 'stress_test', 'challenging', 'executive', 'adversarial']).default('standard'),
+  opportunity: z.object({
+    id: z.string(),
+    title: z.string(),
+    company: z.string(),
+    rawJobDescription: z.string().default(''),
+  }),
+  candidateSnapshot: CandidateProfileSnapshotSchema,
 });
 
 export const FollowUpComposeRequestSchema = z.object({

@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { MockQuestionsRequestSchema, MockEvaluationRequestSchema } from '@/lib/server/schemas';
+import {
+  MockQuestionsRequestSchema,
+  MockEvaluationRequestSchema,
+  ConversationalTurnRequestSchema,
+} from '@/lib/server/schemas';
 import { MockInterviewEngine } from '@/lib/server/mockInterviewEngine';
 import { CandidateProfile } from '@/types/candidate';
 import { JobOpportunity } from '@/types/opportunity';
+import { VoiceDeliveryMetrics } from '@/types/interview';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -27,12 +32,52 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      const { opportunity, candidateSnapshot, difficulty, mode } = parseResult.data;
+      const { opportunity, candidateSnapshot, difficulty, mode, persona } = parseResult.data;
       const result = await engine.generateQuestions({
         opportunity: opportunity as unknown as JobOpportunity,
         candidate: candidateSnapshot as unknown as CandidateProfile,
         difficulty,
         mode,
+        persona,
+      });
+
+      return NextResponse.json({
+        success: true,
+        ...result,
+      });
+    }
+
+    if (action === 'conversational_turn') {
+      const parseResult = ConversationalTurnRequestSchema.safeParse(rawBody);
+      if (!parseResult.success) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'Invalid conversational turn request schema',
+            details: parseResult.error.flatten(),
+          },
+          { status: 400 }
+        );
+      }
+
+      const {
+        question,
+        candidateAnswer,
+        conversationHistory,
+        persona,
+        difficulty,
+        opportunity,
+        candidateSnapshot,
+      } = parseResult.data;
+
+      const result = await engine.generateDynamicFollowUp({
+        question,
+        candidateAnswer,
+        conversationHistory,
+        persona,
+        difficulty,
+        opportunity: opportunity as unknown as JobOpportunity,
+        candidate: candidateSnapshot as unknown as CandidateProfile,
       });
 
       return NextResponse.json({
@@ -54,7 +99,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { question, questionCategory, candidateAnswer, opportunity, candidateSnapshot, difficulty } = parseResult.data;
+    const {
+      question,
+      questionCategory,
+      candidateAnswer,
+      opportunity,
+      candidateSnapshot,
+      difficulty,
+      answerMode,
+      transcriptSource,
+      deliveryMetrics,
+      persona,
+    } = parseResult.data;
+
     const evaluation = await engine.evaluateAnswer({
       question,
       questionCategory,
@@ -62,6 +119,10 @@ export async function POST(req: NextRequest) {
       opportunity: opportunity as unknown as JobOpportunity,
       candidate: candidateSnapshot as unknown as CandidateProfile,
       difficulty,
+      answerMode,
+      transcriptSource,
+      deliveryMetrics: deliveryMetrics as VoiceDeliveryMetrics | undefined,
+      persona,
     });
 
     return NextResponse.json({

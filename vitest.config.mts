@@ -8,6 +8,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    pool: 'forks',
     include: ['tests/unit/**/*.test.ts'],
     exclude: ['node_modules', '.next'],
     testTimeout: 10000,

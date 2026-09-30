@@ -17,6 +17,31 @@ test.describe('V3.3 Interview War Room, Activity Timeline & Application Intellig
     await expect(page.getByRole('button', { name: /Smart Follow-Up/i })).toBeVisible();
   });
 
+  test('Opportunity tab strip supports accessible overflow navigation and keyboard arrows', async ({ page }) => {
+    await page.goto('/opportunities');
+    await page.getByRole('link', { name: /Report/i }).first().click();
+    await page.waitForURL(/\/analysis\/.+/);
+
+    const tabStrip = page.locator('[aria-label="Opportunity navigation tabs"]');
+    await expect(tabStrip).toBeVisible();
+
+    // Verify tab semantics
+    const overviewTab = page.locator('button[data-tab-key="overview"]');
+    await expect(overviewTab).toHaveAttribute('aria-pressed', 'true');
+
+    // Focus overview and press ArrowRight to navigate tabs
+    await overviewTab.focus();
+    await page.keyboard.press('ArrowRight');
+    const qualTab = page.locator('button[data-tab-key="qualifications"]');
+    await expect(qualTab).toHaveAttribute('aria-pressed', 'true');
+
+    // Click Mock Interview tab and verify activation
+    const mockTab = page.locator('button[data-tab-key="mock"]');
+    await mockTab.click();
+    await expect(mockTab).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('heading', { name: /Voice Interview Intelligence/i })).toBeVisible();
+  });
+
   test('Activity Timeline supports recording notes, scheduling interviews, and tracking stage changes', async ({ page }) => {
     await page.goto('/opportunities');
     await page.getByRole('link', { name: /Report/i }).first().click();
@@ -186,6 +211,9 @@ test.describe('V3.3 Interview War Room, Activity Timeline & Application Intellig
                 structure: 4,
                 concision: 4,
               },
+              overallResponseScore: 88,
+              contentWeight: 1.0,
+              deliveryWeight: 0.0,
               coaching: {
                 strengths: ['Clear strategic framing', 'Measurable metrics referenced'],
                 improvements: ['Could mention specific tooling used'],
@@ -210,7 +238,7 @@ test.describe('V3.3 Interview War Room, Activity Timeline & Application Intellig
     await expect(page.locator('h1')).toBeVisible();
 
     await page.getByRole('button', { name: /Mock Interview/i }).click();
-    await expect(page.getByText('Interactive Mock Interview Simulator')).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Voice Interview Intelligence/i })).toBeVisible();
 
     // Start mock session
     await page.getByRole('button', { name: /Start (New )?Mock Session/i }).click();
@@ -225,7 +253,6 @@ test.describe('V3.3 Interview War Room, Activity Timeline & Application Intellig
     await page.getByRole('button', { name: /Submit Answer for AI Score/i }).click();
 
     // Verify scores and feedback
-    await expect(page.getByText('Score Dimensions (1-5 Scale)')).toBeVisible();
     await expect(page.getByText('Clear strategic framing')).toBeVisible();
 
     // Finish session

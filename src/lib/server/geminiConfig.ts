@@ -5,11 +5,11 @@ import type { GoogleGenAI } from '@google/genai';
  * NEVER import this file from client components.
  */
 
-// Production Primary Model: Gemini 3.7 Flash
-export const DEFAULT_GEMINI_MODEL = 'gemini-3.7-flash';
+// Production Primary Model: Gemini 3.8 Flash
+export const DEFAULT_GEMINI_MODEL = 'gemini-3.8-flash';
 
-// Production Failover Model: Gemini 3.6 Flash
-export const DEFAULT_GEMINI_FALLBACK_MODEL = 'gemini-3.6-flash';
+// Production Failover Model: Gemini 3.7 Flash
+export const DEFAULT_GEMINI_FALLBACK_MODEL = 'gemini-3.7-flash';
 
 export function getGeminiModel(): string {
   return process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL;

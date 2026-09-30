@@ -458,7 +458,7 @@ ${finalReminders.map((r) => `- ${r}`).join('\n')}
 
         {/* Footer */}
         <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[10px] text-slate-400 print:text-slate-500 print-card">
-          <span>Career Command Center V3.3 — Grounded Executive Intelligence</span>
+          <span>Career Command Center V3.4 — Grounded Executive Intelligence</span>
           <span>Confidential Candidate Briefing</span>
         </div>
       </div>

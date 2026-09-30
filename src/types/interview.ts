@@ -165,8 +165,24 @@ export interface InterviewPreparation {
 }
 
 // ---------------------------------------------------------------------------
-// Mock Interview Session
+// Mock Interview Session & Voice Interview Intelligence (V3.4)
 // ---------------------------------------------------------------------------
+
+export type AnswerMode = 'text' | 'voice';
+
+export type TranscriptSource =
+  | 'browser_stt'
+  | 'gemini_audio'
+  | 'server_transcription'
+  | 'manual_edit'
+  | 'text_typed';
+
+export type InterviewerPersona =
+  | 'recruiter'
+  | 'hiring_manager'
+  | 'executive'
+  | 'behavioral'
+  | 'peer';
 
 export type MockDifficulty =
   | 'standard'
@@ -183,6 +199,64 @@ export interface MockAnswerScore {
   executiveCommunication: number; // 1-5
   structure: number;           // 1-5
   concision: number;           // 1-5
+}
+
+export interface MockDeliveryScore {
+  pace: number;                // 1-5 (Observable pace proxy: 130-165 WPM target)
+  verbalConcision: number;     // 1-5 (Verbal efficiency vs depth)
+  fillerControl: number;       // 1-5 (Filler word density)
+  pausing: number;             // 1-5 (Composure and cadence proxy)
+  clarity: number;             // 1-5 (Observable articulation and flow)
+  executiveDelivery: number;   // 1-5 (Holistic presence and bottom-line delivery)
+}
+
+export interface TopFillerWord {
+  word: string;
+  count: number;
+}
+
+export interface PauseAnalysisResult {
+  available: boolean;
+  pauseCount: number;
+  averagePauseSeconds: number;
+  longestPauseSeconds: number;
+  reason?: string;
+}
+
+export type DeliveryMetricsStatus = 'valid' | 'invalid_transcript_or_timing' | 'duplicate_transcript_detected';
+
+export interface VoiceDeliveryMetrics {
+  durationSeconds: number;
+  wordCount: number;
+  wordsPerMinute: number;
+  fillerWordsCount: number;
+  fillerRatePerMinute: number;
+  topFillerWords: TopFillerWord[];
+  pauseAnalysis: PauseAnalysisResult;
+  verbosity: 'too_brief' | 'appropriate' | 'potentially_overlong';
+  deliveryMetricsStatus?: DeliveryMetricsStatus;
+  metricsNotice?: string;
+}
+
+export interface MockVoiceCoaching {
+  speakingPaceCoaching?: string;
+  fillerWordCoaching?: string;
+  deliveryRefinements?: string[];
+  overallDeliverySummary?: string;
+}
+
+export interface LiveConversationTurn {
+  id: string;
+  speaker: 'interviewer' | 'candidate';
+  text: string;
+  timestamp: string;
+  persona?: InterviewerPersona;
+  turnType: 'question' | 'response' | 'probe' | 'conclusion';
+  deliveryMetrics?: VoiceDeliveryMetrics;
+  scores?: {
+    content?: MockAnswerScore;
+    delivery?: MockDeliveryScore;
+  };
 }
 
 export interface MockAnswerCoaching {
@@ -205,6 +279,18 @@ export interface MockInterviewExchange {
   roundName?: string;          // E.g. 'Recruiter Screen', 'Hiring Manager'
   roundNumber?: number;        // Round index (1-based)
   totalRounds?: number;
+
+  // V3.4 Voice Additions
+  answerMode?: AnswerMode;
+  transcriptSource?: TranscriptSource;
+  deliveryMetrics?: VoiceDeliveryMetrics;
+  deliveryScore?: MockDeliveryScore;
+  voiceCoaching?: MockVoiceCoaching;
+  overallResponseScore?: number; // 0-100 combining content and delivery
+  contentWeight?: number;        // E.g. 0.75
+  deliveryWeight?: number;       // E.g. 0.25
+  persona?: InterviewerPersona;
+  liveTurns?: LiveConversationTurn[];
 }
 
 export interface InterviewSession {
@@ -213,18 +299,27 @@ export interface InterviewSession {
   prepId?: string;             // Optional link to the prep used
 
   // Session config
-  mode: 'practice' | 'timed' | 'full';
+  mode: 'practice' | 'timed' | 'full' | 'live';
   difficulty: MockDifficulty;
+  interviewerPersona?: InterviewerPersona;
+  answerMode?: 'text' | 'voice' | 'hybrid';
 
   // Content
   exchanges: MockInterviewExchange[];
-  overallScore: number;        // Average across all exchange scores (0-100 scale)
+  overallScore: number;        // Combined or content score (0-100 scale)
   summary: string;
   strengths: string[];
   improvementAreas: string[];
   averageDurationSeconds?: number;
   roundsCompleted?: number;
   totalRounds?: number;
+
+  // V3.4 Delivery Aggregates
+  averageWordsPerMinute?: number;
+  averageFillerRate?: number;
+  averageContentScore?: number;   // 0-100 scale
+  averageDeliveryScore?: number;  // 0-100 scale
+  liveTranscript?: LiveConversationTurn[];
 
   // Provenance
   requestedModel: string;
