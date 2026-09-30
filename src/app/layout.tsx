@@ -4,6 +4,9 @@ import './globals.css';
 import { AppShell } from '@/components/layout/AppShell';
 
 export const metadata: Metadata = {
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_APP_URL || 'https://career-command-center-gamma.vercel.app'
+  ),
   title: 'Career Command Center — Voice Interview Intelligence & Executive CRM',
   description:
     'Executive-grade career operating system combining voice interview delivery metrics, grounded brief preparation, recruiter timeline tracking, and AI opportunity evaluation.',
