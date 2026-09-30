@@ -29,14 +29,6 @@ export function FollowUpEngineView({
 }: FollowUpEngineViewProps) {
   const recommendations = evaluateOpportunityFollowUp(opportunity, activities);
 
-  const sortedActivities = [...activities].sort(
-    (a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime()
-  );
-  const latestActivity = sortedActivities[0] || null;
-  const daysSinceLatest = latestActivity
-    ? Math.floor((Date.now() - new Date(latestActivity.occurredAt).getTime()) / (1000 * 60 * 60 * 24))
-    : Math.floor((Date.now() - new Date(opportunity.updatedAt || opportunity.createdAt).getTime()) / (1000 * 60 * 60 * 24));
-
   const [selectedActionType, setSelectedActionType] = useState<FollowUpActionType>(
     recommendations[0]?.actionType || 'thank_you'
   );
@@ -130,7 +122,7 @@ export function FollowUpEngineView({
 
         {recommendations.length === 0 ? (
           <Card padding="md" className="text-xs text-slate-500 text-center py-6">
-            {opportunity.stage === 'Applied' && daysSinceLatest < 7
+            {opportunity.stage === 'Applied'
               ? 'No follow-up needed yet. This application is still within the normal follow-up window (typically 7 days from submission).'
               : 'No urgent follow-up required at this stage. You are up to date!'}
           </Card>

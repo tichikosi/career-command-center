@@ -13,6 +13,21 @@ export const metadata: Metadata = {
       'Executive-grade career operating system combining voice interview delivery metrics, grounded brief preparation, recruiter timeline tracking, and AI opportunity evaluation.',
     type: 'website',
     siteName: 'Career Command Center',
+    images: [
+      {
+        url: '/og-career-command-center.png',
+        width: 1200,
+        height: 630,
+        alt: 'Career Command Center — Voice Interview Intelligence & Executive CRM',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Career Command Center — Voice Interview Intelligence & Executive CRM',
+    description:
+      'Executive-grade career operating system combining voice interview delivery metrics, grounded brief preparation, recruiter timeline tracking, and AI opportunity evaluation.',
+    images: ['/og-career-command-center.png'],
   },
 };
 

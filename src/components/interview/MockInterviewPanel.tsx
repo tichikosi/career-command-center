@@ -434,7 +434,7 @@ export function MockInterviewPanel({
     // If in Live Simulation and an adaptive follow-up was generated, insert it into the session queue
     if (mode === 'live' && liveFollowUp) {
       const followUpTurn = {
-        id: `mq-followup-${Date.now()}`,
+        id: `mq-followup-${currentIndex + 1}`,
         question: liveFollowUp.followUpQuestion,
         category: 'situational',
       };
